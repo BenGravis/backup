@@ -62,11 +62,21 @@ class FTMO10KConfig:
     tp1_r_multiple: float = 1.5  # TP1 at 1.5R
     tp2_r_multiple: float = 3.0  # TP2 at 3.0R
     tp3_r_multiple: float = 5.0  # TP3 at 5.0R
+    tp4_r_multiple: float = 7.0  # TP4 at 7.0R
+    tp5_r_multiple: float = 10.0  # TP5 at 10.0R
 
     # === PARTIAL CLOSE PERCENTAGES ===
-    tp1_close_pct: float = 0.40  # Close 40% at TP1
-    tp2_close_pct: float = 0.35  # Close 35% at TP2
-    tp3_close_pct: float = 0.25  # Close 25% at TP3
+    tp1_close_pct: float = 0.25  # Close 25% at TP1
+    tp2_close_pct: float = 0.25  # Close 25% at TP2
+    tp3_close_pct: float = 0.20  # Close 20% at TP3
+    tp4_close_pct: float = 0.15  # Close 15% at TP4
+    tp5_close_pct: float = 0.15  # Close 15% at TP5
+
+    # === TRAILING STOP SETTINGS (Moderate Progressive) ===
+    trail_after_tp1: bool = True  # Move SL to breakeven after TP1
+    trail_after_tp2: bool = True  # Move SL to TP1 after TP2
+    trail_after_tp3: bool = True  # Move SL to TP2 after TP3
+    trail_after_tp4: bool = True  # Move SL to TP3 after TP4
 
     # === BREAKEVEN SETTINGS ===
     breakeven_trigger_r: float = 1.0  # Move to BE after 1R profit
