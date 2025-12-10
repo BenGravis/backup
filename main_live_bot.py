@@ -264,7 +264,7 @@ class LiveTradingBot:
                     daily_loss_halt_pct=FTMO_CONFIG.daily_loss_halt_pct,
                     total_dd_warning_pct=FTMO_CONFIG.total_dd_warning_pct,
                     total_dd_emergency_pct=FTMO_CONFIG.total_dd_emergency_pct,
-                    protection_loop_interval_sec=FTMO_CONFIG.protection_interval_sec,
+                    protection_loop_interval_sec=FTMO_CONFIG.protection_loop_interval_sec,
                     pending_order_max_age_hours=FTMO_CONFIG.pending_order_expiry_hours,
                     profit_ultra_safe_threshold_pct=FTMO_CONFIG.ultra_safe_profit_threshold_pct,
                     ultra_safe_risk_pct=FTMO_CONFIG.ultra_safe_risk_pct,
