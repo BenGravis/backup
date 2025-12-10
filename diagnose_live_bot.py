@@ -35,6 +35,12 @@ def diagnose_symbol(symbol: str) -> Dict:
     
     reasons = []
     
+    # Check whitelist first
+    if not FTMO_CONFIG.is_asset_whitelisted(symbol):
+        reasons.append(f"Asset not in whitelist (only top 10 performers traded)")
+        print(f"✗ NOT WHITELISTED (only trading top 10 assets)")
+        return {"symbol": symbol, "tradeable": False, "reasons": reasons}
+    
     # Get data
     daily = get_ohlcv(symbol, timeframe="D", count=500, use_cache=False)
     weekly = get_ohlcv(symbol, timeframe="W", count=104, use_cache=False) or []

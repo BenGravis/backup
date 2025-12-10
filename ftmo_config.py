@@ -1,6 +1,7 @@
+
 """
-FTMO 10K Challenge Configuration
-Optimized settings to pass challenge while replicating backtest performance.
+FTMO 10K Challenge Configuration - ULTRA CONSERVATIVE
+Only takes the highest probability setups to pass challenge safely.
 """
 
 from dataclasses import dataclass
@@ -9,7 +10,7 @@ from typing import Dict
 
 @dataclass
 class FTMO10KConfig:
-    """FTMO 10K Challenge optimized configuration."""
+    """FTMO 10K Challenge - Ultra Conservative Quality-First Mode."""
 
     # === ACCOUNT SETTINGS ===
     account_size: float = 10000.0
@@ -22,62 +23,88 @@ class FTMO10KConfig:
     phase2_target_pct: float = 5.0
 
     # === SAFETY BUFFERS (Stop BEFORE breach) ===
-    daily_loss_warning_pct: float = 2.5
-    daily_loss_reduce_pct: float = 3.5
-    daily_loss_halt_pct: float = 4.2
-    total_dd_warning_pct: float = 5.0
-    total_dd_reduce_pct: float = 7.0
-    total_dd_halt_pct: float = 8.5
+    daily_loss_warning_pct: float = 1.5  # Very early warning
+    daily_loss_reduce_pct: float = 2.5   # Reduce risk early
+    daily_loss_halt_pct: float = 3.5     # Halt well before limit
+    total_dd_warning_pct: float = 3.0    # Early warning
+    total_dd_reduce_pct: float = 5.0     # Reduce risk
+    total_dd_halt_pct: float = 7.0       # Halt well before limit
 
-    # === POSITION SIZING (Conservative for 10K) ===
-    risk_per_trade_pct: float = 0.75
-    risk_per_trade_reduced_pct: float = 0.4
+    # === POSITION SIZING (ULTRA CONSERVATIVE) ===
+    risk_per_trade_pct: float = 0.5      # Lower risk = safer
+    risk_per_trade_reduced_pct: float = 0.3
     risk_per_trade_minimal_pct: float = 0.2
-    max_cumulative_risk_pct: float = 2.5
+    max_cumulative_risk_pct: float = 1.5  # Max 3 trades open (0.5% each)
 
-    # === TRADE LIMITS ===
-    max_concurrent_trades: int = 4
-    max_pending_orders: int = 5
-    max_trades_per_day: int = 8
+    # === TRADE LIMITS (QUALITY OVER QUANTITY) ===
+    max_concurrent_trades: int = 2       # Only 2 positions max
+    max_pending_orders: int = 3
+    max_trades_per_day: int = 2          # Max 2 trades per day
+    max_trades_per_week: int = 5         # Max 5 trades per week
     max_trades_per_symbol: int = 1
 
-    # === ENTRY OPTIMIZATION (Match Backtest) ===
-    max_entry_distance_r: float = 1.5  # Max distance from current price to entry (in R) - LOOSENED from 0.5
-    immediate_entry_r: float = 0.2  # If within this range, use market order instead of pending
+    # === ENTRY OPTIMIZATION (STRICTER) ===
+    max_entry_distance_r: float = 0.8    # Entry must be close to ideal
+    immediate_entry_r: float = 0.3
 
-    # SL validation (in pips)
-    min_sl_pips: float = 10.0  # Minimum SL size - LOOSENED from 15.0
-    max_sl_pips: float = 150.0  # Maximum SL size - LOOSENED from 100.0
-    min_sl_atr_ratio: float = 0.3  # Min SL as ratio of ATR - LOOSENED from 0.5
-    max_sl_atr_ratio: float = 3.0  # Max SL as ratio of ATR - LOOSENED from 2.5
+    # SL validation (in pips) - TIGHTER
+    min_sl_pips: float = 15.0
+    max_sl_pips: float = 80.0            # Tighter stops
+    min_sl_atr_ratio: float = 0.5
+    max_sl_atr_ratio: float = 2.0        # No oversized stops
 
-    # === TAKE PROFIT SETTINGS (Lock profits fast) ===
-    tp1_r_multiple: float = 1.0
-    tp2_r_multiple: float = 2.0
-    tp3_r_multiple: float = 3.0
+    # === TAKE PROFIT SETTINGS ===
+    tp1_r_multiple: float = 1.5          # Longer TP1 for better R:R
+    tp2_r_multiple: float = 3.0
+    tp3_r_multiple: float = 5.0
 
     # === PARTIAL CLOSE PERCENTAGES ===
-    tp1_close_pct: float = 0.40
-    tp2_close_pct: float = 0.35
-    tp3_close_pct: float = 0.25
+    tp1_close_pct: float = 0.50          # Close half at TP1
+    tp2_close_pct: float = 0.30
+    tp3_close_pct: float = 0.20
 
     # === BREAKEVEN SETTINGS ===
     move_sl_to_be_after_tp1: bool = True
-    be_buffer_pips: float = 2.0
+    be_buffer_pips: float = 3.0
 
-    # === ULTRA SAFE MODE (When close to target) ===
-    ultra_safe_profit_threshold_pct: float = 8.0
-    ultra_safe_risk_pct: float = 0.25
-    ultra_safe_max_trades: int = 2
+    # === ULTRA SAFE MODE ===
+    ultra_safe_profit_threshold_pct: float = 7.0  # Earlier protection
+    ultra_safe_risk_pct: float = 0.2
+    ultra_safe_max_trades: int = 1
 
-    # === CONFLUENCE SETTINGS (Same as backtest) ===
-    min_confluence_score: int = 4
-    min_quality_factors: int = 1
+    # === CONFLUENCE SETTINGS (STRICTER - QUALITY ONLY) ===
+    min_confluence_score: int = 5        # 5/7 minimum (was 4/7)
+    min_quality_factors: int = 3         # Need 3 quality factors (was 1)
     require_rr_flag: bool = True
-    require_confirmation: bool = False
+    require_confirmation: bool = True    # MUST have 4H confirmation
+    require_htf_alignment: bool = True   # MUST have HTF alignment
 
+    # === ASSET WHITELIST (TOP PERFORMERS ONLY) ===
+    # Based on backtest: SPX500, NAS100, AUD_NZD, GBP_JPY, USD_JPY, XAU_USD
+    whitelist_assets: list = None
+    
     # === PROTECTION LOOP ===
     protection_interval_sec: float = 20.0
+    
+    # === WEEKLY TRACKING ===
+    current_week_trades: int = 0
+    week_start_date: str = ""
+
+    def __post_init__(self):
+        if self.whitelist_assets is None:
+            # Top 10 performers from backtest (highest R and win rate)
+            self.whitelist_assets = [
+                "SPX500_USD",   # 58.70R, 85.7% WR
+                "NAS100_USD",   # 47.80R, 77.1% WR
+                "AUD_NZD",      # 46.60R, 77.8% WR
+                "GBP_JPY",      # 45.00R, 84.4% WR
+                "USD_JPY",      # 42.00R, 91.9% WR
+                "XAU_USD",      # 41.40R, 90.9% WR
+                "CAD_JPY",      # 41.00R, 87.5% WR
+                "CHF_JPY",      # 40.50R, 74.4% WR
+                "GBP_CAD",      # 39.20R, 76.2% WR
+                "EUR_GBP",      # 33.70R, 78.4% WR
+            ]
 
     def get_risk_pct(self, daily_loss_pct: float, total_dd_pct: float) -> float:
         """Get adjusted risk percentage based on current drawdown."""
@@ -95,6 +122,10 @@ class FTMO10KConfig:
         if profit_pct >= self.ultra_safe_profit_threshold_pct:
             return self.ultra_safe_max_trades
         return self.max_concurrent_trades
+    
+    def is_asset_whitelisted(self, symbol: str) -> bool:
+        """Check if asset is in whitelist."""
+        return symbol in self.whitelist_assets
 
 
 FTMO_CONFIG = FTMO10KConfig()

@@ -431,6 +431,20 @@ class ChallengeRiskManager:
         if self.halted:
             return False, 0.0, f"Trading halted: {self.halt_reason}"
         
+        # Check asset whitelist
+        if not self.config.is_asset_whitelisted(symbol):
+            return False, 0.0, f"Asset not in whitelist (only top performers traded)"
+        
+        # Check weekly trade limit
+        from datetime import datetime
+        current_week = datetime.now().strftime("%Y-W%W")
+        if self.config.week_start_date != current_week:
+            self.config.week_start_date = current_week
+            self.config.current_week_trades = 0
+        
+        if self.config.current_week_trades >= self.config.max_trades_per_week:
+            return False, 0.0, f"Weekly trade limit reached ({self.config.current_week_trades}/{self.config.max_trades_per_week})"
+        
         snapshot = self.get_account_snapshot()
         if not snapshot:
             return False, 0.0, "Cannot get account info"
@@ -493,7 +507,10 @@ class ChallengeRiskManager:
         final_lot = min(calculated_lot, requested_lot) if requested_lot else calculated_lot
         final_lot = round(max(0.01, final_lot), 2)
         
-        reason = f"Approved ({self.current_mode.value} mode, risk: {adjusted_risk_pct:.2f}%)"
+        # Increment weekly counter
+        self.config.current_week_trades += 1
+        
+        reason = f"Approved ({self.current_mode.value} mode, risk: {adjusted_risk_pct:.2f}%, week: {self.config.current_week_trades}/{self.config.max_trades_per_week})"
         self.log.info(f"Trade check [{symbol}]: {reason}, lot: {final_lot}")
         
         return True, final_lot, reason
