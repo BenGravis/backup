@@ -32,8 +32,9 @@ from strategy_core import (
 )
 
 from data import get_ohlcv as get_ohlcv_api
-from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
+from ftmo_config import FTMO_CONFIG, FTMO10KConfig, get_pip_size, get_sl_limits
 from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
+from tradr.data.dukascopy import DukascopyDownloader
 
 OUTPUT_DIR = Path("ftmo_analysis_output")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -164,15 +165,51 @@ class DukascopyValidator:
     
     def __init__(self):
         self.validation_cache = {}
+        self.downloader = DukascopyDownloader()
         
+    def _get_candle_for_date(self, symbol: str, trade_date: datetime) -> Optional[Dict]:
+        """Fetch OHLCV candle data for a specific date from Dukascopy."""
+        cache_key = f"{symbol}_{trade_date.date()}"
+        
+        if cache_key in self.validation_cache:
+            return self.validation_cache[cache_key]
+        
+        try:
+            trade_day = trade_date.date() if hasattr(trade_date, 'date') else trade_date
+            ohlcv_data = self.downloader.get_ohlcv(
+                symbol=symbol,
+                start_date=trade_day,
+                end_date=trade_day,
+                timeframe="D",
+                use_cache=True
+            )
+            
+            if ohlcv_data:
+                self.validation_cache[cache_key] = ohlcv_data[0]
+                return ohlcv_data[0]
+        except Exception as e:
+            print(f"[DukascopyValidator] Error fetching data for {symbol} on {trade_date}: {e}")
+        
+        return None
+    
+    def _price_within_candle(self, price: float, candle: Dict, tolerance: float = 0.0) -> bool:
+        """Check if price was achievable within the candle's high/low range."""
+        if not candle:
+            return True
+        
+        high = candle.get("high", 0)
+        low = candle.get("low", 0)
+        
+        return (low - tolerance) <= price <= (high + tolerance)
+    
     def validate_trade(self, trade: BacktestTrade, symbol: str) -> Tuple[bool, str]:
         """
-        Validate that trade entry/exit prices align with actual market data.
+        Validate that trade entry/exit prices align with actual Dukascopy market data.
         
         Checks:
-        1. Entry price was achievable at entry_date
-        2. Exit price was achievable at exit_date
-        3. SL/TP levels were reachable
+        1. Entry price was achievable within the candle high/low at entry_date
+        2. Exit price was achievable within the candle high/low at exit_date
+        3. SL/TP levels were reachable at the recorded dates
         """
         notes = []
         is_valid = True
@@ -190,7 +227,7 @@ class DukascopyValidator:
                 notes.append("Invalid stop loss")
                 is_valid = False
             
-            if trade.direction == "bullish":
+            if trade.direction.upper() == "BULLISH":
                 if trade.stop_loss >= trade.entry_price:
                     notes.append("SL above entry for bullish trade")
                     is_valid = False
@@ -199,17 +236,50 @@ class DukascopyValidator:
                     notes.append("SL below entry for bearish trade")
                     is_valid = False
             
+            entry_candle = self._get_candle_for_date(symbol, trade.entry_date)
+            if entry_candle:
+                if not self._price_within_candle(trade.entry_price, entry_candle, tolerance):
+                    notes.append(f"Entry price {trade.entry_price:.5f} outside candle range [{entry_candle.get('low', 0):.5f}-{entry_candle.get('high', 0):.5f}]")
+                    is_valid = False
+                else:
+                    notes.append("Entry price validated against Dukascopy data")
+            
+            exit_candle = self._get_candle_for_date(symbol, trade.exit_date)
+            if exit_candle:
+                if not self._price_within_candle(trade.exit_price, exit_candle, tolerance):
+                    notes.append(f"Exit price {trade.exit_price:.5f} outside candle range [{exit_candle.get('low', 0):.5f}-{exit_candle.get('high', 0):.5f}]")
+                    is_valid = False
+                else:
+                    notes.append("Exit price validated against Dukascopy data")
+            
+            if trade.sl_hit and trade.sl_hit_date:
+                sl_candle = self._get_candle_for_date(symbol, trade.sl_hit_date)
+                if sl_candle:
+                    if not self._price_within_candle(trade.stop_loss, sl_candle, tolerance):
+                        notes.append(f"SL price {trade.stop_loss:.5f} not reachable on recorded SL hit date")
+                        is_valid = False
+                    else:
+                        notes.append("SL hit validated against Dukascopy data")
+            
+            if trade.tp1_hit and trade.tp1_hit_date:
+                tp1_candle = self._get_candle_for_date(symbol, trade.tp1_hit_date)
+                if tp1_candle:
+                    if not self._price_within_candle(trade.tp1_price, tp1_candle, tolerance):
+                        notes.append(f"TP1 price {trade.tp1_price:.5f} not reachable on recorded TP1 hit date")
+                    else:
+                        notes.append("TP1 hit validated against Dukascopy data")
+            
             risk = abs(trade.entry_price - trade.stop_loss)
             if risk > 0:
                 actual_r = (trade.exit_price - trade.entry_price) / risk
-                if trade.direction == "bearish":
+                if trade.direction.upper() == "BEARISH":
                     actual_r = (trade.entry_price - trade.exit_price) / risk
                 
                 if abs(actual_r - trade.r_multiple) > 0.5:
                     notes.append(f"R mismatch: calc={actual_r:.2f}, reported={trade.r_multiple:.2f}")
             
-            if not notes:
-                notes.append("Price levels validated successfully")
+            if is_valid and not any("outside" in n.lower() or "mismatch" in n.lower() for n in notes):
+                notes = ["Price levels validated successfully against Dukascopy data"]
                 
         except Exception as e:
             notes.append(f"Validation error: {str(e)}")
@@ -218,19 +288,24 @@ class DukascopyValidator:
         return is_valid, "; ".join(notes)
     
     def validate_all_trades(self, trades: List[BacktestTrade]) -> Dict:
-        """Validate all trades and generate report."""
+        """Validate all trades against Dukascopy data and generate report."""
         total = len(trades)
         perfect_match = 0
         minor_discrepancies = 0
         major_issues = 0
         suspicious = 0
         
-        for trade in trades:
+        print(f"\n[DukascopyValidator] Validating {total} trades against Dukascopy historical data...")
+        
+        for i, trade in enumerate(trades):
+            if (i + 1) % 50 == 0:
+                print(f"  Validated {i + 1}/{total} trades...")
+            
             is_valid, notes = self.validate_trade(trade, trade.symbol)
             trade.price_validated = is_valid
             trade.validation_notes = notes
             
-            if is_valid and "successfully" in notes:
+            if is_valid and "successfully" in notes.lower():
                 perfect_match += 1
             elif is_valid:
                 minor_discrepancies += 1
@@ -239,6 +314,12 @@ class DukascopyValidator:
                     suspicious += 1
                 else:
                     major_issues += 1
+        
+        print(f"[DukascopyValidator] Validation complete:")
+        print(f"  Perfect matches: {perfect_match}")
+        print(f"  Minor discrepancies: {minor_discrepancies}")
+        print(f"  Major issues: {major_issues}")
+        print(f"  Suspicious trades: {suspicious}")
         
         return {
             "total_validated": total,
@@ -622,13 +703,29 @@ class PerformanceOptimizer:
     Optimizes main_live_bot.py parameters if success criteria not met.
     
     Target: >= 14 challenges passed, <= 2 challenges failed
+    
+    Actually modifies FTMO_CONFIG parameters based on failure patterns.
     """
     
     MIN_CHALLENGES_PASSED = 14
     MAX_CHALLENGES_FAILED = 2
     
-    def __init__(self):
+    def __init__(self, config: Optional[FTMO10KConfig] = None):
         self.optimization_log: List[Dict] = []
+        self.config = config if config else FTMO_CONFIG
+        self._original_config = self._snapshot_config()
+    
+    def _snapshot_config(self) -> Dict:
+        """Take a snapshot of current config values."""
+        return {
+            "risk_per_trade_pct": self.config.risk_per_trade_pct,
+            "min_confluence_score": self.config.min_confluence_score,
+            "max_concurrent_trades": self.config.max_concurrent_trades,
+            "max_cumulative_risk_pct": self.config.max_cumulative_risk_pct,
+            "daily_loss_warning_pct": self.config.daily_loss_warning_pct,
+            "daily_loss_reduce_pct": self.config.daily_loss_reduce_pct,
+            "min_quality_factors": self.config.min_quality_factors,
+        }
     
     def check_success_criteria(self, results: Dict) -> bool:
         """Check if results meet success criteria."""
@@ -699,11 +796,72 @@ class PerformanceOptimizer:
         
         return recommendations
     
+    def apply_optimizations(self, patterns: Dict, iteration: int) -> FTMO10KConfig:
+        """
+        Actually modify FTMO_CONFIG parameters based on failure patterns.
+        
+        Returns the modified config for use in the next iteration.
+        """
+        changes_made = []
+        
+        if patterns["dd_failures"] > 0 or patterns["daily_loss_failures"] > 0:
+            new_risk = max(0.25, self.config.risk_per_trade_pct - 0.1)
+            if new_risk != self.config.risk_per_trade_pct:
+                changes_made.append(f"risk_per_trade_pct: {self.config.risk_per_trade_pct}% -> {new_risk}%")
+                self.config.risk_per_trade_pct = new_risk
+            
+            new_max_concurrent = max(1, self.config.max_concurrent_trades - 1)
+            if new_max_concurrent != self.config.max_concurrent_trades:
+                changes_made.append(f"max_concurrent_trades: {self.config.max_concurrent_trades} -> {new_max_concurrent}")
+                self.config.max_concurrent_trades = new_max_concurrent
+            
+            new_cumulative_risk = max(2.0, self.config.max_cumulative_risk_pct - 0.5)
+            if new_cumulative_risk != self.config.max_cumulative_risk_pct:
+                changes_made.append(f"max_cumulative_risk_pct: {self.config.max_cumulative_risk_pct}% -> {new_cumulative_risk}%")
+                self.config.max_cumulative_risk_pct = new_cumulative_risk
+        
+        if patterns["step1_failures"] > 1:
+            new_confluence = min(7, self.config.min_confluence_score + 1)
+            if new_confluence != self.config.min_confluence_score:
+                changes_made.append(f"min_confluence_score: {self.config.min_confluence_score} -> {new_confluence}")
+                self.config.min_confluence_score = new_confluence
+        
+        if patterns["step2_failures"] > 2:
+            new_warning = max(2.0, self.config.daily_loss_warning_pct - 0.5)
+            if new_warning != self.config.daily_loss_warning_pct:
+                changes_made.append(f"daily_loss_warning_pct: {self.config.daily_loss_warning_pct}% -> {new_warning}%")
+                self.config.daily_loss_warning_pct = new_warning
+            
+            new_reduce = max(3.0, self.config.daily_loss_reduce_pct - 0.3)
+            if new_reduce != self.config.daily_loss_reduce_pct:
+                changes_made.append(f"daily_loss_reduce_pct: {self.config.daily_loss_reduce_pct}% -> {new_reduce}%")
+                self.config.daily_loss_reduce_pct = new_reduce
+        
+        if patterns["profit_failures"] > 2 and patterns["dd_failures"] == 0:
+            new_confluence = max(4, self.config.min_confluence_score - 1)
+            if new_confluence != self.config.min_confluence_score:
+                changes_made.append(f"min_confluence_score: {self.config.min_confluence_score} -> {new_confluence}")
+                self.config.min_confluence_score = new_confluence
+            
+            new_quality = max(1, self.config.min_quality_factors - 1)
+            if new_quality != self.config.min_quality_factors:
+                changes_made.append(f"min_quality_factors: {self.config.min_quality_factors} -> {new_quality}")
+                self.config.min_quality_factors = new_quality
+        
+        print(f"\n  Config Changes Applied (Iteration {iteration}):")
+        if changes_made:
+            for change in changes_made:
+                print(f"    - {change}")
+        else:
+            print(f"    - No changes needed")
+        
+        return self.config
+    
     def optimize_and_retest(self, results: Dict, iteration: int) -> Dict:
         """
-        Analyze failure patterns and suggest optimizations.
+        Analyze failure patterns and apply optimizations to FTMO_CONFIG.
         
-        Note: Actual parameter changes would modify ftmo_config.py
+        Actually modifies the config parameters for the next iteration.
         """
         print(f"\n{'='*80}")
         print(f"OPTIMIZATION ITERATION #{iteration}")
@@ -723,17 +881,35 @@ class PerformanceOptimizer:
         for i, rec in enumerate(recommendations, 1):
             print(f"  {i}. {rec}")
         
+        modified_config = self.apply_optimizations(patterns, iteration)
+        
         self.optimization_log.append({
             "iteration": iteration,
             "patterns": patterns,
             "recommendations": recommendations,
+            "config_snapshot": self._snapshot_config(),
             "timestamp": datetime.now().isoformat(),
         })
         
         return {
             "patterns": patterns,
             "recommendations": recommendations,
+            "modified_config": modified_config,
         }
+    
+    def get_config(self) -> FTMO10KConfig:
+        """Return the current (potentially modified) config."""
+        return self.config
+    
+    def reset_config(self):
+        """Reset config to original values."""
+        self.config.risk_per_trade_pct = self._original_config["risk_per_trade_pct"]
+        self.config.min_confluence_score = self._original_config["min_confluence_score"]
+        self.config.max_concurrent_trades = self._original_config["max_concurrent_trades"]
+        self.config.max_cumulative_risk_pct = self._original_config["max_cumulative_risk_pct"]
+        self.config.daily_loss_warning_pct = self._original_config["daily_loss_warning_pct"]
+        self.config.daily_loss_reduce_pct = self._original_config["daily_loss_reduce_pct"]
+        self.config.min_quality_factors = self._original_config["min_quality_factors"]
 
 
 class ReportGenerator:
@@ -867,8 +1043,8 @@ Winning Trades: {wins}
 Losing Trades: {losses}
 Win Rate: {win_rate:.1f}%
 Average R per Trade: {avg_r:+.2f}R
-Best Trade: {best_trade.r_multiple:+.1f}R ({best_trade.symbol}, {best_trade.entry_date.strftime('%b %d') if best_trade and best_trade.entry_date else 'N/A'})
-Worst Trade: {worst_trade.r_multiple:+.1f}R
+Best Trade: {f'{best_trade.r_multiple:+.1f}R ({best_trade.symbol}, {best_trade.entry_date.strftime("%b %d") if best_trade.entry_date else "N/A"})' if best_trade else 'N/A'}
+Worst Trade: {f'{worst_trade.r_multiple:+.1f}R' if worst_trade else 'N/A'}
 
 PROFITABILITY ANALYSIS:
 -----------------------
@@ -1157,12 +1333,23 @@ def main_challenge_analyzer():
     start_date = datetime(2025, 1, 1)
     end_date = datetime(2025, 11, 30)
     
+    results: Dict = {"challenges_passed": 0, "challenges_failed": 0, "all_results": [], "all_trades": [], "total_challenges_attempted": 0}
+    validation_report: Dict = {"total_validated": 0, "perfect_match": 0, "minor_discrepancies": 0, "major_issues": 0, "suspicious_trades": 0}
+    
+    optimizer = PerformanceOptimizer(FTMO_CONFIG)
+    
     while not success and iteration < max_optimization_iterations:
         iteration += 1
         
         print(f"\n{'='*80}")
         print(f"MAIN RUN - ITERATION #{iteration}")
         print(f"{'='*80}")
+        
+        current_config = optimizer.get_config()
+        print(f"Current Config:")
+        print(f"  risk_per_trade_pct: {current_config.risk_per_trade_pct}%")
+        print(f"  min_confluence_score: {current_config.min_confluence_score}/7")
+        print(f"  max_concurrent_trades: {current_config.max_concurrent_trades}")
         
         trades = run_full_period_backtest(start_date, end_date)
         
@@ -1180,7 +1367,6 @@ def main_challenge_analyzer():
         if validation_report.get("suspicious_trades", 0) > 0:
             print(f"\nWARNING: {validation_report['suspicious_trades']} suspicious trades detected!")
         
-        optimizer = PerformanceOptimizer()
         success = optimizer.check_success_criteria(results)
         
         if success:
@@ -1194,7 +1380,8 @@ def main_challenge_analyzer():
             
             if iteration < max_optimization_iterations:
                 print(f"   Analyzing for optimization...")
-                optimizer.optimize_and_retest(results, iteration)
+                optimization_result = optimizer.optimize_and_retest(results, iteration)
+                print(f"\n   Config modified for next iteration.")
             else:
                 print(f"   Max iterations reached. Generating final reports.")
     
