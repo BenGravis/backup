@@ -164,7 +164,7 @@ class RiskManager:
     DAILY_LOSS_BUFFER_PCT = 4.0  # Trigger protective close at 4.0% (1% safety margin)
     TOTAL_DD_BUFFER_PCT = 8.0     # Trigger protective close at 8.0% (2% safety margin)
     
-    DEFAULT_RISK_PCT = 0.01
+    DEFAULT_RISK_PCT = 0.005  # 0.5% - aligned with FTMO ultra-conservative config
     
     def __init__(self, state_file: str = "challenge_state.json"):
         self.state_file = Path(state_file)

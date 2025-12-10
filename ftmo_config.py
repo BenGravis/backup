@@ -20,6 +20,7 @@ class FTMO10KConfig:
     max_total_drawdown_pct: float = 10.0  # Maximum total drawdown (10%)
     phase1_target_pct: float = 10.0  # Phase 1 profit target (10%)
     phase2_target_pct: float = 5.0  # Phase 2 profit target (5%)
+    min_trading_days: int = 4  # Minimum 4 trading days required
     
     # === SAFETY BUFFERS (Ultra-Conservative) ===
     daily_loss_warning_pct: float = 2.5  # Warning at 2.5% daily loss
@@ -70,7 +71,7 @@ class FTMO10KConfig:
     breakeven_buffer_pips: float = 5.0  # BE + 5 pips
     
     # === ULTRA SAFE MODE ===
-    profit_ultra_safe_threshold_pct: float = 8.0  # Switch to ultra-safe at 8% profit
+    profit_ultra_safe_threshold_pct: float = 9.0  # Switch to ultra-safe at 9% profit (allows faster Step 1 completion)
     ultra_safe_risk_pct: float = 0.25  # Use 0.25% risk in ultra-safe mode
     
     # === ASSET WHITELIST (Top 10 Performers from Backtest) ===
