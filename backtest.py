@@ -25,6 +25,21 @@ from strategy_core import (
 )
 
 
+def is_valid_trading_day(dt: datetime) -> bool:
+    """Check if datetime is a valid trading day (no weekends or major holidays)."""
+    # Weekend check
+    if dt.weekday() >= 5:
+        return False
+
+    # Major holidays
+    if dt.month == 1 and dt.day == 1:  # New Year's Day
+        return False
+    if dt.month == 12 and dt.day == 25:  # Christmas
+        return False
+
+    return True
+
+
 def _parse_partial_date(s: str, for_start: bool) -> Optional[date]:
     """Parse date strings like 'Jan 2024', '2024-01-01', 'Now'."""
     s = s.strip()

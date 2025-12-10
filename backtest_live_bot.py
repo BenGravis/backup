@@ -24,6 +24,27 @@ from ftmo_config import FTMO_CONFIG
 from symbol_mapping import ALL_TRADABLE_FTMO
 
 
+def is_trading_day(dt: datetime) -> bool:
+    """Check if a datetime is a valid trading day (excludes weekends and major holidays)."""
+    # Exclude weekends (Saturday=5, Sunday=6)
+    if dt.weekday() >= 5:
+        return False
+    
+    # Exclude major market holidays (New Year's Day, Christmas, etc.)
+    # New Year's Day
+    if dt.month == 1 and dt.day == 1:
+        return False
+    
+    # Christmas Day
+    if dt.month == 12 and dt.day == 25:
+        return False
+    
+    # Good Friday and Easter Monday would need dynamic calculation
+    # For now, basic validation
+    
+    return True
+
+
 def backtest_live_bot(
     start_date: datetime,
     end_date: datetime,
@@ -49,6 +70,7 @@ def backtest_live_bot(
     - Same partial close percentages (50%/30%/20%)
     - Same SL validation (ATR-based + pip limits)
     - Same entry distance rules (max 1.2R)
+    - Filters out weekends and major holidays
     """
     from symbol_mapping import ALL_TRADABLE_OANDA
     
@@ -99,10 +121,16 @@ def backtest_live_bot(
             
             # Convert to BacktestTrade objects
             for trade in trades:
+                entry_date = datetime.fromisoformat(trade['entry_date']) if isinstance(trade['entry_date'], str) else trade['entry_date']
+                
+                # Skip trades that would occur on non-trading days
+                if not is_trading_day(entry_date):
+                    continue
+                
                 bt = BacktestTrade(
                     symbol=symbol,
                     direction=trade.get('direction', 'bullish'),
-                    entry_date=datetime.fromisoformat(trade['entry_date']) if isinstance(trade['entry_date'], str) else trade['entry_date'],
+                    entry_date=entry_date,
                     entry_price=trade['entry_price'],
                     stop_loss=trade['stop_loss'],
                     tp1=trade.get('tp1'),
