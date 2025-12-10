@@ -1553,7 +1553,7 @@ def main():
     4. Loop until success or max iterations
     5. Generate final reports
     """
-    MAX_ITERATIONS = 10
+    MAX_ITERATIONS = 20
     iteration = 0
     success = False
     
