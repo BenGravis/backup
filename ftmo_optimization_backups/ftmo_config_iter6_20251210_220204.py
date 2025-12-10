@@ -30,7 +30,7 @@ class FTMO10KConfig:
     total_dd_emergency_pct: float = 7.0  # Emergency mode at 7% total DD
 
     # === POSITION SIZING (Match /backtest command) ===
-    risk_per_trade_pct: float = 0.6  # Match /backtest command (1% = $100 per trade on 10K)
+    risk_per_trade_pct: float = 0.6499999999999999  # Match /backtest command (1% = $100 per trade on 10K)
     max_risk_aggressive_pct: float = 1.0  # Aggressive mode: 1%
     max_risk_normal_pct: float = 0.75  # Normal mode: 0.75%
     max_risk_conservative_pct: float = 0.5  # Conservative mode: 0.5%
@@ -55,8 +55,8 @@ class FTMO10KConfig:
     max_sl_atr_ratio: float = 3.0  # Maximum SL = 3.0 * ATR
 
     # === CONFLUENCE SETTINGS ===
-    min_confluence_score: int = 4  # Start at 4/7, optimizer can adjust down if needed
-    min_quality_factors: int = 2  # Minimum 2 quality factors
+    min_confluence_score: int = 5  # Start at 4/7, optimizer can adjust down if needed
+    min_quality_factors: int = 3  # Minimum 2 quality factors
 
     # === TAKE PROFIT SETTINGS ===
     tp1_r_multiple: float = 1.5  # TP1 at 1.5R
