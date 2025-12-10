@@ -1,7 +1,7 @@
 # Blueprint Trader AI - FTMO MT5 Trading Bot
 
 ## Overview
-Blueprint Trader AI is an automated trading bot for FTMO Challenge accounts. It runs 24/7 on a Windows VM with MetaTrader 5, using the same proven strategy from backtests for live trading. Discord is used ONLY for monitoring commands - all trading happens independently on the VM.
+Blueprint Trader AI is an automated trading bot for FTMO Challenge accounts. It runs 24/7 on a Windows VM with MetaTrader 5, using the same proven strategy from backtests for live trading. A Flask web server provides a lightweight monitoring interface - all trading happens independently on the VM.
 
 ## User Preferences
 - Preferred communication style: Simple, everyday language
@@ -217,6 +217,15 @@ Start-ScheduledTask -TaskName TradrLive
 ## Recent Changes
 
 ### December 2025
+- **H4 STOP LOSS CALCULATION**: Changed SL calculation to use H4 timeframe structure instead of Daily
+  - Modified `compute_trade_levels` in `strategy_core.py` to accept and use H4 candles
+  - Uses 20 H4 candles (~3.3 trading days) instead of 35 daily candles (~7 weeks)
+  - Results in tighter stops = larger position sizes = higher profits per trade
+  - Updated `get_sl_limits` in `ftmo_config.py` for H4-based structure stops
+  - Analyzer results: 515 trades, 15 challenges passed, avg win profit $90.31
+- **REMOVED DISCORD**: Replaced Discord bot with lightweight Flask web server
+  - New `main.py` serves as simple monitoring endpoint
+  - All trading happens independently on Windows VM
 - **CRITICAL FIX**: Sequential Partial Take-Profit Logic in `strategy_core.py`
   - Fixed bug where TP2 could hit without TP1 hitting first
   - Now properly calculates weighted partial profits:
