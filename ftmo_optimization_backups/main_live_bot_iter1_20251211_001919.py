@@ -627,15 +627,8 @@ class LiveTradingBot:
                 return False
             
             max_trades = FTMO_CONFIG.get_max_trades(profit_pct)
-            pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
-            total_exposure = snapshot.open_positions + pending_count
-            
-            if snapshot.open_positions >= max_trades and entry_distance_r <= FTMO_CONFIG.immediate_entry_r:
-                log.info(f"[{symbol}] Max filled positions reached: {snapshot.open_positions}/{max_trades} - cannot place market order")
-                return False
-            
-            if total_exposure >= FTMO_CONFIG.max_pending_orders:
-                log.info(f"[{symbol}] Max total exposure reached: {total_exposure}/{FTMO_CONFIG.max_pending_orders} (positions: {snapshot.open_positions}, pending: {pending_count})")
+            if snapshot.open_positions >= max_trades:
+                log.info(f"[{symbol}] Max trades reached: {snapshot.open_positions}/{max_trades}")
                 return False
             
             if snapshot.total_risk_pct >= FTMO_CONFIG.max_cumulative_risk_pct:

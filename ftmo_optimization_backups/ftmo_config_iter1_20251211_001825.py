@@ -37,7 +37,7 @@ class FTMO10KConfig:
     max_cumulative_risk_pct: float = 5.0  # Max total risk across all positions
 
     # === TRADE LIMITS ===
-    max_concurrent_trades: int = 3  # Allow more trades for challenge completion (analyzer doesn't limit)
+    max_concurrent_trades: int = 2  # Allow more trades for challenge completion
     max_trades_per_day: int = 5  # Max 5 trades per day
     max_trades_per_week: int = 20  # Max 20 trades per week
     max_pending_orders: int = 5  # Max 5 pending orders

@@ -37,7 +37,7 @@ class FTMO10KConfig:
     max_cumulative_risk_pct: float = 5.0  # Max total risk across all positions
 
     # === TRADE LIMITS ===
-    max_concurrent_trades: int = 3  # Allow more trades for challenge completion (analyzer doesn't limit)
+    max_concurrent_trades: int = 2  # Allow more trades for challenge completion
     max_trades_per_day: int = 5  # Max 5 trades per day
     max_trades_per_week: int = 20  # Max 20 trades per week
     max_pending_orders: int = 5  # Max 5 pending orders
@@ -55,8 +55,8 @@ class FTMO10KConfig:
     max_sl_atr_ratio: float = 3.0  # Maximum SL = 3.0 * ATR
 
     # === CONFLUENCE SETTINGS ===
-    min_confluence_score: int = 4  # Start at 4/7, optimizer can adjust down if needed
-    min_quality_factors: int = 2  # Minimum 2 quality factors
+    min_confluence_score: int = 5  # Start at 4/7, optimizer can adjust down if needed
+    min_quality_factors: int = 3  # Minimum 2 quality factors
 
     # === TAKE PROFIT SETTINGS ===
     tp1_r_multiple: float = 1.5  # TP1 at 1.5R
