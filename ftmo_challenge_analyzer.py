@@ -5,11 +5,11 @@ Ultimate FTMO Challenge Performance Analyzer - Jan 2025 to Nov 2025
 This module provides a comprehensive backtesting and self-optimizing system that:
 1. Backtests main_live_bot.py for the entire period Jan 2025 - Nov 2025
 2. Runs continuous FTMO challenges (Step 1 + Step 2 = 1 complete challenge)
-3. Tracks ALL trades with complete entry/exit data validated against Dukascopy
+3. Tracks ALL trades with complete entry/exit data validated against OANDA
 4. Generates detailed CSV reports with all trade details
 5. Self-optimizes by MODIFYING main_live_bot.py parameters until achieving targets
 6. Target: Minimum 14 challenges passed, Maximum 2 failed
-7. Shows total earnings potential from a $10,000 account over 11 months
+7. Shows total earnings potential from a $200,000 account over 11 months
 """
 
 import json
@@ -37,7 +37,7 @@ from strategy_core import (
 from data import get_ohlcv as get_ohlcv_api
 from ftmo_config import FTMO_CONFIG, FTMO10KConfig, get_pip_size, get_sl_limits
 from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
-from tradr.data.dukascopy import DukascopyDownloader
+from tradr.data.oanda import OandaClient
 
 OUTPUT_DIR = Path("ftmo_analysis_output")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -116,6 +116,7 @@ class BacktestTrade:
     price_validated: bool = False
     validation_notes: str = ""
     trailing_sl: Optional[float] = None
+    lot_size: float = 0.0
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -149,6 +150,7 @@ class BacktestTrade:
             "Holding Time (hours)": f"{self.holding_time_hours:.1f}",
             "Price Data Validated?": "YES" if self.price_validated else "NO",
             "Validation Notes": self.validation_notes,
+            "Lot Size": f"{self.lot_size:.2f}",
         }
 
 
@@ -556,28 +558,28 @@ class MainLiveBotModifier:
         return self.modification_log
 
 
-class DukascopyValidator:
-    """Validates trade prices against Dukascopy historical data."""
+class OandaValidator:
+    """Validates trade prices against OANDA historical data."""
     
     def __init__(self):
         self.validation_cache = {}
-        self.downloader = DukascopyDownloader()
+        self.client = OandaClient()
         
     def _get_candle_for_date(self, symbol: str, trade_date: datetime) -> Optional[Dict]:
-        """Fetch OHLCV candle data for a specific date from Dukascopy."""
+        """Fetch OHLCV candle data for a specific date from OANDA."""
         cache_key = f"{symbol}_{trade_date.date()}"
         
         if cache_key in self.validation_cache:
             return self.validation_cache[cache_key]
         
         try:
-            trade_day = trade_date.date() if hasattr(trade_date, 'date') else trade_date
-            ohlcv_data = self.downloader.get_ohlcv(
+            trade_day = trade_date if isinstance(trade_date, datetime) else datetime.combine(trade_date, datetime.min.time())
+            ohlcv_data = self.client.get_candles(
                 symbol=symbol,
-                start_date=trade_day,
-                end_date=trade_day,
-                timeframe="D",
-                use_cache=True
+                granularity="D",
+                count=1,
+                from_time=trade_day,
+                to_time=trade_day + timedelta(days=1),
             )
             
             if ohlcv_data:
@@ -599,7 +601,7 @@ class DukascopyValidator:
         return (low - tolerance) <= price <= (high + tolerance)
     
     def validate_trade(self, trade: BacktestTrade, symbol: str) -> Tuple[bool, str]:
-        """Validate that trade entry/exit prices align with actual Dukascopy market data."""
+        """Validate that trade entry/exit prices align with actual OANDA market data."""
         notes = []
         is_valid = True
         
@@ -625,8 +627,27 @@ class DukascopyValidator:
                     notes.append("SL below entry for bearish trade")
                     is_valid = False
             
+            if is_valid and trade.entry_date:
+                entry_candle = self._get_candle_for_date(symbol, trade.entry_date)
+                if entry_candle:
+                    if not self._price_within_candle(trade.entry_price, entry_candle, tolerance):
+                        notes.append(f"Entry price {trade.entry_price} outside candle range [{entry_candle.get('low')}-{entry_candle.get('high')}]")
+                        is_valid = False
+                    else:
+                        notes.append("Entry price validated against OANDA candle")
+            
+            if is_valid and trade.exit_date and trade.exit_price > 0:
+                exit_candle = self._get_candle_for_date(symbol, trade.exit_date)
+                if exit_candle:
+                    if not self._price_within_candle(trade.exit_price, exit_candle, tolerance):
+                        notes.append(f"Exit price {trade.exit_price} outside candle range [{exit_candle.get('low')}-{exit_candle.get('high')}]")
+                        is_valid = False
+                    else:
+                        notes.append("Exit price validated against OANDA candle")
+            
             if is_valid and not any("outside" in n.lower() or "mismatch" in n.lower() for n in notes):
-                notes = ["Price levels validated successfully"]
+                if not notes:
+                    notes = ["Price levels validated successfully"]
                 
         except Exception as e:
             notes.append(f"Validation error: {str(e)}")
@@ -635,14 +656,14 @@ class DukascopyValidator:
         return is_valid, "; ".join(notes)
     
     def validate_all_trades(self, trades: List[BacktestTrade]) -> Dict:
-        """Validate all trades against Dukascopy data and generate report."""
+        """Validate all trades against OANDA data and generate report."""
         total = len(trades)
         perfect_match = 0
         minor_discrepancies = 0
         major_issues = 0
         suspicious = 0
         
-        print(f"\n[DukascopyValidator] Validating {total} trades...")
+        print(f"\n[OandaValidator] Validating {total} trades...")
         
         for i, trade in enumerate(trades):
             if (i + 1) % 100 == 0:
@@ -662,7 +683,7 @@ class DukascopyValidator:
                 else:
                     major_issues += 1
         
-        print(f"[DukascopyValidator] Validation complete: {perfect_match} perfect, {minor_discrepancies} minor, {major_issues} major")
+        print(f"[OandaValidator] Validation complete: {perfect_match} perfect, {minor_discrepancies} minor, {major_issues} major")
         
         return {
             "total_validated": total,
@@ -741,6 +762,18 @@ class ChallengeSequencer:
         tp3_hit = "TP3" in trade.exit_reason
         sl_hit = trade.exit_reason == "SL"
         
+        lot_size = 0.0
+        if risk_pips > 0:
+            if "XAU" in trade.symbol.upper() or "GOLD" in trade.symbol.upper():
+                pip_value = 1.0  # Gold: 100 oz * $0.01 pip = $1 per pip per lot
+            elif "XAG" in trade.symbol.upper() or "SILVER" in trade.symbol.upper():
+                pip_value = 5.0  # Silver: 5000 oz * $0.001 pip ≈ $5 per pip per lot
+            elif "JPY" in trade.symbol.upper():
+                pip_value = 6.67  # Approximation at USD/JPY ≈ 150
+            else:
+                pip_value = 10.0  # Standard forex: 100,000 * 0.0001 = $10 per pip per lot
+            lot_size = risk_per_trade_usd / (risk_pips * pip_value)
+        
         return BacktestTrade(
             trade_num=self.trade_counter,
             challenge_num=challenge_num,
@@ -770,6 +803,7 @@ class ChallengeSequencer:
             result=result,
             risk_pips=risk_pips,
             holding_time_hours=holding_hours,
+            lot_size=lot_size,
         )
     
     def _run_step(
@@ -1514,7 +1548,7 @@ FTMO CHALLENGE PERFORMANCE - JAN 2025 TO NOV 2025
 {'='*80}
 
 PERIOD: January 1, 2025 - November 30, 2025 (11 months)
-ACCOUNT SIZE: $10,000 (per challenge)
+ACCOUNT SIZE: $200,000 (per challenge)
 TOTAL TRADES EXECUTED: {total_trades}
 
 CHALLENGE RESULTS:
@@ -1748,15 +1782,15 @@ def run_full_period_backtest(
             monthly_data = get_ohlcv_api(asset, timeframe="M", count=60, use_cache=True) or []
             h4_data = get_ohlcv_api(asset, timeframe="H4", count=1000, use_cache=True) or []
             
-            dukascopy_data = None
+            oanda_data = None
             try:
-                downloader = DukascopyDownloader()
-                dukascopy_data = downloader.get_ohlcv(
+                oanda_client = OandaClient()
+                oanda_data = oanda_client.get_candles(
                     symbol=asset,
-                    start_date=start_date.date() if hasattr(start_date, 'date') else start_date,
-                    end_date=end_date.date() if hasattr(end_date, 'date') else end_date,
-                    timeframe="D",
-                    use_cache=True,
+                    granularity="D",
+                    count=500,
+                    from_time=start_date,
+                    to_time=end_date,
                 )
             except Exception as e:
                 pass
@@ -1813,21 +1847,21 @@ def run_full_period_backtest(
                 if not is_valid_trading_day(trade_dt):
                     continue
                 
-                if dukascopy_data:
+                if oanda_data:
                     trade_date_only = trade_dt.date() if hasattr(trade_dt, 'date') else trade_dt
-                    for duk_candle in dukascopy_data:
-                        duk_time = duk_candle.get("time")
-                        if isinstance(duk_time, datetime):
-                            duk_date = duk_time.date()
+                    for oanda_candle in oanda_data:
+                        oanda_time = oanda_candle.get("time")
+                        if isinstance(oanda_time, datetime):
+                            oanda_date = oanda_time.date()
                         else:
-                            duk_date = duk_time
+                            oanda_date = oanda_time
                         
-                        if duk_date == trade_date_only:
+                        if oanda_date == trade_date_only:
                             is_valid, notes = validate_price_against_candle(
                                 trade.entry_price,
                                 trade.exit_price,
-                                duk_candle.get("high", float('inf')),
-                                duk_candle.get("low", 0),
+                                oanda_candle.get("high", float('inf')),
+                                oanda_candle.get("low", 0),
                             )
                             break
                 
@@ -1865,7 +1899,7 @@ def main_challenge_analyzer():
     iteration = 0
     success = False
     
-    start_date = datetime(2025, 1, 1)
+    start_date = datetime(2024, 10, 1)
     end_date = datetime(2025, 11, 30)
     
     results: Dict = {"challenges_passed": 0, "challenges_failed": 0, "all_results": [], "all_trades": [], "total_challenges_attempted": 0}
@@ -1920,7 +1954,7 @@ def main_challenge_analyzer():
         sequencer = ChallengeSequencer(trades, start_date, end_date, config)
         results = sequencer.run_sequential_challenges()
         
-        validator = DukascopyValidator()
+        validator = OandaValidator()
         validation_report = validator.validate_all_trades(sequencer.all_backtest_trades)
         
         success, issues = optimizer.check_success_criteria(results)
