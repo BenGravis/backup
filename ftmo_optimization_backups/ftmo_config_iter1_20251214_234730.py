@@ -55,8 +55,8 @@ class FTMO200KConfig:
     max_sl_atr_ratio: float = 3.0  # Maximum SL = 3.0 * ATR
 
     # === CONFLUENCE SETTINGS ===
-    min_confluence_score: int = 6  # Optimized: 3/7 - matches winning config from optimizer
-    min_quality_factors: int = 3  # Minimum 1 quality factor
+    min_confluence_score: int = 5  # Optimized: 3/7 - matches winning config from optimizer
+    min_quality_factors: int = 2  # Minimum 1 quality factor
 
     # === TAKE PROFIT SETTINGS ===
     tp1_r_multiple: float = 1.5  # TP1 at 1.5R
@@ -467,10 +467,6 @@ PIP_SIZES = {
     "GER40": 1.0,
     "FRA40": 1.0,
     "JPN225": 1.0,
-
-    # Crypto (1.0 = $1 move is 1 pip)
-    "BTCUSD": 1.0,
-    "ETHUSD": 1.0,
 }
 
 
@@ -479,32 +475,20 @@ def get_pip_size(symbol: str) -> float:
     Get pip size for a symbol.
     Returns the point value (0.00001 for 5-digit EUR/USD, 0.001 for 3-digit JPY pairs).
     """
-    # Normalize symbol - remove underscores, suffixes, convert to uppercase
-    base_symbol = symbol.replace('.a', '').replace('_m', '').replace('_', '').upper()
+    # Normalize symbol
+    base_symbol = symbol.replace('.a', '').replace('_m', '').upper()
 
     # Check exact match
     if base_symbol in PIP_SIZES:
         return PIP_SIZES[base_symbol]
 
-    # Check by asset type (order matters - check specific before generic)
-    # Crypto first - large pip values
-    if "BTC" in base_symbol:
-        return 1.0  # $1 move = 1 pip for Bitcoin
-    elif "ETH" in base_symbol:
-        return 1.0  # $1 move = 1 pip for Ethereum
-    # Indices
-    elif any(i in base_symbol for i in ["SPX", "US500"]):
-        return 0.1  # SPX500
-    elif any(i in base_symbol for i in ["NAS", "US100", "US30", "UK100", "GER40", "FRA40", "JPN225"]):
-        return 1.0  # Other indices
-    # Metals
+    # Default based on symbol type
+    if "JPY" in base_symbol or "HUF" in base_symbol:
+        return 0.001  # 3-digit quote
     elif "XAU" in base_symbol or "GOLD" in base_symbol:
         return 0.01  # Gold
     elif "XAG" in base_symbol or "SILVER" in base_symbol:
         return 0.001  # Silver
-    # JPY pairs
-    elif "JPY" in base_symbol or "HUF" in base_symbol:
-        return 0.001  # 3-digit quote
     else:
         return 0.00001  # Standard 5-digit forex
 

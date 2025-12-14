@@ -1127,5 +1127,25 @@
       "MIN_CONFLUENCE -> 5"
     ],
     "timestamp": "2025-12-14T23:27:13.642387"
+  },
+  {
+    "iteration": 1,
+    "file": "ftmo_config.py",
+    "backup": "ftmo_optimization_backups/ftmo_config_iter1_20251214_234730.py",
+    "changes": [
+      "min_confluence_score -> 6",
+      "min_quality_factors -> 3"
+    ],
+    "timestamp": "2025-12-14T23:47:30.405536"
+  },
+  {
+    "iteration": 1,
+    "file": "strategy_core.py",
+    "backup": "ftmo_optimization_backups/strategy_core_iter1_20251214_234730.py",
+    "changes": [
+      "min_confluence -> 6",
+      "min_quality_factors -> 3"
+    ],
+    "timestamp": "2025-12-14T23:47:30.414790"
   }
 ]
