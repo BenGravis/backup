@@ -18,3 +18,7 @@ flask
 flask
 flask
 flask
+flask
+numpy
+pandas
+requests
