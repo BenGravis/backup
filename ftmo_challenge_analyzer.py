@@ -136,10 +136,10 @@ def run_quarterly_backtest(
         excluded_assets=excluded_assets,
     )
     
-    wins = sum(1 for t in trades if t.r_multiple > 0)
-    losses = sum(1 for t in trades if t.r_multiple <= 0)
-    total_r = sum(t.r_multiple for t in trades)
-    r_values = [t.r_multiple for t in trades]
+    wins = sum(1 for t in trades if getattr(t, 'is_winner', getattr(t, 'rr', 0) > 0))
+    losses = sum(1 for t in trades if not getattr(t, 'is_winner', getattr(t, 'rr', 0) > 0))
+    total_r = sum(getattr(t, 'rr', getattr(t, 'r_multiple', 0)) for t in trades)
+    r_values = [getattr(t, 'rr', getattr(t, 'r_multiple', 0)) for t in trades]
     
     metrics = {
         "quarter": quarter,
@@ -292,8 +292,8 @@ def test_parameter_stability(
             excluded_assets=excluded_assets,
         )
         
-        wins = sum(1 for t in trades if t.r_multiple > 0)
-        total_r = sum(t.r_multiple for t in trades)
+        wins = sum(1 for t in trades if getattr(t, 'is_winner', getattr(t, 'rr', 0) > 0))
+        total_r = sum(getattr(t, 'rr', getattr(t, 'r_multiple', 0)) for t in trades)
         win_rate = (wins / len(trades) * 100) if trades else 0
         
         results[f"confluence_{confluence}"] = {
@@ -367,11 +367,11 @@ def run_out_of_sample_test(
         excluded_assets=excluded_assets,
     )
     
-    wins = sum(1 for t in trades if t.r_multiple > 0)
-    losses = sum(1 for t in trades if t.r_multiple <= 0)
-    total_r = sum(t.r_multiple for t in trades)
+    wins = sum(1 for t in trades if getattr(t, 'is_winner', getattr(t, 'rr', 0) > 0))
+    losses = sum(1 for t in trades if not getattr(t, 'is_winner', getattr(t, 'rr', 0) > 0))
+    total_r = sum(getattr(t, 'rr', getattr(t, 'r_multiple', 0)) for t in trades)
     
-    r_values = [t.r_multiple for t in trades]
+    r_values = [getattr(t, 'rr', getattr(t, 'r_multiple', 0)) for t in trades]
     avg_r = total_r / len(trades) if trades else 0
     std_r = (sum((r - avg_r)**2 for r in r_values) / len(r_values))**0.5 if len(r_values) > 1 else 0
     
