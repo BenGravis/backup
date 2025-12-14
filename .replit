@@ -43,6 +43,10 @@ args = "Web Server"
 task = "workflow.run"
 args = "FTMO Analyzer"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Dukascopy Data Download"
+
 [[workflows.workflow]]
 name = "Web Server"
 author = "agent"
@@ -62,6 +66,17 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python ftmo_challenge_analyzer.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Dukascopy Data Download"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python download_dukascopy_data.py"
 
 [workflows.workflow.metadata]
 outputType = "console"
