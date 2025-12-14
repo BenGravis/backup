@@ -41,3 +41,5 @@ pandas
 requests
 flask
 flask-cors
+flask
+flask-cors
