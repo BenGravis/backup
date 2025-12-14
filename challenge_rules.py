@@ -26,7 +26,7 @@ class ChallengeStep(Enum):
 class FiversRules:
     """FTMO Challenge Rules (variable name kept for backward compatibility)"""
 
-    account_size: float = 10_000.0
+    account_size: float = 200_000.0
     account_currency: str = "USD"
 
     step1_profit_target_pct: float = 10.0  # FTMO Challenge: 10% target
@@ -81,7 +81,8 @@ class FiversRules:
         return self.account_size * (self.get_target_pct(step) / 100)
 
 
-FIVERS_10K_RULES = FiversRules()
+FTMO_200K_RULES = FiversRules()
+FIVERS_10K_RULES = FTMO_200K_RULES  # Backward compatibility alias
 
 
 @dataclass
@@ -118,8 +119,8 @@ class StepResult:
     start_date: datetime
     end_date: Optional[datetime] = None
 
-    starting_balance: float = 10_000.0
-    final_balance: float = 10_000.0
+    starting_balance: float = 200_000.0
+    final_balance: float = 200_000.0
     target_pct: float = 8.0
 
     passed: bool = False
@@ -214,7 +215,7 @@ class ChallengeSimulationResult:
     total_trades: int = 0
     total_profitable_days: int = 0
 
-    final_equity: float = 10_000.0
+    final_equity: float = 200_000.0
     total_profit_usd: float = 0.0
     total_profit_pct: float = 0.0
 

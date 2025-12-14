@@ -6,7 +6,7 @@ Runs backtests for November 2024 and optimizes parameters until BOTH
 Phase 1 AND Phase 2 of the FTMO challenge are passed.
 
 FTMO Challenge Rules:
-- Phase 1: 10% profit on $10K, max 5% daily loss, max 10% drawdown, min 4 trading days
+- Phase 1: 10% profit on $200K, max 5% daily loss, max 10% drawdown, min 4 trading days
 - Phase 2: 5% profit on Phase 1 ending balance, same percentage limits
 
 Author: Blueprint Trader AI
@@ -102,7 +102,7 @@ class OptimizableParams:
 class FTMOBacktestRunner:
     """Runs FTMO-compliant backtests with proper phase tracking."""
     
-    INITIAL_BALANCE = 10000.0
+    INITIAL_BALANCE = 200000.0
     PHASE1_PROFIT_TARGET_PCT = 10.0
     PHASE2_PROFIT_TARGET_PCT = 5.0
     MAX_DAILY_LOSS_PCT = 5.0
@@ -629,7 +629,7 @@ def run_optimization_loop(max_iterations: int = 50, symbols: List[str] = None):
     print("🚀 FTMO SELF-OPTIMIZING BACKTEST SYSTEM")
     print("="*70)
     print(f"Target: Pass BOTH Phase 1 (10% profit) AND Phase 2 (5% profit)")
-    print(f"Starting Balance: $10,000")
+    print(f"Starting Balance: $200,000")
     print(f"Max Iterations: {max_iterations}")
     print("="*70)
     

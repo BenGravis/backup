@@ -36,7 +36,7 @@ from challenge_rules import FIVERS_10K_RULES
 # These values are exported for backward compatibility
 
 ACCOUNT_CURRENCY = FIVERS_10K_RULES.account_currency
-ACCOUNT_SIZE = FIVERS_10K_RULES.account_size  # 10,000 USD
+ACCOUNT_SIZE = FIVERS_10K_RULES.account_size  # 200,000 USD (FTMO 200K)
 MAX_DAILY_LOSS_PCT = FIVERS_10K_RULES.max_daily_loss_pct / 100  # 0.05 (5%)
 MAX_TOTAL_LOSS_PCT = FIVERS_10K_RULES.max_total_drawdown_pct / 100  # 0.10 (10%)
 RISK_PER_TRADE_PCT = FIVERS_10K_RULES.risk_per_trade_pct / 100  # 0.01 (1%)
