@@ -13,7 +13,7 @@ from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 
-from tradr.risk.position_sizing import calculate_lot_size, get_pip_value
+from tradr.risk.position_sizing import calculate_lot_size, get_pip_value, get_contract_specs
 
 
 @dataclass
@@ -28,8 +28,15 @@ class OpenPosition:
     entry_time: datetime
     
     def potential_loss_usd(self) -> float:
-        """Calculate potential loss if SL is hit."""
-        stop_pips = abs(self.entry_price - self.stop_loss) / 0.0001
+        """
+        Calculate potential loss if SL is hit.
+        
+        FIXED: Now uses symbol-specific pip size instead of hardcoded 0.0001.
+        This is critical for JPY pairs (0.01), Gold (0.01), BTC (1.0), etc.
+        """
+        specs = get_contract_specs(self.symbol)
+        pip_size = specs.get("pip_value", 0.0001)
+        stop_pips = abs(self.entry_price - self.stop_loss) / pip_size
         pip_value = get_pip_value(self.symbol, self.entry_price)
         return stop_pips * pip_value * self.lot_size
 
