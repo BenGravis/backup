@@ -1,11 +1,11 @@
 {
   "min_confluence": 5,
-  "min_quality_factors": 2,
+  "min_quality_factors": 1,
   "risk_per_trade_pct": 0.4,
   "max_concurrent_trades": 5,
   "max_open_trades": 5,
-  "iteration": 8,
-  "generated_at": "2025-12-15T10:00:20.619125Z",
+  "iteration": 3,
+  "generated_at": "2025-12-15T09:42:46.742799Z",
   "generated_by": "ftmo_challenge_analyzer.py",
   "version": "1.0.0"
 }
