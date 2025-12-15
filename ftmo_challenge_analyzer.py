@@ -1520,46 +1520,157 @@ class PerformanceOptimizer:
         }
     
     def determine_optimizations(self, patterns: Dict, iteration: int) -> Dict[str, Any]:
-        """Determine what optimizations to apply based on patterns."""
-        optimizations = {}
+        """
+        Determine what optimizations to apply based on patterns.
         
-        # Disabled dynamic asset exclusion - only AUDNZD is excluded (set in __init__)
-        # This ensures all symbols are traded regardless of individual performance
+        Uses ACCUMULATOR approach to prevent conditions from overwriting each other.
+        Each condition adjusts delta values, then final values are calculated at the end.
+        GUARANTEES at least one parameter changes each iteration to prevent stagnation.
+        """
         low_wr_assets = patterns.get("low_winrate_assets", [])
         low_r_assets = patterns.get("low_r_assets", [])
         
-        # Log underperforming assets but don't exclude them
         if low_wr_assets or low_r_assets:
             assets_info = list(set(low_wr_assets + low_r_assets))
             if assets_info:
                 print(f"  [Optimizer] Note: {len(assets_info)} assets below thresholds (not excluding)")
         
+        confluence_delta = 0
+        quality_delta = 0
+        risk_delta = 0.0
+        concurrent_delta = 0
+        changes_made = []
+        
         if patterns["total_trades"] < self.MIN_TRADES_NEEDED:
-            new_confluence = max(2, self.current_min_confluence - 1)
-            new_quality = max(1, self.current_min_quality - 1)
-            optimizations["min_confluence_score"] = new_confluence
-            optimizations["min_quality_factors"] = new_quality
-            print(f"  [Optimizer] Too few trades ({patterns['total_trades']}). Lowering confluence {self.current_min_confluence} -> {new_confluence}")
+            confluence_delta -= 1
+            quality_delta -= 1
+            changes_made.append(f"Too few trades ({patterns['total_trades']}/{self.MIN_TRADES_NEEDED}): confluence-1, quality-1")
         
         if patterns["dd_failures"] > 0 or patterns["daily_loss_failures"] > 0:
-            new_risk = max(0.5, self.current_risk_pct - 0.15)
-            new_concurrent = max(2, self.current_max_concurrent - 1)
-            optimizations["risk_per_trade_pct"] = new_risk
-            optimizations["max_concurrent_trades"] = new_concurrent
-            print(f"  [Optimizer] Risk failures detected. Reducing risk {self.current_risk_pct} -> {new_risk}")
-        
+            risk_delta -= 0.15
+            concurrent_delta -= 1
+            changes_made.append(f"Risk failures (DD:{patterns['dd_failures']}, Daily:{patterns['daily_loss_failures']}): risk-0.15, concurrent-1")
         
         if len(low_wr_assets) > 5:
-            new_confluence = min(6, self.current_min_confluence + 1)
-            new_quality = min(3, self.current_min_quality + 1)
-            optimizations["min_confluence_score"] = new_confluence
-            optimizations["min_quality_factors"] = new_quality
-            print(f"  [Optimizer] Many low win-rate assets. Increasing quality filters.")
+            confluence_delta += 1
+            quality_delta += 1
+            changes_made.append(f"Many low WR assets ({len(low_wr_assets)}): confluence+1, quality+1")
         
         if patterns["profit_failures"] > 2 and patterns["dd_failures"] == 0:
-            new_confluence = max(2, self.current_min_confluence - 1)
-            optimizations["min_confluence_score"] = new_confluence
-            print(f"  [Optimizer] Profit target failures. Lowering confluence to generate more trades.")
+            confluence_delta -= 1
+            changes_made.append(f"Profit failures ({patterns['profit_failures']}): confluence-1")
+        
+        for change in changes_made:
+            print(f"  [Optimizer] {change}")
+        
+        optimizations = {}
+        
+        if confluence_delta != 0:
+            new_confluence = max(2, min(6, self.current_min_confluence + confluence_delta))
+            if new_confluence != self.current_min_confluence:
+                optimizations["min_confluence_score"] = new_confluence
+                print(f"  [Optimizer] Confluence: {self.current_min_confluence} -> {new_confluence}")
+        
+        if quality_delta != 0:
+            new_quality = max(1, min(3, self.current_min_quality + quality_delta))
+            if new_quality != self.current_min_quality:
+                optimizations["min_quality_factors"] = new_quality
+                print(f"  [Optimizer] Quality: {self.current_min_quality} -> {new_quality}")
+        
+        if risk_delta != 0:
+            new_risk = max(0.3, min(1.5, self.current_risk_pct + risk_delta))
+            if abs(new_risk - self.current_risk_pct) >= 0.05:
+                optimizations["risk_per_trade_pct"] = round(new_risk, 2)
+                print(f"  [Optimizer] Risk: {self.current_risk_pct}% -> {new_risk:.2f}%")
+        
+        if concurrent_delta != 0:
+            new_concurrent = max(2, min(7, self.current_max_concurrent + concurrent_delta))
+            if new_concurrent != self.current_max_concurrent:
+                optimizations["max_concurrent_trades"] = new_concurrent
+                print(f"  [Optimizer] Concurrent: {self.current_max_concurrent} -> {new_concurrent}")
+        
+        if not optimizations:
+            print(f"  [Optimizer] Deltas produced no changes, applying multi-parameter grid exploration...")
+            
+            conf_options = [2, 3, 4, 5, 6]
+            quality_options = [1, 2, 3]
+            risk_options = [0.4, 0.5, 0.65, 0.8, 1.0, 1.2]
+            concurrent_options = [2, 3, 4, 5, 6]
+            
+            conf_idx = iteration % len(conf_options)
+            quality_idx = (iteration // len(conf_options)) % len(quality_options)
+            risk_idx = (iteration // (len(conf_options) * len(quality_options))) % len(risk_options)
+            concurrent_idx = iteration % len(concurrent_options)
+            
+            new_confluence = conf_options[conf_idx]
+            new_quality = quality_options[quality_idx]
+            new_risk = risk_options[risk_idx]
+            new_concurrent = concurrent_options[concurrent_idx]
+            
+            if new_confluence != self.current_min_confluence:
+                optimizations["min_confluence_score"] = new_confluence
+                print(f"  [Optimizer] Grid exploration confluence: {self.current_min_confluence} -> {new_confluence}")
+            
+            if new_quality != self.current_min_quality:
+                optimizations["min_quality_factors"] = new_quality
+                print(f"  [Optimizer] Grid exploration quality: {self.current_min_quality} -> {new_quality}")
+            
+            if abs(new_risk - self.current_risk_pct) >= 0.05:
+                optimizations["risk_per_trade_pct"] = new_risk
+                print(f"  [Optimizer] Grid exploration risk: {self.current_risk_pct}% -> {new_risk}%")
+            
+            if new_concurrent != self.current_max_concurrent:
+                optimizations["max_concurrent_trades"] = new_concurrent
+                print(f"  [Optimizer] Grid exploration concurrent: {self.current_max_concurrent} -> {new_concurrent}")
+        
+        current_tuple = (self.current_min_confluence, self.current_min_quality, 
+                         self.current_risk_pct, self.current_max_concurrent)
+        
+        new_confluence = optimizations.get("min_confluence_score", self.current_min_confluence)
+        new_quality = optimizations.get("min_quality_factors", self.current_min_quality)
+        new_risk = optimizations.get("risk_per_trade_pct", self.current_risk_pct)
+        new_concurrent = optimizations.get("max_concurrent_trades", self.current_max_concurrent)
+        new_tuple = (new_confluence, new_quality, new_risk, new_concurrent)
+        
+        if new_tuple == current_tuple:
+            print(f"  [Optimizer] VALIDATION: No change detected, applying cascading guaranteed changes...")
+            
+            param_axis = iteration % 4
+            
+            if param_axis == 0:
+                conf_candidates = [c for c in [2, 3, 4, 5, 6] if c != self.current_min_confluence]
+                new_confluence = conf_candidates[iteration % len(conf_candidates)]
+                optimizations["min_confluence_score"] = new_confluence
+                print(f"  [Optimizer] Cascading confluence: {self.current_min_confluence} -> {new_confluence}")
+            
+            if param_axis == 1 or new_confluence == self.current_min_confluence:
+                quality_candidates = [q for q in [1, 2, 3] if q != self.current_min_quality]
+                new_quality = quality_candidates[iteration % len(quality_candidates)]
+                optimizations["min_quality_factors"] = new_quality
+                print(f"  [Optimizer] Cascading quality: {self.current_min_quality} -> {new_quality}")
+            
+            if param_axis == 2 or (new_confluence == self.current_min_confluence and new_quality == self.current_min_quality):
+                risk_candidates = [r for r in [0.4, 0.5, 0.65, 0.8, 1.0, 1.2] if abs(r - self.current_risk_pct) >= 0.1]
+                if risk_candidates:
+                    new_risk = risk_candidates[iteration % len(risk_candidates)]
+                    optimizations["risk_per_trade_pct"] = new_risk
+                    print(f"  [Optimizer] Cascading risk: {self.current_risk_pct}% -> {new_risk}%")
+            
+            if param_axis == 3 or not optimizations:
+                conc_candidates = [c for c in [2, 3, 4, 5, 6] if c != self.current_max_concurrent]
+                new_concurrent = conc_candidates[iteration % len(conc_candidates)]
+                optimizations["max_concurrent_trades"] = new_concurrent
+                print(f"  [Optimizer] Cascading concurrent: {self.current_max_concurrent} -> {new_concurrent}")
+        
+        final_confluence = optimizations.get("min_confluence_score", self.current_min_confluence)
+        final_quality = optimizations.get("min_quality_factors", self.current_min_quality)
+        final_risk = optimizations.get("risk_per_trade_pct", self.current_risk_pct)
+        final_concurrent = optimizations.get("max_concurrent_trades", self.current_max_concurrent)
+        final_tuple = (final_confluence, final_quality, final_risk, final_concurrent)
+        
+        assert final_tuple != current_tuple, f"FATAL: Optimizer failed to produce parameter change! Current={current_tuple}, Final={final_tuple}"
+        
+        print(f"  [Optimizer] VERIFIED: Parameters will change from {current_tuple} to {final_tuple}")
         
         return optimizations
     
