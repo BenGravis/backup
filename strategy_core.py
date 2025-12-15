@@ -2348,6 +2348,13 @@ def simulate_trades(
                     entered_signal_ids.add(sig_id)
                     continue
                 
+                # Hard volatility filter - skip trades in low volatility regimes
+                if params.use_atr_regime_filter:
+                    passes_vol, _ = check_volatility_filter(candles[:bar_idx+1], params.atr_min_percentile)
+                    if not passes_vol:
+                        entered_signal_ids.add(sig_id)
+                        continue
+                
                 if params.ml_min_prob > 0:
                     features = extract_ml_features(candles[:bar_idx+1], sig.flags, direction, params)
                     if features:
