@@ -582,7 +582,8 @@ def _find_bos_swing_for_bullish_n(candles: List[Dict], lookback: int = 20) -> Op
         green_candle_open = recent[min(swing_low_idx + 1, len(recent) - 1)]["open"]
     
     fib_start = min(red_candle_close, green_candle_open)
-    fib_end = recent[bos_idx]["high"]
+    bos_candle = recent[bos_idx]
+    fib_end = bos_candle["close"]
     
     return (fib_start, fib_end, swing_low_idx, bos_idx)
 
@@ -643,7 +644,8 @@ def _find_bos_swing_for_bearish_v(candles: List[Dict], lookback: int = 20) -> Op
         red_candle_open = recent[min(swing_high_idx + 1, len(recent) - 1)]["open"]
     
     fib_start = max(green_candle_close, red_candle_open)
-    fib_end = recent[bos_idx]["low"]
+    bos_candle = recent[bos_idx]
+    fib_end = bos_candle["close"]
     
     return (fib_start, fib_end, swing_high_idx, bos_idx)
 
