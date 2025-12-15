@@ -1147,6 +1147,7 @@ def simulate_trades(
     monthly_candles: Optional[List[Dict]] = None,
     weekly_candles: Optional[List[Dict]] = None,
     h4_candles: Optional[List[Dict]] = None,
+    include_transaction_costs: bool = True,
 ) -> List[Trade]:
     """
     Simulate trades through historical candles using the Blueprint strategy.
@@ -1159,6 +1160,9 @@ def simulate_trades(
     If the theoretical entry price is not available on the signal bar,
     we wait up to 5 bars for price to reach the entry level.
     
+    Transaction costs (spread + slippage) are deducted from each trade
+    when include_transaction_costs=True to produce realistic backtest results.
+    
     Args:
         candles: Daily OHLCV candles (oldest to newest)
         symbol: Asset symbol
@@ -1166,12 +1170,32 @@ def simulate_trades(
         monthly_candles: Optional monthly data
         weekly_candles: Optional weekly data
         h4_candles: Optional 4H data
+        include_transaction_costs: Whether to include spread/slippage costs (default True)
     
     Returns:
         List of completed Trade objects
     """
     if params is None:
         params = StrategyParams()
+    
+    transaction_cost_pips = 0.0
+    pip_value = 0.0001
+    
+    if include_transaction_costs:
+        try:
+            from params.params_loader import get_transaction_costs
+            from tradr.risk.position_sizing import get_contract_specs
+            
+            spread_pips, slippage_pips, _ = get_transaction_costs(symbol)
+            transaction_cost_pips = spread_pips + slippage_pips
+            
+            specs = get_contract_specs(symbol)
+            pip_value = specs.get("pip_value", 0.0001)
+        except Exception:
+            transaction_cost_pips = 2.5
+            pip_value = 0.0001
+    
+    transaction_cost_price = transaction_cost_pips * pip_value
     
     signals = generate_signals(
         candles, symbol, params,
@@ -1359,13 +1383,18 @@ def simulate_trades(
                     trade_closed = True
             
             if trade_closed:
+                cost_r = ot.get("transaction_cost_r", 0.0)
+                adjusted_rr = rr - cost_r
+                adjusted_reward = adjusted_rr * risk
+                adjusted_is_winner = is_winner and adjusted_rr >= 0
+                
                 trade = Trade(
                     symbol=symbol,
                     direction=direction,
                     entry_date=ot["entry_timestamp"],
                     exit_date=bar_timestamp,
                     entry_price=entry_price,
-                    exit_price=entry_price + reward if direction == "bullish" else entry_price - reward,
+                    exit_price=entry_price + adjusted_reward if direction == "bullish" else entry_price - adjusted_reward,
                     stop_loss=ot["sl"],
                     tp1=tp1,
                     tp2=tp2,
@@ -1373,9 +1402,9 @@ def simulate_trades(
                     tp4=tp4,
                     tp5=tp5,
                     risk=risk,
-                    reward=reward,
-                    rr=rr,
-                    is_winner=is_winner,
+                    reward=adjusted_reward,
+                    rr=adjusted_rr,
+                    is_winner=adjusted_is_winner,
                     exit_reason=exit_reason,
                     confluence_score=ot["confluence_score"],
                 )
@@ -1431,6 +1460,8 @@ def simulate_trades(
                 tp4_rr = (tp4 - entry_price) / risk if tp4 and direction == "bullish" else ((entry_price - tp4) / risk if tp4 else 0)
                 tp5_rr = (tp5 - entry_price) / risk if tp5 and direction == "bullish" else ((entry_price - tp5) / risk if tp5 else 0)
                 
+                cost_as_r = transaction_cost_price / risk if risk > 0 else 0.0
+                
                 open_trades.append({
                     "signal_id": sig_id,
                     "direction": direction,
@@ -1456,6 +1487,7 @@ def simulate_trades(
                     "tp4_rr": tp4_rr,
                     "tp5_rr": tp5_rr,
                     "confluence_score": sig.confluence_score,
+                    "transaction_cost_r": cost_as_r,
                 })
                 entered_signal_ids.add(sig_id)
     

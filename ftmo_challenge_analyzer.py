@@ -8,15 +8,13 @@ This module provides a comprehensive backtesting and self-optimizing system that
 3. Runs continuous FTMO challenges (Step 1 + Step 2 = 1 complete challenge)
 4. Tracks ALL trades with complete entry/exit data validated against OANDA
 5. Generates detailed CSV reports with all trade details
-6. Self-optimizes by MODIFYING main_live_bot.py parameters until achieving targets
+6. Self-optimizes by saving parameters to params/current_params.json (no source code mutation)
 7. Target: Minimum 14 challenges passed, Maximum 2 failed
 """
 
 import json
 import csv
 import os
-import re
-import shutil
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
@@ -39,14 +37,10 @@ from ftmo_config import FTMO_CONFIG, FTMO10KConfig, get_pip_size, get_sl_limits
 from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
 from tradr.data.oanda import OandaClient
 from tradr.risk.position_sizing import calculate_lot_size, get_contract_specs
+from params.params_loader import save_optimized_params
 
 OUTPUT_DIR = Path("ftmo_analysis_output")
 OUTPUT_DIR.mkdir(exist_ok=True)
-
-BACKUP_DIR = Path("ftmo_optimization_backups")
-BACKUP_DIR.mkdir(exist_ok=True)
-
-MODIFICATION_LOG_FILE = OUTPUT_DIR / "modification_log.json"
 
 # =============================================================================
 # WALK-FORWARD OPTIMIZATION DATE RANGES
@@ -548,355 +542,6 @@ class ChallengeResult:
             "start_date": self.start_date.isoformat() if self.start_date else None,
             "end_date": self.end_date.isoformat() if self.end_date else None,
         }
-
-
-class MainLiveBotModifier:
-    """
-    Actually modifies source files (ftmo_config.py, strategy_core.py, main_live_bot.py).
-    Creates backups before modification and tracks all changes in a log.
-    """
-    
-    FILES_TO_MODIFY = {
-        "ftmo_config": Path("ftmo_config.py"),
-        "strategy_core": Path("strategy_core.py"),
-        "main_live_bot": Path("main_live_bot.py"),
-    }
-    
-    def __init__(self, backup_dir: Path = BACKUP_DIR):
-        self.backup_dir = backup_dir
-        self.backup_dir.mkdir(exist_ok=True)
-        self.modification_log: List[Dict] = []
-        self._load_modification_log()
-    
-    def _load_modification_log(self):
-        """Load existing modification log if present."""
-        if MODIFICATION_LOG_FILE.exists():
-            try:
-                with open(MODIFICATION_LOG_FILE, 'r') as f:
-                    self.modification_log = json.load(f)
-            except Exception as e:
-                print(f"[MainLiveBotModifier] Could not load modification log: {e}")
-                self.modification_log = []
-    
-    def _save_modification_log(self):
-        """Save modification log to file."""
-        try:
-            with open(MODIFICATION_LOG_FILE, 'w') as f:
-                json.dump(self.modification_log, f, indent=2, default=str)
-        except Exception as e:
-            print(f"[MainLiveBotModifier] Could not save modification log: {e}")
-    
-    def _backup_file(self, file_path: Path, iteration: int) -> Optional[Path]:
-        """Create backup of file before modification."""
-        if not file_path.exists():
-            print(f"[MainLiveBotModifier] File not found: {file_path}")
-            return None
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_name = f"{file_path.stem}_iter{iteration}_{timestamp}{file_path.suffix}"
-        backup_path = self.backup_dir / backup_name
-        
-        try:
-            shutil.copy2(file_path, backup_path)
-            print(f"[MainLiveBotModifier] Backed up {file_path} -> {backup_path}")
-            return backup_path
-        except Exception as e:
-            print(f"[MainLiveBotModifier] Backup failed for {file_path}: {e}")
-            return None
-    
-    def _read_file(self, file_path: Path) -> Optional[str]:
-        """Read file content."""
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            print(f"[MainLiveBotModifier] Could not read {file_path}: {e}")
-            return None
-    
-    def _write_file(self, file_path: Path, content: str) -> bool:
-        """Write content to file."""
-        try:
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(content)
-            return True
-        except Exception as e:
-            print(f"[MainLiveBotModifier] Could not write {file_path}: {e}")
-            return False
-    
-    def modify_ftmo_config(
-        self,
-        iteration: int,
-        min_confluence_score: Optional[int] = None,
-        risk_per_trade_pct: Optional[float] = None,
-        max_concurrent_trades: Optional[int] = None,
-        min_quality_factors: Optional[int] = None,
-        max_cumulative_risk_pct: Optional[float] = None,
-    ) -> bool:
-        """
-        Modify ftmo_config.py with new parameter values.
-        Uses regex to find and replace parameter values.
-        """
-        file_path = self.FILES_TO_MODIFY["ftmo_config"]
-        
-        backup_path = self._backup_file(file_path, iteration)
-        if not backup_path:
-            return False
-        
-        content = self._read_file(file_path)
-        if not content:
-            return False
-        
-        changes = []
-        original_content = content
-        
-        if min_confluence_score is not None:
-            pattern = r'(min_confluence_score:\s*int\s*=\s*)\d+'
-            replacement = f'\\g<1>{min_confluence_score}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"min_confluence_score -> {min_confluence_score}")
-                content = new_content
-        
-        if risk_per_trade_pct is not None:
-            pattern = r'(risk_per_trade_pct:\s*float\s*=\s*)\d+\.?\d*'
-            replacement = f'\\g<1>{risk_per_trade_pct}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"risk_per_trade_pct -> {risk_per_trade_pct}")
-                content = new_content
-        
-        if max_concurrent_trades is not None:
-            pattern = r'(max_concurrent_trades:\s*int\s*=\s*)\d+'
-            replacement = f'\\g<1>{max_concurrent_trades}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"max_concurrent_trades -> {max_concurrent_trades}")
-                content = new_content
-        
-        if min_quality_factors is not None:
-            pattern = r'(min_quality_factors:\s*int\s*=\s*)\d+'
-            replacement = f'\\g<1>{min_quality_factors}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"min_quality_factors -> {min_quality_factors}")
-                content = new_content
-        
-        if max_cumulative_risk_pct is not None:
-            pattern = r'(max_cumulative_risk_pct:\s*float\s*=\s*)\d+\.?\d*'
-            replacement = f'\\g<1>{max_cumulative_risk_pct}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"max_cumulative_risk_pct -> {max_cumulative_risk_pct}")
-                content = new_content
-        
-        if content != original_content:
-            if self._write_file(file_path, content):
-                log_entry = {
-                    "iteration": iteration,
-                    "file": str(file_path),
-                    "backup": str(backup_path),
-                    "changes": changes,
-                    "timestamp": datetime.now().isoformat(),
-                }
-                self.modification_log.append(log_entry)
-                self._save_modification_log()
-                print(f"[MainLiveBotModifier] Modified {file_path}: {', '.join(changes)}")
-                return True
-        else:
-            print(f"[MainLiveBotModifier] No changes made to {file_path}")
-        
-        return False
-    
-    def modify_strategy_core(
-        self,
-        iteration: int,
-        min_confluence: Optional[int] = None,
-        min_quality_factors: Optional[int] = None,
-        atr_sl_multiplier: Optional[float] = None,
-        min_rr_ratio: Optional[float] = None,
-    ) -> bool:
-        """
-        Modify strategy_core.py with new parameter values.
-        """
-        file_path = self.FILES_TO_MODIFY["strategy_core"]
-        
-        backup_path = self._backup_file(file_path, iteration)
-        if not backup_path:
-            return False
-        
-        content = self._read_file(file_path)
-        if not content:
-            return False
-        
-        changes = []
-        original_content = content
-        
-        if min_confluence is not None:
-            pattern = r'(min_confluence:\s*int\s*=\s*)\d+'
-            replacement = f'\\g<1>{min_confluence}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"min_confluence -> {min_confluence}")
-                content = new_content
-        
-        if min_quality_factors is not None:
-            pattern = r'(min_quality_factors:\s*int\s*=\s*)\d+'
-            replacement = f'\\g<1>{min_quality_factors}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"min_quality_factors -> {min_quality_factors}")
-                content = new_content
-        
-        if atr_sl_multiplier is not None:
-            pattern = r'(atr_sl_multiplier:\s*float\s*=\s*)\d+\.?\d*'
-            replacement = f'\\g<1>{atr_sl_multiplier}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"atr_sl_multiplier -> {atr_sl_multiplier}")
-                content = new_content
-        
-        if min_rr_ratio is not None:
-            pattern = r'(min_rr_ratio:\s*float\s*=\s*)\d+\.?\d*'
-            replacement = f'\\g<1>{min_rr_ratio}'
-            new_content = re.sub(pattern, replacement, content)
-            if new_content != content:
-                changes.append(f"min_rr_ratio -> {min_rr_ratio}")
-                content = new_content
-        
-        if content != original_content:
-            if self._write_file(file_path, content):
-                log_entry = {
-                    "iteration": iteration,
-                    "file": str(file_path),
-                    "backup": str(backup_path),
-                    "changes": changes,
-                    "timestamp": datetime.now().isoformat(),
-                }
-                self.modification_log.append(log_entry)
-                self._save_modification_log()
-                print(f"[MainLiveBotModifier] Modified {file_path}: {', '.join(changes)}")
-                return True
-        
-        return False
-    
-    def modify_main_live_bot(
-        self,
-        iteration: int,
-        min_confluence: Optional[int] = None,
-    ) -> bool:
-        """
-        Modify main_live_bot.py with new parameter values.
-        
-        Note: main_live_bot.py uses MIN_CONFLUENCE = FTMO_CONFIG.min_confluence_score
-        which means modifying ftmo_config.py is the primary way to change this value.
-        This method handles both cases:
-        1. Direct literal value: MIN_CONFLUENCE = 5
-        2. Reference to FTMO_CONFIG: MIN_CONFLUENCE = FTMO_CONFIG.min_confluence_score
-        
-        For case 2, we convert it to a literal value for explicit control.
-        """
-        file_path = self.FILES_TO_MODIFY["main_live_bot"]
-        
-        backup_path = self._backup_file(file_path, iteration)
-        if not backup_path:
-            return False
-        
-        content = self._read_file(file_path)
-        if not content:
-            return False
-        
-        changes = []
-        original_content = content
-        
-        if min_confluence is not None:
-            # Pattern 1: Direct literal value (MIN_CONFLUENCE = 5)
-            pattern1 = r'(MIN_CONFLUENCE\s*=\s*)\d+'
-            if re.search(pattern1, content):
-                replacement = f'\\g<1>{min_confluence}'
-                new_content = re.sub(pattern1, replacement, content)
-                if new_content != content:
-                    changes.append(f"MIN_CONFLUENCE -> {min_confluence}")
-                    content = new_content
-            else:
-                # Pattern 2: Reference to FTMO_CONFIG (MIN_CONFLUENCE = FTMO_CONFIG.min_confluence_score)
-                pattern2 = r'MIN_CONFLUENCE\s*=\s*FTMO_CONFIG\.min_confluence_score.*'
-                if re.search(pattern2, content):
-                    replacement = f'MIN_CONFLUENCE = {min_confluence}  # Modified by optimizer'
-                    new_content = re.sub(pattern2, replacement, content)
-                    if new_content != content:
-                        changes.append(f"MIN_CONFLUENCE -> {min_confluence} (converted from FTMO_CONFIG reference)")
-                        content = new_content
-        
-        if content != original_content:
-            if self._write_file(file_path, content):
-                log_entry = {
-                    "iteration": iteration,
-                    "file": str(file_path),
-                    "backup": str(backup_path),
-                    "changes": changes,
-                    "timestamp": datetime.now().isoformat(),
-                }
-                self.modification_log.append(log_entry)
-                self._save_modification_log()
-                print(f"[MainLiveBotModifier] Modified {file_path}: {', '.join(changes)}")
-                return True
-        else:
-            # Note: If ftmo_config.py is modified, main_live_bot.py will pick up changes via import
-            print(f"[MainLiveBotModifier] No direct changes to {file_path} (values inherited from ftmo_config.py)")
-        
-        return False
-    
-    def apply_all_modifications(
-        self,
-        iteration: int,
-        min_confluence_score: Optional[int] = None,
-        risk_per_trade_pct: Optional[float] = None,
-        max_concurrent_trades: Optional[int] = None,
-        min_quality_factors: Optional[int] = None,
-        max_cumulative_risk_pct: Optional[float] = None,
-        atr_sl_multiplier: Optional[float] = None,
-        min_rr_ratio: Optional[float] = None,
-    ) -> Dict[str, bool]:
-        """Apply modifications to all relevant files."""
-        results = {}
-        
-        results["ftmo_config"] = self.modify_ftmo_config(
-            iteration=iteration,
-            min_confluence_score=min_confluence_score,
-            risk_per_trade_pct=risk_per_trade_pct,
-            max_concurrent_trades=max_concurrent_trades,
-            min_quality_factors=min_quality_factors,
-            max_cumulative_risk_pct=max_cumulative_risk_pct,
-        )
-        
-        results["strategy_core"] = self.modify_strategy_core(
-            iteration=iteration,
-            min_confluence=min_confluence_score,
-            min_quality_factors=min_quality_factors,
-            atr_sl_multiplier=atr_sl_multiplier,
-            min_rr_ratio=min_rr_ratio,
-        )
-        
-        results["main_live_bot"] = self.modify_main_live_bot(
-            iteration=iteration,
-            min_confluence=min_confluence_score,
-        )
-        
-        return results
-    
-    def restore_from_backup(self, backup_path: Path, target_path: Path) -> bool:
-        """Restore a file from backup."""
-        try:
-            shutil.copy2(backup_path, target_path)
-            print(f"[MainLiveBotModifier] Restored {target_path} from {backup_path}")
-            return True
-        except Exception as e:
-            print(f"[MainLiveBotModifier] Restore failed: {e}")
-            return False
-    
-    def get_modification_history(self) -> List[Dict]:
-        """Get all modification history."""
-        return self.modification_log
 
 
 class OandaValidator:
@@ -1490,7 +1135,6 @@ class PerformanceOptimizer:
         self.optimization_log: List[Dict] = []
         self.config = config if config else FTMO_CONFIG
         self._original_config = self._snapshot_config()
-        self.file_modifier = MainLiveBotModifier()
         
         self.current_min_confluence = self.config.min_confluence_score
         self.current_risk_pct = self.config.risk_per_trade_pct
@@ -1749,7 +1393,7 @@ class PerformanceOptimizer:
         return optimizations
     
     def apply_optimizations(self, optimizations: Dict[str, Any], iteration: int) -> bool:
-        """Apply optimizations by modifying actual source files."""
+        """Apply optimizations by saving to JSON params file (no source code mutation)."""
         if not optimizations:
             print(f"  [Optimizer] No optimizations to apply.")
             return False
@@ -1770,25 +1414,31 @@ class PerformanceOptimizer:
             self.current_max_concurrent = optimizations["max_concurrent_trades"]
             self.config.max_concurrent_trades = self.current_max_concurrent
         
-        results = self.file_modifier.apply_all_modifications(
-            iteration=iteration,
-            min_confluence_score=optimizations.get("min_confluence_score"),
-            risk_per_trade_pct=optimizations.get("risk_per_trade_pct"),
-            max_concurrent_trades=optimizations.get("max_concurrent_trades"),
-            min_quality_factors=optimizations.get("min_quality_factors"),
-            max_cumulative_risk_pct=optimizations.get("max_cumulative_risk_pct"),
-        )
+        params_dict = {
+            "min_confluence": self.current_min_confluence,
+            "min_quality_factors": self.current_min_quality,
+            "risk_per_trade_pct": self.current_risk_pct,
+            "max_concurrent_trades": self.current_max_concurrent,
+            "max_open_trades": self.current_max_concurrent,
+            "iteration": iteration,
+        }
         
-        any_modified = any(results.values())
+        try:
+            saved_path = save_optimized_params(params_dict, backup=True)
+            print(f"  [Optimizer] Saved optimized params to {saved_path}")
+            params_saved = True
+        except Exception as e:
+            print(f"  [Optimizer] Failed to save params: {e}")
+            params_saved = False
         
         self.optimization_log.append({
             "iteration": iteration,
             "optimizations": optimizations,
-            "file_modifications": results,
+            "params_saved": params_saved,
             "timestamp": datetime.now().isoformat(),
         })
         
-        return any_modified
+        return params_saved
     
     def optimize_and_retest(self, results: Dict, iteration: int) -> Dict:
         """Analyze patterns and apply optimizations."""
@@ -2822,9 +2472,7 @@ def main_challenge_analyzer():
     print(f"\nIterations Used: {iteration}")
     print(f"Early Stopped: {optimizer.iterations_without_improvement >= optimizer.EARLY_STOPPING_PATIENCE}")
     
-    modification_history = optimizer.file_modifier.get_modification_history()
-    if modification_history:
-        print(f"\nFile Modifications Made: {len(modification_history)}")
+    print(f"\nOptimization Iterations: {len(optimizer.optimization_log)}")
     
     print(f"\n{'='*80}")
     print("WALK-FORWARD OPTIMIZATION SYSTEM COMPLETE")
