@@ -17,3 +17,6 @@ flask-cors
 python-dotenv
 flask
 flask
+joblib
+optuna
+scikit-learn
