@@ -38,6 +38,7 @@ from data_provider import get_ohlcv as get_ohlcv_api
 from ftmo_config import FTMO_CONFIG, FTMO10KConfig, get_pip_size, get_sl_limits
 from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
 from tradr.data.oanda import OandaClient
+from tradr.risk.position_sizing import calculate_lot_size, get_contract_specs
 
 OUTPUT_DIR = Path("ftmo_analysis_output")
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -1083,8 +1084,10 @@ class ChallengeSequencer:
             except:
                 exit_dt = datetime.now()
         
-        pip_size = get_pip_size(trade.symbol)
-        risk_pips = abs(trade.entry_price - trade.stop_loss) / pip_size if pip_size > 0 else 0
+        specs = get_contract_specs(trade.symbol)
+        pip_value_unit = specs.get("pip_value", 0.0001)
+        stop_distance = abs(trade.entry_price - trade.stop_loss)
+        risk_pips = stop_distance / pip_value_unit if pip_value_unit > 0 else 0
         
         holding_hours = 0.0
         if entry_dt and exit_dt:
@@ -1127,18 +1130,17 @@ class ChallengeSequencer:
         
         sl_hit = exit_reason == "SL"
         
-        if risk_pips <= 0:
-            lot_size = 0.0
-        else:
-            if "XAU" in trade.symbol.upper() or "GOLD" in trade.symbol.upper():
-                pip_value = 1.0
-            elif "XAG" in trade.symbol.upper() or "SILVER" in trade.symbol.upper():
-                pip_value = 5.0
-            elif "JPY" in trade.symbol.upper():
-                pip_value = 6.67
-            else:
-                pip_value = 10.0
-            lot_size = round(risk_per_trade_usd / (risk_pips * pip_value), 2)
+        sizing_result = calculate_lot_size(
+            symbol=trade.symbol,
+            account_balance=self.config.account_size,
+            risk_percent=risk_per_trade_usd / self.config.account_size,
+            entry_price=trade.entry_price,
+            stop_loss_price=trade.stop_loss,
+            max_lot=100.0,
+            min_lot=0.01,
+        )
+        lot_size = sizing_result.get("lot_size", 0.01)
+        risk_pips = sizing_result.get("stop_pips", risk_pips)
         
         return BacktestTrade(
             trade_num=self.trade_counter,
@@ -2691,28 +2693,18 @@ def main_challenge_analyzer():
         risk_per_trade_usd = account_size * (risk_pct / 100)
         profit_usd = r_multiple * risk_per_trade_usd
         
-        # Calculate lot size based on stop loss distance
-        pip_size = get_pip_size(trade.symbol)
-        if trade.entry_price and trade.stop_loss and pip_size > 0:
-            sl_distance = abs(trade.entry_price - trade.stop_loss)
-            risk_pips = sl_distance / pip_size
-            # Standard lot pip value calculation (approximate)
-            if "JPY" in trade.symbol:
-                pip_value_per_lot = 1000  # Approximate for JPY pairs
-            elif trade.symbol in METALS:
-                pip_value_per_lot = 10  # For gold/silver
-            elif trade.symbol in INDICES:
-                pip_value_per_lot = 1  # For indices
-            else:
-                pip_value_per_lot = 10  # Standard forex pairs
-            
-            if risk_pips > 0:
-                lot_size = risk_per_trade_usd / (risk_pips * pip_value_per_lot)
-            else:
-                lot_size = 0.01
-        else:
-            lot_size = 0.01
-            risk_pips = 0
+        # Calculate lot size using proper position sizing
+        sizing_result = calculate_lot_size(
+            symbol=trade.symbol,
+            account_balance=account_size,
+            risk_percent=risk_pct / 100,
+            entry_price=trade.entry_price,
+            stop_loss_price=trade.stop_loss,
+            max_lot=100.0,
+            min_lot=0.01,
+        )
+        lot_size = sizing_result.get("lot_size", 0.01)
+        risk_pips = sizing_result.get("stop_pips", 0)
         
         entry_dt = trade.entry_date
         if isinstance(entry_dt, str):

@@ -1,32 +1,32 @@
-# Blueprint HTF Confluence Strategy – Spec (v4 – The5ers 10K High Stakes)
+# Blueprint HTF Confluence Strategy – Spec (v4 – FTMO 200K Challenge)
 
-> **File name suggestion:** `Strategy_spec_V4_The5ers10K.md`  
+> **File name suggestion:** `Strategy_spec_V4_FTMO200K.md`  
 > This version keeps the HTF framework from v4 but **optimizes risk & execution**  
-> to pass **The5ers 10K High Stakes challenge (Step 1 & funded stages)**.
+> to pass **FTMO 200K Challenge (Step 1, Step 2 & funded stages)**.
 
 ---
 
-## 0. The5ers 10K High Stakes constraints
+## 0. FTMO 200K Challenge constraints
 
-Designed specifically for **The5ers High Stakes 10K account**:
+Designed specifically for **FTMO 200K Challenge account**:
 
-- **Account size:** $10,000  
-- **Program:** High Stakes (2-step evaluation + funded stages) :contentReference[oaicite:0]{index=0}  
+- **Account size:** $200,000  
+- **Program:** FTMO 200K Challenge (2-step evaluation + funded stages)  
 - **Targets:**
-  - Step 1: **+8%**  
+  - Step 1: **+10%**  
   - Step 2: **+5%**
-- **Drawdown rules (all steps & funded):** :contentReference[oaicite:1]{index=1}  
-  - **Max daily loss:** 5% of previous day’s **balance/equity snapshot** (whichever is higher)  
-  - **Max overall loss (absolute):** 10% of **initial balance** (never go below $9,000 on a 10K)  
-- **Min profitable days:** 3 in each evaluation step :contentReference[oaicite:2]{index=2}  
-- **Leverage:** up to 1:100 (MT5) :contentReference[oaicite:3]{index=3}  
-- **No time limit**, but account expires after **30 days of no trading activity**. :contentReference[oaicite:4]{index=4}  
-- **News restriction (High Stakes):** no order execution within **2 minutes before and after** high-impact news on the instrument’s symbol; open trades may remain running. :contentReference[oaicite:5]{index=5}  
+- **Drawdown rules (all steps & funded):**  
+  - **Max daily loss:** 5% of previous day's **balance/equity snapshot** (whichever is higher)  
+  - **Max overall loss (absolute):** 10% of **initial balance** (never go below $180,000 on a 200K)  
+- **Min trading days:** 4 in each evaluation step  
+- **Leverage:** up to 1:100 (MT5)  
+- **No time limit**, but account expires after **30 days of no trading activity**.  
+- **News restriction:** no order execution within **2 minutes before and after** high-impact news on the instrument's symbol; open trades may remain running.  
 
 This spec:
 
-- **Hard-codes** the 10K account size as default for risk calculation.
-- Ensures **worst-case open risk can’t breach the 5% daily loss** or 10% absolute loss.
+- **Hard-codes** the 200K account size as default for risk calculation.
+- Ensures **worst-case open risk can't breach the 5% daily loss** or 10% absolute loss.
 - Uses **no new trades on Fridays** (but existing trades may stay open) as an extra safety rule.
 
 ---
@@ -239,7 +239,7 @@ Only trade frameworks when:
 
 Daily entry zone = intersection of:
 
-1. Correct Daily impulse’s fib band **0.618–0.796**  
+1. Correct Daily impulse's fib band **0.618–0.796**  
 2. **Daily OB** (demand or supply)  
 3. Ideally MN/W1 S/R
 
@@ -323,7 +323,7 @@ Wicks may go in/out of the zone; only the **close** must be inside.
 
 ## 12. Entry checklists
 
-### 12.1 Longs (The5ers-safe)
+### 12.1 Longs (FTMO-safe)
 
 1. `weekly_bias` bullish, or MN support + clear Daily bullish framework.
 2. Daily impulse defined (leg-1 up, or neckline-break up).
@@ -340,7 +340,7 @@ Wicks may go in/out of the zone; only the **close** must be inside.
 8. R:R:
    - TP1 must offer **≥ 2R**.
 
-### 12.2 Shorts (The5ers-safe)
+### 12.2 Shorts (FTMO-safe)
 
 Mirror:
 
@@ -355,15 +355,15 @@ Mirror:
 
 ---
 
-## 13. Risk & money management (The5ers 10K tuned)
+## 13. Risk & money management (FTMO 200K tuned)
 
-### 13.1 Hard constraints from The5ers (for 10K account)
+### 13.1 Hard constraints from FTMO (for 200K account)
 
-- **Initial balance:** 10,000.
-- **Max overall loss (10%):** equity must **never** go below **9,000**.
+- **Initial balance:** 200,000.
+- **Max overall loss (10%):** equity must **never** go below **180,000**.
 - **Max daily loss (5%):** on each day `D`, snapshot reference is  
   `ref_D = max(balance_{D-1}, equity_{D-1})`.  
-  Daily account stopout if `equity_D < ref_D - 0.05 * ref_D`. :contentReference[oaicite:6]{index=6}  
+  Daily account stopout if `equity_D < ref_D - 0.05 * ref_D`.  
 
 ### 13.2 Internal risk limits (safety margins)
 
@@ -406,3 +406,4 @@ Before opening a new trade with risk `%r_new`:
 ```text
 if (realized_loss_today + open_risk_today + r_new) > internal_daily_limit
     → skip this entry (no trade)
+```
