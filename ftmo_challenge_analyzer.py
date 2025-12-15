@@ -1998,10 +1998,10 @@ class OptunaOptimizer:
         params = {
             'min_confluence_score': trial.suggest_int('min_confluence_score', 2, 6),
             'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 4),
-            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.3, 0.6),
+            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.3, 0.6, step=0.1),
             'bollinger_std': trial.suggest_float('bollinger_std', 1.8, 2.5),
             'rsi_period': trial.suggest_int('rsi_period', 10, 20),
-            'atr_min_percentile': trial.suggest_float('atr_min_percentile', 40.0, 80.0),
+            'atr_min_percentile': trial.suggest_float('atr_min_percentile', 50.0, 80.0, step=5.0),
             'use_mean_reversion_filter': trial.suggest_categorical('use_mean_reversion_filter', [True, False]),
             'use_rsi_divergence_filter': trial.suggest_categorical('use_rsi_divergence_filter', [True, False]),
             'ml_min_prob': trial.suggest_float('ml_min_prob', 0.55, 0.75),
@@ -2073,6 +2073,8 @@ class OptunaOptimizer:
                 pass
         
         score = avg_quarterly_R + min_quarterly_R_bonus - negative_quarter_penalty + validation_R + monte_carlo_stability
+        
+        print(f"Trial {trial.number} completed, value: {score:.2f}")
         
         for trade in trades:
             r_value = getattr(trade, 'rr', getattr(trade, 'r_multiple', 0))
@@ -2661,350 +2663,84 @@ def run_full_period_backtest(
     return all_trades
 
 
-def main_challenge_analyzer():
+def main():
     """
-    Walk-Forward Optimization System for FTMO Challenge Analysis.
+    Clean Optuna-based optimization for FTMO Challenge.
     
-    This implements a robust walk-forward optimization approach:
-    1. TRAINING: Optimize parameters on Jan-Sep 2024 data
-    2. VALIDATION: Validate each iteration on Oct-Dec 2024 data
-    3. Use VALIDATION score (not training) for best result selection
-    4. Test parameter stability before accepting final parameters
-    5. OUT-OF-SAMPLE: Final test on 2023 data for ultimate validation
-    6. Report results from all three periods
-    
-    Early stopping: Stop if no validation improvement for 5 iterations.
-    
-    Targets:
-    - >=14 challenges passed, <=2 failed
-    - >=40% win rate per asset (assets with 3+ trades)
-    - >=+2R total per asset (assets with 3+ trades)
+    Runs 50 trials to find optimal parameters, then:
+    1. Saves best params to params/current_params.json
+    2. Trains ML model on best trades
+    3. Runs Monte Carlo simulation for robustness
+    4. Generates final reports
     """
-    MAX_ITERATIONS = 10
-    iteration = 0
-    success = False
-    
-    training_results: Dict = {"challenges_passed": 0, "challenges_failed": 0, "all_results": [], "all_trades": [], "total_challenges_attempted": 0}
-    validation_results: Dict = {}
-    oos_results: Dict = {}
-    validation_report: Dict = {"total_validated": 0, "perfect_match": 0, "minor_discrepancies": 0, "major_issues": 0, "suspicious_trades": 0}
-    
-    optimizer = PerformanceOptimizer(FTMO_CONFIG)
-    
     print(f"\n{'='*80}")
-    print("FTMO WALK-FORWARD OPTIMIZATION SYSTEM")
+    print("FTMO OPTUNA OPTIMIZATION SYSTEM")
     print(f"{'='*80}")
     print(f"\nData Partitioning:")
-    print(f"  TRAINING:    Jan 1, 2024 - Sep 30, 2024 (optimize here)")
-    print(f"  VALIDATION:  Oct 1, 2024 - Dec 31, 2024 (validate each iteration)")
-    print(f"  OUT-OF-SAMPLE: Jan 1, 2023 - Dec 31, 2023 (final test)")
-    print(f"\nTargets:")
-    print(f"  - Minimum 14 challenges PASSED")
-    print(f"  - Maximum 2 challenges FAILED")
-    print(f"  - Minimum 40% win rate per asset (assets with 3+ trades)")
-    print(f"  - Minimum +2R total per asset (assets with 3+ trades)")
-    print(f"\nOptimization Settings:")
-    print(f"  Max Iterations: {MAX_ITERATIONS}")
-    print(f"  Early Stopping Patience: {optimizer.EARLY_STOPPING_PATIENCE} iterations")
-    print(f"{'='*80}")
+    print(f"  TRAINING:    Jan 1, 2024 - Sep 30, 2024")
+    print(f"  VALIDATION:  Oct 1, 2024 - Dec 31, 2024")
+    print(f"\nRunning 50 Optuna trials...")
+    print(f"{'='*80}\n")
     
-    while not success and iteration < MAX_ITERATIONS:
-        iteration += 1
-        
-        print(f"\n{'#'*80}")
-        print(f"# ITERATION #{iteration} - TRAINING PHASE (Jan-Sep 2024)")
-        print(f"{'#'*80}")
-        
-        current_params = optimizer.get_current_params()
-        print(f"\nCurrent Config:")
-        print(f"  risk_per_trade_pct: {current_params['risk_per_trade_pct']}%")
-        print(f"  min_confluence_score: {current_params['min_confluence']}/7")
-        print(f"  max_concurrent_trades: {current_params['max_concurrent_trades']}")
-        
-        trades = run_full_period_backtest(
-            start_date=TRAINING_START,
-            end_date=TRAINING_END,
-            min_confluence=current_params['min_confluence'],
-            min_quality_factors=current_params['min_quality_factors'],
-            risk_per_trade_pct=current_params['risk_per_trade_pct'],
-            excluded_assets=optimizer.get_excluded_assets(),
-        )
-        
-        if not trades:
-            print("No trades generated in training period. Check data availability.")
-            if iteration < MAX_ITERATIONS:
-                optimizer.optimize_and_retest({"all_results": [], "all_trades": [], "challenges_passed": 0, "challenges_failed": 0}, iteration)
-                continue
-            break
-        
-        print(f"\nTraining: Generated {len(trades)} trades")
-        
-        config = optimizer.get_config()
-        sequencer = ChallengeSequencer(trades, TRAINING_START, TRAINING_END, config)
-        training_results = sequencer.run_sequential_challenges()
-        
-        print(f"\n{'='*60}")
-        print(f"ITERATION #{iteration} - TRAINING RESULTS")
-        print(f"{'='*60}")
-        print(f"Total Trades: {len(training_results.get('all_trades', []))}")
-        print(f"Challenges PASSED: {training_results.get('challenges_passed', 0)}")
-        print(f"Challenges FAILED: {training_results.get('challenges_failed', 0)}")
-        
-        optimizer.update_training_result(training_results, iteration)
-        
-        print(f"\n{'#'*80}")
-        print(f"# ITERATION #{iteration} - VALIDATION PHASE (Oct-Dec 2024)")
-        print(f"{'#'*80}")
-        
-        validation_results = optimizer.run_validation_phase()
-        
-        validation_improved = optimizer.update_validation_result(validation_results, iteration)
-        
-        success, issues = optimizer.check_success_criteria(training_results)
-        
-        print(f"\n{'='*60}")
-        print(f"ITERATION #{iteration} SUMMARY")
-        print(f"{'='*60}")
-        print(f"Training Score: {optimizer.best_training_score:.1f}")
-        print(f"Validation Score: {optimizer.best_validation_score:.1f}")
-        print(f"Iterations without improvement: {optimizer.iterations_without_improvement}")
-        
-        if optimizer.check_early_stopping():
-            print(f"\n*** EARLY STOPPING TRIGGERED ***")
-            break
-        
-        if success:
-            print(f"\n*** TRAINING SUCCESS CRITERIA MET! ***")
-            print(f"Proceeding to parameter stability test...")
-            break
-        else:
-            print(f"\nCriteria NOT met. Issues:")
-            for issue in issues[:5]:
-                print(f"  - {issue}")
-            
-            if iteration < MAX_ITERATIONS:
-                optimizer.optimize_and_retest(training_results, iteration)
+    optimizer = OptunaOptimizer(FTMO_CONFIG)
+    results = optimizer.run_optimization(n_trials=50)
     
     print(f"\n{'='*80}")
-    print("PARAMETER STABILITY TEST")
+    print("RUNNING MONTE CARLO SIMULATION")
     print(f"{'='*80}")
     
-    best_params = optimizer.best_validation_result.get("params", optimizer.get_current_params()) if optimizer.best_validation_result else optimizer.get_current_params()
-    
-    is_stable, stability_metrics = test_parameter_stability(
-        optimal_confluence=best_params['min_confluence'],
-        min_quality_factors=best_params['min_quality_factors'],
-        risk_per_trade_pct=best_params['risk_per_trade_pct'],
-        excluded_assets=optimizer.get_excluded_assets(),
+    best_params = results['best_params']
+    final_trades = run_full_period_backtest(
+        start_date=TRAINING_START,
+        end_date=VALIDATION_END,
+        min_confluence=best_params.get('min_confluence_score', 3),
+        min_quality_factors=best_params.get('min_quality_factors', 2),
+        risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
+        atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
+        ml_min_prob=best_params.get('ml_min_prob', 0.6),
+        bollinger_std=best_params.get('bollinger_std', 2.0),
+        rsi_period=best_params.get('rsi_period', 14),
+        use_mean_reversion_filter=best_params.get('use_mean_reversion_filter', True),
+        use_rsi_divergence_filter=best_params.get('use_rsi_divergence_filter', True),
     )
     
-    print(f"\nParameter Stability: {'PASSED' if is_stable else 'CAUTION - UNSTABLE'}")
-    if not is_stable:
-        print(f"Stability issues:")
-        for issue in stability_metrics.get("issues", []):
-            print(f"  - {issue}")
+    if final_trades:
+        mc_results = run_monte_carlo_analysis(final_trades, num_simulations=1000)
     
     print(f"\n{'='*80}")
-    print("QUARTERLY CONSISTENCY CHECK")
+    print("QUARTERLY PERFORMANCE BREAKDOWN")
     print(f"{'='*80}")
     
-    quarterly_metrics = optimizer.run_quarterly_validation()
-    robustness_score, robustness_breakdown = optimizer.get_robustness_assessment()
-    
-    print(f"\nRobustness Score: {robustness_score:.1f}/100")
-    print(f"  Consistency Score: {robustness_breakdown.get('consistency_score', 0):.1f}")
-    print(f"  Drawdown Score: {robustness_breakdown.get('drawdown_score', 0):.1f}")
-    print(f"  Sharpe Score: {robustness_breakdown.get('sharpe_score', 0):.1f}")
-    
-    print(f"\n{'='*80}")
-    print("OUT-OF-SAMPLE TEST: 2023 DATA")
-    print(f"{'='*80}")
-    
-    oos_results = run_out_of_sample_test(
-        min_confluence=best_params['min_confluence'],
-        min_quality_factors=best_params['min_quality_factors'],
-        risk_per_trade_pct=best_params['risk_per_trade_pct'],
-        excluded_assets=optimizer.get_excluded_assets(),
-    )
-    
-    print(f"\n{'='*80}")
-    print("FULL YEAR BACKTEST WITH OPTIMIZED PARAMETERS")
-    print(f"{'='*80}")
-    
-    full_year_start = datetime(2024, 1, 1)
-    full_year_end = datetime(2024, 12, 31)
-    
-    full_year_trades = run_full_period_backtest(
-        start_date=full_year_start,
-        end_date=full_year_end,
-        min_confluence=best_params['min_confluence'],
-        min_quality_factors=best_params['min_quality_factors'],
-        risk_per_trade_pct=best_params['risk_per_trade_pct'],
-        excluded_assets=optimizer.get_excluded_assets(),
-    )
-    
-    full_year_backtest_trades = []
-    trade_num = 0
-    account_size = 200000
-    risk_pct = best_params['risk_per_trade_pct']
-    
-    for trade in full_year_trades:
-        trade_num += 1
-        r_multiple = trade.rr if trade.is_winner else -1.0
-        result = "WIN" if trade.is_winner else "LOSS"
+    for q_name, (q_start, q_end) in QUARTERS_2024.items():
+        q_trades = [t for t in final_trades if hasattr(t, 'entry_date') and t.entry_date]
+        q_filtered = []
+        for t in q_trades:
+            entry = t.entry_date
+            if isinstance(entry, str):
+                try:
+                    entry = datetime.fromisoformat(entry.replace("Z", "+00:00"))
+                except:
+                    continue
+            if hasattr(entry, 'replace') and entry.tzinfo:
+                entry = entry.replace(tzinfo=None)
+            if q_start <= entry <= q_end:
+                q_filtered.append(t)
         
-        # Calculate risk in USD
-        risk_per_trade_usd = account_size * (risk_pct / 100)
-        profit_usd = r_multiple * risk_per_trade_usd
-        
-        # Calculate lot size using proper position sizing
-        sizing_result = calculate_lot_size(
-            symbol=trade.symbol,
-            account_balance=account_size,
-            risk_percent=risk_pct / 100,
-            entry_price=trade.entry_price,
-            stop_loss_price=trade.stop_loss,
-            max_lot=100.0,
-            min_lot=0.01,
-        )
-        lot_size = sizing_result.get("lot_size", 0.01)
-        risk_pips = sizing_result.get("stop_pips", 0)
-        
-        entry_dt = trade.entry_date
-        if isinstance(entry_dt, str):
-            try:
-                entry_dt = datetime.fromisoformat(entry_dt.replace("Z", "+00:00"))
-            except:
-                entry_dt = datetime.now()
-        if hasattr(entry_dt, 'replace') and entry_dt.tzinfo:
-            entry_dt = entry_dt.replace(tzinfo=None)
-        
-        exit_dt = trade.exit_date
-        if isinstance(exit_dt, str):
-            try:
-                exit_dt = datetime.fromisoformat(exit_dt.replace("Z", "+00:00"))
-            except:
-                exit_dt = datetime.now()
-        if hasattr(exit_dt, 'replace') and exit_dt.tzinfo:
-            exit_dt = exit_dt.replace(tzinfo=None)
-        
-        bt = BacktestTrade(
-            trade_num=trade_num,
-            challenge_num=1,
-            challenge_step=1,
-            symbol=trade.symbol,
-            direction=trade.direction,
-            confluence_score=getattr(trade, 'confluence_score', 0),
-            entry_date=entry_dt,
-            entry_price=trade.entry_price,
-            stop_loss=trade.stop_loss,
-            tp1_price=trade.tp1 or trade.entry_price,
-            tp2_price=trade.tp2,
-            tp3_price=trade.tp3,
-            tp4_price=trade.tp4,
-            tp5_price=trade.tp5,
-            exit_date=exit_dt,
-            exit_price=trade.exit_price,
-            exit_reason=trade.exit_reason,
-            r_multiple=r_multiple,
-            profit_loss_usd=profit_usd,
-            result=result,
-            lot_size=lot_size,
-            risk_pips=risk_pips,
-        )
-        full_year_backtest_trades.append(bt)
-    
-    wins = sum(1 for t in full_year_backtest_trades if t.result == "WIN")
-    total = len(full_year_backtest_trades)
-    total_r = sum(t.r_multiple for t in full_year_backtest_trades)
-    win_rate = (wins / total * 100) if total > 0 else 0
+        q_r = sum(getattr(t, 'rr', 0) for t in q_filtered)
+        q_wins = sum(1 for t in q_filtered if getattr(t, 'rr', 0) > 0)
+        q_wr = (q_wins / len(q_filtered) * 100) if q_filtered else 0
+        print(f"  {q_name}: {len(q_filtered)} trades, {q_r:+.1f}R, {q_wr:.0f}% win rate")
     
     print(f"\n{'='*80}")
-    print("FULL YEAR 2024 BACKTEST RESULTS")
+    print("OPTIMIZATION COMPLETE")
     print(f"{'='*80}")
-    print(f"Total Trades: {total}")
-    print(f"Wins: {wins}")
-    print(f"Win Rate: {win_rate:.1f}%")
-    print(f"Total R: {total_r:+.1f}R")
+    print(f"\nBest Score: {results['best_score']:.2f}")
+    print(f"Trials Run: {results['n_trials']}")
+    print(f"\nOptimized Parameters saved to: params/current_params.json")
+    print(f"ML Model saved to: models/best_rf.joblib")
+    print(f"\nReady for live trading with main_live_bot.py")
     
-    final_results = {
-        "all_trades": full_year_backtest_trades,
-        "total_trades": total,
-        "wins": wins,
-        "win_rate": win_rate,
-        "total_r": total_r,
-        "challenges_passed": optimizer.best_training_result.get("results", {}).get("challenges_passed", 0) if optimizer.best_training_result else 0,
-        "challenges_failed": optimizer.best_training_result.get("results", {}).get("challenges_failed", 0) if optimizer.best_training_result else 0,
-    }
-    
-    print(f"\n{'='*80}")
-    print("GENERATING FINAL REPORTS")
-    print(f"{'='*80}")
-    
-    reporter = ReportGenerator()
-    
-    validator = OandaValidator()
-    validation_report = {}
-    if final_results.get('all_trades'):
-        validation_report = validator.validate_all_trades(final_results.get('all_trades', []))
-    
-    reporter.generate_all_reports(final_results, validation_report)
-    
-    print(f"\n{'='*80}")
-    print("WALK-FORWARD OPTIMIZATION COMPLETE")
-    print(f"{'='*80}")
-    
-    print(f"\n=== TRAINING PERIOD (Jan-Sep 2024) ===")
-    print(f"Best Training Score: {optimizer.best_training_score:.1f}")
-    if optimizer.best_training_result:
-        tr = optimizer.best_training_result.get("results", {})
-        print(f"Challenges Passed: {tr.get('challenges_passed', 0)}")
-        print(f"Challenges Failed: {tr.get('challenges_failed', 0)}")
-    
-    print(f"\n=== VALIDATION PERIOD (Oct-Dec 2024) ===")
-    print(f"Best Validation Score: {optimizer.best_validation_score:.1f}")
-    if validation_results:
-        print(f"Win Rate: {validation_results.get('win_rate', 0):.1f}%")
-        print(f"Total R: {validation_results.get('total_r', 0):+.1f}R")
-    
-    print(f"\n=== OUT-OF-SAMPLE (2023) ===")
-    if oos_results:
-        print(f"Win Rate: {oos_results.get('win_rate', 0):.1f}%")
-        print(f"Total R: {oos_results.get('total_r', 0):+.1f}R")
-        print(f"Sharpe-like: {oos_results.get('sharpe_like', 0):.2f}")
-        print(f"OOS Test: {'PASSED' if oos_results.get('passed', False) else 'FAILED'}")
-    
-    print(f"\n=== ROBUSTNESS ASSESSMENT ===")
-    print(f"Robustness Score: {robustness_score:.1f}/100")
-    print(f"Parameter Stability: {'STABLE' if is_stable else 'UNSTABLE'}")
-    
-    print(f"\n=== FINAL PARAMETERS ===")
-    print(f"min_confluence: {best_params['min_confluence']}")
-    print(f"min_quality_factors: {best_params['min_quality_factors']}")
-    print(f"risk_per_trade_pct: {best_params['risk_per_trade_pct']}%")
-    
-    print(f"\nIterations Used: {iteration}")
-    print(f"Early Stopped: {optimizer.iterations_without_improvement >= optimizer.EARLY_STOPPING_PATIENCE}")
-    
-    print(f"\nOptimization Iterations: {len(optimizer.optimization_log)}")
-    
-    print(f"\n{'='*80}")
-    print("WALK-FORWARD OPTIMIZATION SYSTEM COMPLETE")
-    print(f"{'='*80}")
-    
-    return {
-        "training_results": optimizer.best_training_result,
-        "validation_results": optimizer.best_validation_result,
-        "oos_results": oos_results,
-        "robustness_score": robustness_score,
-        "is_stable": is_stable,
-        "best_params": best_params,
-        "iterations": iteration,
-    }
-
-
-def main():
-    return main_challenge_analyzer()
+    return results
 
 
 if __name__ == "__main__":
