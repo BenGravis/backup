@@ -1943,20 +1943,30 @@ def generate_signals(
             flags.get("htf_bias", False),
         ])
         
+        # Apply volatile asset boost for high-volatility instruments BEFORE threshold check
+        # This allows volatile assets (XAUUSD, NAS100USD, GBPJPY, BTCUSD) to more easily pass thresholds
+        boosted_confluence, boosted_quality = apply_volatile_asset_boost(
+            symbol,
+            confluence_score,
+            quality_factors,
+            params.volatile_asset_boost
+        )
+        
         has_rr = flags.get("rr", False)
         has_confirmation = flags.get("confirmation", False)
         
         is_active = False
         is_watching = False
         
-        if confluence_score >= params.min_confluence and quality_factors >= params.min_quality_factors:
+        # Use boosted scores for threshold comparison
+        if boosted_confluence >= params.min_confluence and boosted_quality >= params.min_quality_factors:
             if params.require_rr_for_active and not has_rr:
                 is_watching = True
             elif params.require_confirmation_for_active and not has_confirmation:
                 is_watching = True
             else:
                 is_active = True
-        elif confluence_score >= params.min_confluence - 1:
+        elif boosted_confluence >= params.min_confluence - 1:
             is_watching = True
         
         if is_active or is_watching:
@@ -2196,19 +2206,26 @@ def simulate_trades(
                 if not trade_closed and tp1 is not None and high >= tp1 and not tp1_hit:
                     ot["tp1_hit"] = True
                     tp1_hit = True
-                    ot["trailing_sl"] = entry_price
+                    # Delay trailing activation until trail_activation_r is reached
+                    if tp1_rr >= params.trail_activation_r:
+                        ot["trailing_sl"] = entry_price
+                        ot["trailing_activated"] = True
                 
                 if not trade_closed and tp1_hit and tp2 is not None and high >= tp2 and not tp2_hit:
                     ot["tp2_hit"] = True
                     tp2_hit = True
-                    if tp1 is not None:
+                    # Only activate trailing if we've reached trail_activation_r
+                    if tp2_rr >= params.trail_activation_r and tp1 is not None:
                         ot["trailing_sl"] = tp1 + 0.5 * risk
+                        ot["trailing_activated"] = True
                 
                 if not trade_closed and tp2_hit and tp3 is not None and high >= tp3 and not tp3_hit:
                     ot["tp3_hit"] = True
                     tp3_hit = True
-                    if tp2 is not None:
+                    # Only activate trailing if we've reached trail_activation_r
+                    if tp3_rr >= params.trail_activation_r and tp2 is not None:
                         ot["trailing_sl"] = tp2 + 0.5 * risk
+                        ot["trailing_activated"] = True
                 
                 if not trade_closed and tp3_hit and tp4 is not None and high >= tp4 and not tp4_hit:
                     ot["tp4_hit"] = True
@@ -2256,19 +2273,26 @@ def simulate_trades(
                 if not trade_closed and tp1 is not None and low <= tp1 and not tp1_hit:
                     ot["tp1_hit"] = True
                     tp1_hit = True
-                    ot["trailing_sl"] = entry_price
+                    # Delay trailing activation until trail_activation_r is reached
+                    if tp1_rr >= params.trail_activation_r:
+                        ot["trailing_sl"] = entry_price
+                        ot["trailing_activated"] = True
                 
                 if not trade_closed and tp1_hit and tp2 is not None and low <= tp2 and not tp2_hit:
                     ot["tp2_hit"] = True
                     tp2_hit = True
-                    if tp1 is not None:
+                    # Only activate trailing if we've reached trail_activation_r
+                    if tp2_rr >= params.trail_activation_r and tp1 is not None:
                         ot["trailing_sl"] = tp1 - 0.5 * risk
+                        ot["trailing_activated"] = True
                 
                 if not trade_closed and tp2_hit and tp3 is not None and low <= tp3 and not tp3_hit:
                     ot["tp3_hit"] = True
                     tp3_hit = True
-                    if tp2 is not None:
+                    # Only activate trailing if we've reached trail_activation_r
+                    if tp3_rr >= params.trail_activation_r and tp2 is not None:
                         ot["trailing_sl"] = tp2 - 0.5 * risk
+                        ot["trailing_activated"] = True
                 
                 if not trade_closed and tp3_hit and tp4 is not None and low <= tp4 and not tp4_hit:
                     ot["tp4_hit"] = True
@@ -2357,8 +2381,15 @@ def simulate_trades(
                     continue
                 
                 # Hard volatility filter - skip trades in low volatility regimes
+                # In December, apply stricter threshold
                 if params.use_atr_regime_filter:
-                    passes_vol, _ = check_volatility_filter(candles[:bar_idx+1], params.atr_min_percentile)
+                    current_date = _get_candle_datetime(candles[bar_idx])
+                    passes_vol, _ = check_volatility_filter(
+                        candles[:bar_idx+1], 
+                        params.atr_min_percentile,
+                        current_date=current_date,
+                        december_atr_multiplier=params.december_atr_multiplier
+                    )
                     if not passes_vol:
                         entered_signal_ids.add(sig_id)
                         continue
@@ -2379,6 +2410,14 @@ def simulate_trades(
                 
                 cost_as_r = transaction_cost_price / risk if risk > 0 else 0.0
                 
+                # Apply volatile asset boost for high-volatility instruments
+                boosted_confluence, _ = apply_volatile_asset_boost(
+                    symbol,
+                    sig.confluence_score,
+                    sig.quality_factors,
+                    params.volatile_asset_boost
+                )
+                
                 open_trades.append({
                     "signal_id": sig_id,
                     "direction": direction,
@@ -2387,6 +2426,7 @@ def simulate_trades(
                     "entry_timestamp": bar_timestamp,
                     "sl": sl,
                     "trailing_sl": sl,
+                    "trailing_activated": False,  # Flag to track when trail_activation_r threshold is reached
                     "tp1": tp1,
                     "tp2": tp2,
                     "tp3": tp3,
@@ -2403,7 +2443,7 @@ def simulate_trades(
                     "tp3_rr": tp3_rr,
                     "tp4_rr": tp4_rr,
                     "tp5_rr": tp5_rr,
-                    "confluence_score": sig.confluence_score,
+                    "confluence_score": boosted_confluence,
                     "transaction_cost_r": cost_as_r,
                 })
                 entered_signal_ids.add(sig_id)
