@@ -29,3 +29,5 @@ optuna
 python-dotenv
 scikit-learn
 flask
+scipy
+tabulate
