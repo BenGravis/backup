@@ -2006,33 +2006,30 @@ class OptunaOptimizer:
     
     def _objective(self, trial) -> float:
         """
-        Optuna objective function with RELAXED penalty-based logic (no hard -inf rejects).
+        Optuna objective function - runs ONLY on TRAINING period (Jan-Sep 2024).
         
-        Search space (widened for faster convergence):
+        Search space:
         - risk_per_trade_pct: 0.5-0.8 (step 0.05)
         - min_confluence_score: 3-6
         - min_quality_factors: 1-4
         - atr_min_percentile: 60-85 (step 5)
-        - trail_activation_r: 1.8-3.2 (step 0.2)
+        - trail_activation_r: 1.8-3.4 (step 0.2)
         - december_atr_multiplier: 1.3-1.8 (step 0.1)
         - volatile_asset_boost: 1.3-2.0 (step 0.1)
         
-        Objective:
-        - Primary: total_net_profit_dollars + (total_R * 1000)
-        - Bonus: +50000 if all quarters >= 0R and December >= 0R
-        
-        PENALTIES (instead of rejection):
-        - Per quarter < 0R: -20000 per quarter
-        - Per quarter < -10R: reject (return -inf)
-        - MC 5th percentile < 0R: -100000 penalty
-        - Max DD > 15R: -(max_dd - 15) * 10000
+        Objective: Maximize total_net_profit_dollars on TRAINING data
+        Penalties:
+        - -5000 per negative quarter on training
+        - -10000 if max DD > 15R
+        - -50000 if net profit <= 0 or 0 trades
+        Bonus: +30000 if all training quarters >= 0R
         """
         params = {
             'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.5, 0.8, step=0.05),
             'min_confluence_score': trial.suggest_int('min_confluence_score', 3, 6),
             'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 4),
             'atr_min_percentile': trial.suggest_float('atr_min_percentile', 60.0, 85.0, step=5.0),
-            'trail_activation_r': trial.suggest_float('trail_activation_r', 1.8, 3.2, step=0.2),
+            'trail_activation_r': trial.suggest_float('trail_activation_r', 1.8, 3.4, step=0.2),
             'december_atr_multiplier': trial.suggest_float('december_atr_multiplier', 1.3, 1.8, step=0.1),
             'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', 1.3, 2.0, step=0.1),
             'bollinger_std': trial.suggest_float('bollinger_std', 1.8, 2.5),
@@ -2040,30 +2037,36 @@ class OptunaOptimizer:
             'ml_min_prob': trial.suggest_float('ml_min_prob', 0.55, 0.75),
         }
         
-        all_trades = run_full_period_backtest(
+        training_trades = run_full_period_backtest(
             start_date=TRAINING_START,
-            end_date=VALIDATION_END,
+            end_date=TRAINING_END,
             min_confluence=params['min_confluence_score'],
             min_quality_factors=params['min_quality_factors'],
             risk_per_trade_pct=params['risk_per_trade_pct'],
             atr_min_percentile=params['atr_min_percentile'],
-            ml_min_prob=params['ml_min_prob'],
+            ml_min_prob=None,
             bollinger_std=params['bollinger_std'],
             rsi_period=params['rsi_period'],
         )
         
-        total_r = sum(getattr(t, 'rr', 0) for t in all_trades) if all_trades else 0
+        if not training_trades or len(training_trades) == 0:
+            return -50000.0
         
-        if not all_trades or len(all_trades) < 10:
-            if total_r <= 0:
-                return float('-inf')
-            return total_r * 100
+        total_r = sum(getattr(t, 'rr', 0) for t in training_trades)
+        
+        if total_r <= 0:
+            return -50000.0
+        
+        training_quarters = {
+            "Q1": (datetime(2024, 1, 1), datetime(2024, 3, 31)),
+            "Q2": (datetime(2024, 4, 1), datetime(2024, 6, 30)),
+            "Q3": (datetime(2024, 7, 1), datetime(2024, 9, 30)),
+        }
         
         quarterly_r = {}
-        december_r = 0.0
-        for q, (start, end) in QUARTERS_2024.items():
+        for q, (start, end) in training_quarters.items():
             q_trades = []
-            for t in all_trades:
+            for t in training_trades:
                 entry = getattr(t, 'entry_date', None)
                 if entry:
                     if isinstance(entry, str):
@@ -2075,74 +2078,54 @@ class OptunaOptimizer:
                         entry = entry.replace(tzinfo=None)
                     if start <= entry <= end:
                         q_trades.append(t)
-                        if entry.month == 12:
-                            december_r += getattr(t, 'rr', 0)
             quarterly_r[q] = sum(getattr(t, 'rr', 0) for t in q_trades)
         
         penalty = 0.0
         
         for q, r_val in quarterly_r.items():
-            if r_val < -10.0:
-                return float('-inf')
-            elif r_val < 0.0:
-                penalty += 20000
+            if r_val < 0.0:
+                penalty += 5000
         
-        mc_results = None
         max_dd_r = 0.0
-        if len(all_trades) >= 30:
+        if len(training_trades) >= 20:
             try:
-                mc = MonteCarloSimulator(all_trades, num_simulations=500)
+                mc = MonteCarloSimulator(training_trades, num_simulations=200)
                 mc_results = mc.run_simulation()
-                
-                worst_return = mc_results.get('worst_case_return', 0)
-                if worst_return < 0.0:
-                    penalty += 100000
-                
                 max_dd_r = mc_results.get('worst_case_dd', 0)
                 if max_dd_r > 15.0:
-                    penalty += (max_dd_r - 15.0) * 10000
-                    
+                    penalty += 10000
             except Exception:
                 pass
-        
-        win_trades = [t for t in all_trades if getattr(t, 'rr', 0) > 0]
-        loss_trades = [t for t in all_trades if getattr(t, 'rr', 0) <= 0]
-        
-        avg_win_r = sum(getattr(t, 'rr', 0) for t in win_trades) / len(win_trades) if win_trades else 0
-        avg_loss_r = abs(sum(getattr(t, 'rr', 0) for t in loss_trades) / len(loss_trades)) if loss_trades else 1
         
         risk_usd = self.ACCOUNT_SIZE * (params['risk_per_trade_pct'] / 100)
         total_net_profit = total_r * risk_usd
         
-        score = total_net_profit + (total_r * 1000) - penalty
+        score = total_net_profit - penalty
         
         all_quarters_positive = all(r >= 0 for r in quarterly_r.values())
-        if all_quarters_positive and december_r >= 0:
-            score += 50000
+        if all_quarters_positive:
+            score += 30000
         
-        if mc_results:
-            mean_return = mc_results.get('mean_return', 0)
-            if mean_return > 50:
-                score += 30000
-        
-        print(f"Trial {trial.number}: Score={score:.0f}, R={total_r:.1f}, Trades={len(all_trades)}, Dec R={december_r:.1f}, MaxDD={max_dd_r:.1f}R")
+        print(f"Trial {trial.number}: Score={score:.0f}, R={total_r:.1f}, Trades={len(training_trades)}, MaxDD={max_dd_r:.1f}R")
         
         return score
     
-    def run_optimization(self, n_trials: int = 100) -> Dict:
-        """Run Optuna optimization with specified number of trials (default 100)."""
+    def run_optimization(self, n_trials: int = 5) -> Dict:
+        """
+        Run Optuna optimization on TRAINING data only (Jan-Sep 2024).
+        Default n_trials=5 for quick testing.
+        """
         import optuna
         optuna.logging.set_verbosity(optuna.logging.WARNING)
         
         print(f"\n{'='*60}")
         print(f"OPTUNA OPTIMIZATION - {n_trials} trials")
-        print(f"Enhanced for FTMO scaling compliance")
-        print(f"Expected runtime: 5-8 hours for 100 trials")
+        print(f"TRAINING PERIOD ONLY: Jan 1 - Sep 30, 2024")
         print(f"{'='*60}")
         
         study = optuna.create_study(
             direction='maximize',
-            study_name='ftmo_scaling_optimization',
+            study_name='ftmo_training_optimization',
             sampler=optuna.samplers.TPESampler(seed=42)
         )
         study.optimize(self._objective, n_trials=n_trials, show_progress_bar=True)
@@ -2177,26 +2160,10 @@ class OptunaOptimizer:
         except Exception as e:
             print(f"Failed to save params: {e}")
         
-        final_trades = run_full_period_backtest(
-            start_date=TRAINING_START,
-            end_date=VALIDATION_END,
-            min_confluence=self.best_params.get('min_confluence_score', 5),
-            min_quality_factors=self.best_params.get('min_quality_factors', 2),
-            risk_per_trade_pct=self.best_params.get('risk_per_trade_pct', 0.5),
-            atr_min_percentile=self.best_params.get('atr_min_percentile', 75.0),
-            ml_min_prob=self.best_params.get('ml_min_prob', 0.6),
-            bollinger_std=self.best_params.get('bollinger_std', 2.0),
-            rsi_period=self.best_params.get('rsi_period', 14),
-        )
-        
-        if final_trades and len(final_trades) >= 50:
-            self.train_ml_model(final_trades)
-        
         return {
             'best_params': self.best_params,
             'best_score': self.best_score,
             'n_trials': n_trials,
-            'total_trades': len(final_trades) if final_trades else 0,
         }
     
     def train_ml_model(self, trades: List[Trade]) -> bool:
@@ -2529,7 +2496,7 @@ def run_full_period_backtest(
     risk_per_trade_pct: float = 0.5,
     excluded_assets: Optional[List[str]] = None,
     atr_min_percentile: float = 60.0,
-    ml_min_prob: float = 0.6,
+    ml_min_prob: Optional[float] = 0.6,
     bollinger_std: float = 2.0,
     rsi_period: int = 14,
     use_mean_reversion_filter: bool = True,
@@ -2563,7 +2530,7 @@ def run_full_period_backtest(
     params.min_quality_factors = min_quality_factors
     params.risk_per_trade_pct = risk_per_trade_pct
     params.atr_min_percentile = atr_min_percentile
-    params.ml_min_prob = ml_min_prob
+    params.ml_min_prob = ml_min_prob if ml_min_prob is not None else 0.0
     params.bollinger_std = bollinger_std
     params.rsi_period = rsi_period
     params.use_mean_reversion = use_mean_reversion_filter
@@ -2715,84 +2682,295 @@ def run_full_period_backtest(
     return all_trades
 
 
+def update_documentation():
+    """Update README.md and other documentation files with optimization info."""
+    readme_section = """
+## Optimization & Backtesting
+
+The optimizer uses professional quant best practices:
+
+- TRAINING PERIOD: January 1, 2024 – September 30, 2024 (in-sample optimization)
+- VALIDATION PERIOD: October 1, 2024 – December 31, 2024 (out-of-sample test)
+- FINAL BACKTEST: Full year 2024 with best parameters
+
+All trades from the final full-year backtest are exported to:
+`ftmo_analysis_output/all_trades_2024_full.csv`
+
+Parameters are saved to `params/current_params.json`
+"""
+    
+    readme_path = Path("README.md")
+    if readme_path.exists():
+        content = readme_path.read_text()
+        if "## Optimization & Backtesting" in content:
+            import re
+            content = re.sub(
+                r'## Optimization & Backtesting.*?(?=\n## |\Z)',
+                readme_section.strip() + "\n\n",
+                content,
+                flags=re.DOTALL
+            )
+        else:
+            content += "\n" + readme_section
+        readme_path.write_text(content)
+    else:
+        readme_path.write_text(f"# FTMO Trading Bot\n{readme_section}")
+    
+    print("Documentation files (README.md etc.) updated.")
+
+
+def export_trades_to_csv(trades: List, filename: str = "all_trades_2024_full.csv"):
+    """Export trades to CSV with all required columns."""
+    OUTPUT_DIR.mkdir(exist_ok=True)
+    filepath = OUTPUT_DIR / filename
+    
+    if not trades:
+        print(f"No trades to export to {filepath}")
+        return
+    
+    fieldnames = [
+        "Trade#", "Symbol", "Direction", "Entry Date", "Entry Price", 
+        "Stop Loss Price", "TP1 Price", "TP2 Price", "TP3 Price", "TP4 Price", "TP5 Price",
+        "Exit Date", "Exit Price", "TP1 Hit", "TP2 Hit", "TP3 Hit", "TP4 Hit", "TP5 Hit",
+        "SL Hit", "Final Exit Reason", "R Multiple", "Profit/Loss USD", 
+        "Confluence Score", "Holding Time (hours)", "Lot Size", "Risk Pips"
+    ]
+    
+    rows = []
+    for i, t in enumerate(trades, 1):
+        entry_date = getattr(t, 'entry_date', None)
+        exit_date = getattr(t, 'exit_date', None)
+        
+        if entry_date and isinstance(entry_date, datetime):
+            entry_date = entry_date.strftime("%Y-%m-%d %H:%M:%S")
+        if exit_date and isinstance(exit_date, datetime):
+            exit_date = exit_date.strftime("%Y-%m-%d %H:%M:%S")
+        
+        row = {
+            "Trade#": i,
+            "Symbol": getattr(t, 'symbol', ''),
+            "Direction": getattr(t, 'direction', ''),
+            "Entry Date": entry_date or '',
+            "Entry Price": getattr(t, 'entry_price', 0),
+            "Stop Loss Price": getattr(t, 'stop_loss', 0),
+            "TP1 Price": getattr(t, 'tp1', getattr(t, 'take_profit', 0)),
+            "TP2 Price": getattr(t, 'tp2', 0),
+            "TP3 Price": getattr(t, 'tp3', 0),
+            "TP4 Price": getattr(t, 'tp4', 0),
+            "TP5 Price": getattr(t, 'tp5', 0),
+            "Exit Date": exit_date or '',
+            "Exit Price": getattr(t, 'exit_price', 0),
+            "TP1 Hit": getattr(t, 'tp1_hit', False),
+            "TP2 Hit": getattr(t, 'tp2_hit', False),
+            "TP3 Hit": getattr(t, 'tp3_hit', False),
+            "TP4 Hit": getattr(t, 'tp4_hit', False),
+            "TP5 Hit": getattr(t, 'tp5_hit', False),
+            "SL Hit": getattr(t, 'sl_hit', False),
+            "Final Exit Reason": getattr(t, 'exit_reason', ''),
+            "R Multiple": getattr(t, 'rr', getattr(t, 'r_multiple', 0)),
+            "Profit/Loss USD": getattr(t, 'profit_usd', 0),
+            "Confluence Score": getattr(t, 'confluence_score', 0),
+            "Holding Time (hours)": getattr(t, 'holding_hours', 0),
+            "Lot Size": getattr(t, 'lot_size', 0),
+            "Risk Pips": getattr(t, 'risk_pips', 0),
+        }
+        rows.append(row)
+    
+    with open(filepath, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    
+    print(f"Exported {len(rows)} trades to: {filepath}")
+
+
+def print_period_results(trades: List, period_name: str, start_date: datetime, end_date: datetime):
+    """Print results for a specific period."""
+    if not trades:
+        print(f"\n{'='*60}")
+        print(f"=== {period_name} ===")
+        print(f"{'='*60}")
+        print("No trades in this period")
+        return {}
+    
+    total_r = sum(getattr(t, 'rr', 0) for t in trades)
+    wins = sum(1 for t in trades if getattr(t, 'rr', 0) > 0)
+    win_rate = (wins / len(trades) * 100) if trades else 0
+    
+    risk_usd = 200000 * 0.005
+    total_profit = total_r * risk_usd
+    
+    print(f"\n{'='*60}")
+    print(f"=== {period_name} ===")
+    print(f"{'='*60}")
+    print(f"Period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
+    print(f"Total Trades: {len(trades)}")
+    print(f"Win Rate: {win_rate:.1f}%")
+    print(f"Total R: {total_r:+.1f}R")
+    print(f"Net Profit: ${total_profit:,.2f}")
+    
+    return {
+        'trades': len(trades),
+        'total_r': total_r,
+        'win_rate': win_rate,
+        'net_profit': total_profit,
+    }
+
+
 def main():
     """
-    Clean Optuna-based optimization for FTMO Challenge.
+    Professional FTMO Optimization Workflow:
     
-    Runs 5 trials (quick test mode) to find optimal parameters, then:
-    1. Saves best params to params/current_params.json
-    2. Trains ML model on best trades
-    3. Runs Monte Carlo simulation for robustness
-    4. Generates final reports
+    1. TRAINING: Optuna optimization on Jan-Sep 2024
+    2. VALIDATION: Test best params on Oct-Dec 2024
+    3. FULL YEAR: Final backtest with ML disabled
+    4. Export CSV, Monte Carlo, quarterly breakdown
+    5. Train ML model (optional)
+    6. Update documentation
     """
     print(f"\n{'='*80}")
-    print("FTMO OPTUNA OPTIMIZATION SYSTEM")
+    print("FTMO PROFESSIONAL OPTIMIZATION SYSTEM")
     print(f"{'='*80}")
     print(f"\nData Partitioning:")
-    print(f"  TRAINING:    Jan 1, 2024 - Sep 30, 2024")
-    print(f"  VALIDATION:  Oct 1, 2024 - Dec 31, 2024")
-    print(f"\nRunning 5 Optuna trials (quick test mode)...")
+    print(f"  TRAINING:    Jan 1, 2024 - Sep 30, 2024 (in-sample)")
+    print(f"  VALIDATION:  Oct 1, 2024 - Dec 31, 2024 (out-of-sample)")
+    print(f"  FINAL:       Full year 2024")
     print(f"{'='*80}\n")
     
     optimizer = OptunaOptimizer(FTMO_CONFIG)
     results = optimizer.run_optimization(n_trials=5)
     
+    best_params = results['best_params']
+    
     print(f"\n{'='*80}")
-    print("RUNNING MONTE CARLO SIMULATION")
+    print("=== TRAINING RESULTS (Jan-Sep 2024) ===")
     print(f"{'='*80}")
     
-    best_params = results['best_params']
-    final_trades = run_full_period_backtest(
+    training_trades = run_full_period_backtest(
         start_date=TRAINING_START,
+        end_date=TRAINING_END,
+        min_confluence=best_params.get('min_confluence_score', 3),
+        min_quality_factors=best_params.get('min_quality_factors', 2),
+        risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
+        atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
+        ml_min_prob=None,
+        bollinger_std=best_params.get('bollinger_std', 2.0),
+        rsi_period=best_params.get('rsi_period', 14),
+    )
+    
+    training_results = print_period_results(
+        training_trades, "TRAINING RESULTS (Jan-Sep 2024)", 
+        TRAINING_START, TRAINING_END
+    )
+    
+    print(f"\n{'='*80}")
+    print("=== VALIDATION RESULTS (Oct-Dec 2024) ===")
+    print(f"{'='*80}")
+    
+    validation_trades = run_full_period_backtest(
+        start_date=VALIDATION_START,
         end_date=VALIDATION_END,
         min_confluence=best_params.get('min_confluence_score', 3),
         min_quality_factors=best_params.get('min_quality_factors', 2),
         risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
         atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
-        ml_min_prob=best_params.get('ml_min_prob', 0.6),
+        ml_min_prob=None,
         bollinger_std=best_params.get('bollinger_std', 2.0),
         rsi_period=best_params.get('rsi_period', 14),
-        use_mean_reversion_filter=best_params.get('use_mean_reversion_filter', True),
-        use_rsi_divergence_filter=best_params.get('use_rsi_divergence_filter', True),
     )
     
-    if final_trades:
-        mc_results = run_monte_carlo_analysis(final_trades, num_simulations=1000)
+    validation_results = print_period_results(
+        validation_trades, "VALIDATION RESULTS (Oct-Dec 2024)",
+        VALIDATION_START, VALIDATION_END
+    )
     
     print(f"\n{'='*80}")
-    print("QUARTERLY PERFORMANCE BREAKDOWN")
+    print("=== FULL YEAR FINAL BACKTEST (2024) ===")
+    print(f"{'='*80}")
+    print("Running full year backtest with ML FILTER DISABLED...")
+    
+    full_year_start = datetime(2024, 1, 1)
+    full_year_end = datetime(2024, 12, 31)
+    
+    full_year_trades = run_full_period_backtest(
+        start_date=full_year_start,
+        end_date=full_year_end,
+        min_confluence=best_params.get('min_confluence_score', 3),
+        min_quality_factors=best_params.get('min_quality_factors', 2),
+        risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
+        atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
+        ml_min_prob=None,
+        bollinger_std=best_params.get('bollinger_std', 2.0),
+        rsi_period=best_params.get('rsi_period', 14),
+    )
+    
+    export_trades_to_csv(full_year_trades, "all_trades_2024_full.csv")
+    
+    full_year_results = print_period_results(
+        full_year_trades, "FULL YEAR FINAL RESULTS (2024)",
+        full_year_start, full_year_end
+    )
+    
+    if full_year_trades and len(full_year_trades) >= 30:
+        print(f"\n{'='*80}")
+        print("MONTE CARLO SIMULATION (1000 iterations)")
+        print(f"{'='*80}")
+        mc_results = run_monte_carlo_analysis(full_year_trades, num_simulations=1000)
+    
+    print(f"\n{'='*80}")
+    print("QUARTERLY PERFORMANCE BREAKDOWN (Full Year)")
     print(f"{'='*80}")
     
     for q_name, (q_start, q_end) in QUARTERS_2024.items():
-        q_trades = [t for t in final_trades if hasattr(t, 'entry_date') and t.entry_date]
         q_filtered = []
-        for t in q_trades:
-            entry = t.entry_date
-            if isinstance(entry, str):
-                try:
-                    entry = datetime.fromisoformat(entry.replace("Z", "+00:00"))
-                except:
-                    continue
-            if hasattr(entry, 'replace') and entry.tzinfo:
-                entry = entry.replace(tzinfo=None)
-            if q_start <= entry <= q_end:
-                q_filtered.append(t)
+        for t in full_year_trades:
+            entry = getattr(t, 'entry_date', None)
+            if entry:
+                if isinstance(entry, str):
+                    try:
+                        entry = datetime.fromisoformat(entry.replace("Z", "+00:00"))
+                    except:
+                        continue
+                if hasattr(entry, 'replace') and entry.tzinfo:
+                    entry = entry.replace(tzinfo=None)
+                if q_start <= entry <= q_end:
+                    q_filtered.append(t)
         
         q_r = sum(getattr(t, 'rr', 0) for t in q_filtered)
         q_wins = sum(1 for t in q_filtered if getattr(t, 'rr', 0) > 0)
         q_wr = (q_wins / len(q_filtered) * 100) if q_filtered else 0
         print(f"  {q_name}: {len(q_filtered)} trades, {q_r:+.1f}R, {q_wr:.0f}% win rate")
     
+    if full_year_trades and len(full_year_trades) >= 50:
+        print(f"\n{'='*80}")
+        print("TRAINING ML MODEL")
+        print(f"{'='*80}")
+        optimizer.train_ml_model(full_year_trades)
+    
+    print(f"\n{'='*80}")
+    print("UPDATING DOCUMENTATION")
+    print(f"{'='*80}")
+    update_documentation()
+    
     print(f"\n{'='*80}")
     print("OPTIMIZATION COMPLETE")
     print(f"{'='*80}")
     print(f"\nBest Score: {results['best_score']:.2f}")
     print(f"Trials Run: {results['n_trials']}")
-    print(f"\nOptimized Parameters saved to: params/current_params.json")
-    print(f"ML Model saved to: models/best_rf.joblib")
+    print(f"\nFiles Created:")
+    print(f"  - params/current_params.json (optimized parameters)")
+    print(f"  - ftmo_analysis_output/all_trades_2024_full.csv ({len(full_year_trades) if full_year_trades else 0} trades)")
+    print(f"  - models/best_rf.joblib (ML model)")
     print(f"\nReady for live trading with main_live_bot.py")
     
-    return results
+    return {
+        'best_params': best_params,
+        'best_score': results['best_score'],
+        'n_trials': results['n_trials'],
+        'training': training_results,
+        'validation': validation_results,
+        'full_year': full_year_results,
+    }
 
 
 if __name__ == "__main__":
