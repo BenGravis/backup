@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """
-Ultimate FTMO Challenge Performance Analyzer - 2024 Historical Data
-Production-Ready, Resumable Optimizer with ADX Trend Filter
+Ultimate FTMO Challenge Performance Analyzer - Multi-Year 2023-2025
+Production-Ready, Resumable Optimizer with ADX Trend Filter + MedianPruner
 
 This module provides a comprehensive backtesting and self-optimizing system that:
-1. Backtests using 2024 historical data
-2. Training Period: Jan-Sep 2024, Validation Period: Oct-Dec 2024
-3. ADX > 25 trend-strength filter to avoid ranging markets
-4. December fully open for trading (no date restrictions)
-5. Tracks ALL trades with complete entry/exit data
-6. Generates detailed CSV reports with all trade details
-7. Self-optimizes by saving parameters to params/current_params.json
-8. RESUMABLE: Uses Optuna SQLite storage for crash-resistant optimization
-9. STATUS MODE: Check progress anytime with --status flag
+1. Backtests using multi-year historical data (2023-2025)
+2. Training Period: 2023-01-01 to 2024-09-30
+3. Validation Period: 2024-10-01 to current date
+4. ADX > 25 trend-strength filter to avoid ranging markets
+5. December fully open for trading (no date restrictions)
+6. Tracks ALL trades with complete entry/exit data
+7. Generates detailed CSV reports with all trade details
+8. Self-optimizes by saving parameters to params/current_params.json
+9. RESUMABLE: Uses Optuna SQLite storage for crash-resistant optimization
+10. MedianPruner kills bad trials early for faster convergence
+11. STATUS MODE: Check progress anytime with --status flag
 
 Usage:
   python ftmo_challenge_analyzer.py              # Run/resume optimization
@@ -60,24 +62,36 @@ OPTUNA_DB_PATH = "sqlite:///optuna_study.db"
 OPTUNA_STUDY_NAME = "ftmo_study"
 PROGRESS_LOG_FILE = "ftmo_optimization_progress.txt"
 
-TRAINING_START = datetime(2024, 1, 1)
+TRAINING_START = datetime(2023, 1, 1)
 TRAINING_END = datetime(2024, 9, 30)
 VALIDATION_START = datetime(2024, 10, 1)
-VALIDATION_END = datetime(2024, 12, 31)
-FULL_YEAR_START = datetime(2024, 1, 1)
-FULL_YEAR_END = datetime(2024, 12, 31)
+VALIDATION_END = min(datetime.now(), datetime(2025, 12, 31))
+FULL_PERIOD_START = datetime(2023, 1, 1)
+FULL_PERIOD_END = min(datetime.now(), datetime(2025, 12, 31))
 
-QUARTERS_2024 = {
-    "Q1": (datetime(2024, 1, 1), datetime(2024, 3, 31)),
-    "Q2": (datetime(2024, 4, 1), datetime(2024, 6, 30)),
-    "Q3": (datetime(2024, 7, 1), datetime(2024, 9, 30)),
-    "Q4": (datetime(2024, 10, 1), datetime(2024, 12, 31)),
+QUARTERS_ALL = {
+    "2023_Q1": (datetime(2023, 1, 1), datetime(2023, 3, 31)),
+    "2023_Q2": (datetime(2023, 4, 1), datetime(2023, 6, 30)),
+    "2023_Q3": (datetime(2023, 7, 1), datetime(2023, 9, 30)),
+    "2023_Q4": (datetime(2023, 10, 1), datetime(2023, 12, 31)),
+    "2024_Q1": (datetime(2024, 1, 1), datetime(2024, 3, 31)),
+    "2024_Q2": (datetime(2024, 4, 1), datetime(2024, 6, 30)),
+    "2024_Q3": (datetime(2024, 7, 1), datetime(2024, 9, 30)),
+    "2024_Q4": (datetime(2024, 10, 1), datetime(2024, 12, 31)),
+    "2025_Q1": (datetime(2025, 1, 1), datetime(2025, 3, 31)),
+    "2025_Q2": (datetime(2025, 4, 1), datetime(2025, 6, 30)),
+    "2025_Q3": (datetime(2025, 7, 1), datetime(2025, 9, 30)),
+    "2025_Q4": (datetime(2025, 10, 1), datetime(2025, 12, 31)),
 }
 
 TRAINING_QUARTERS = {
-    "Q1": (datetime(2024, 1, 1), datetime(2024, 3, 31)),
-    "Q2": (datetime(2024, 4, 1), datetime(2024, 6, 30)),
-    "Q3": (datetime(2024, 7, 1), datetime(2024, 9, 30)),
+    "2023_Q1": (datetime(2023, 1, 1), datetime(2023, 3, 31)),
+    "2023_Q2": (datetime(2023, 4, 1), datetime(2023, 6, 30)),
+    "2023_Q3": (datetime(2023, 7, 1), datetime(2023, 9, 30)),
+    "2023_Q4": (datetime(2023, 10, 1), datetime(2023, 12, 31)),
+    "2024_Q1": (datetime(2024, 1, 1), datetime(2024, 3, 31)),
+    "2024_Q2": (datetime(2024, 4, 1), datetime(2024, 6, 30)),
+    "2024_Q3": (datetime(2024, 7, 1), datetime(2024, 9, 30)),
 }
 
 ACCOUNT_SIZE = 200000.0
@@ -871,7 +885,7 @@ def train_ml_model(trades: List[Trade]) -> bool:
 class OptunaOptimizer:
     """
     Optuna-based optimizer for FTMO strategy parameters.
-    Runs optimization ONLY on training data (Jan-Sep 2024).
+    Runs optimization ONLY on training data (2023-01-01 to 2024-09-30).
     Uses persistent SQLite storage for resumability.
     """
     
@@ -973,7 +987,7 @@ class OptunaOptimizer:
         
         print(f"\n{'='*60}")
         print(f"OPTUNA OPTIMIZATION - Adding {n_trials} trials")
-        print(f"TRAINING PERIOD ONLY: Jan 1 - Sep 30, 2024")
+        print(f"TRAINING PERIOD: 2023-01-01 to 2024-09-30")
         print(f"ADX > 25 trend filter applied")
         print(f"Storage: {OPTUNA_DB_PATH} (resumable)")
         print(f"{'='*60}")
@@ -1081,10 +1095,10 @@ def main():
     print(f"\n{'='*80}")
     print("FTMO PROFESSIONAL OPTIMIZATION SYSTEM")
     print(f"{'='*80}")
-    print(f"\nData Partitioning:")
-    print(f"  TRAINING:    Jan 1, 2024 - Sep 30, 2024 (in-sample)")
-    print(f"  VALIDATION:  Oct 1, 2024 - Dec 31, 2024 (out-of-sample)")
-    print(f"  FINAL:       Full year 2024 (December fully open)")
+    print(f"\nData Partitioning (Multi-Year Robustness):")
+    print(f"  TRAINING:    2023-01-01 to 2024-09-30 (in-sample)")
+    print(f"  VALIDATION:  2024-10-01 to {VALIDATION_END.strftime('%Y-%m-%d')} (out-of-sample)")
+    print(f"  FINAL:       Full 2023-2025 (December fully open)")
     print(f"\nADX > 25 trend-strength filter applied")
     print(f"Resumable: Study stored in {OPTUNA_DB_PATH}")
     print(f"{'='*80}\n")
@@ -1095,7 +1109,7 @@ def main():
     best_params = results['best_params']
     
     print(f"\n{'='*80}")
-    print("=== TRAINING RESULTS (Jan-Sep 2024) ===")
+    print("=== TRAINING RESULTS (2023-01-01 to 2024-09-30) ===")
     print(f"{'='*80}")
     
     training_trades = run_full_period_backtest(
@@ -1113,12 +1127,12 @@ def main():
     )
     
     training_results = print_period_results(
-        training_trades, "TRAINING RESULTS (Jan-Sep 2024)",
+        training_trades, "TRAINING RESULTS (2023-01-01 to 2024-09-30)",
         TRAINING_START, TRAINING_END
     )
     
     print(f"\n{'='*80}")
-    print("=== VALIDATION RESULTS (Oct-Dec 2024) ===")
+    print(f"=== VALIDATION RESULTS (2024-10-01 to {VALIDATION_END.strftime('%Y-%m-%d')}) ===")
     print(f"{'='*80}")
     
     validation_trades = run_full_period_backtest(
@@ -1136,19 +1150,19 @@ def main():
     )
     
     validation_results = print_period_results(
-        validation_trades, "VALIDATION RESULTS (Oct-Dec 2024)",
+        validation_trades, f"VALIDATION RESULTS (2024-10-01 to {VALIDATION_END.strftime('%Y-%m-%d')})",
         VALIDATION_START, VALIDATION_END
     )
     
     print(f"\n{'='*80}")
-    print("=== FULL YEAR FINAL RESULTS ===")
+    print("=== FULL PERIOD FINAL RESULTS (2023-2025) ===")
     print(f"{'='*80}")
-    print("Running full year backtest with ML FILTER DISABLED...")
+    print("Running full period backtest with ML FILTER DISABLED...")
     print("December fully open for trading")
     
     full_year_trades = run_full_period_backtest(
-        start_date=FULL_YEAR_START,
-        end_date=FULL_YEAR_END,
+        start_date=FULL_PERIOD_START,
+        end_date=FULL_PERIOD_END,
         min_confluence=best_params.get('min_confluence_score', 3),
         min_quality_factors=best_params.get('min_quality_factors', 2),
         risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
@@ -1161,11 +1175,11 @@ def main():
     )
     
     risk_pct = best_params.get('risk_per_trade_pct', 0.5)
-    export_trades_to_csv(full_year_trades, "all_trades_2024_full.csv", risk_pct)
+    export_trades_to_csv(full_year_trades, "all_trades_2023_2025_full.csv", risk_pct)
     
     full_year_results = print_period_results(
-        full_year_trades, "FULL YEAR FINAL RESULTS (2024)",
-        FULL_YEAR_START, FULL_YEAR_END
+        full_year_trades, f"FULL PERIOD FINAL RESULTS ({FULL_PERIOD_START.year}-{FULL_PERIOD_END.year})",
+        FULL_PERIOD_START, FULL_PERIOD_END
     )
     
     if full_year_trades and len(full_year_trades) >= 30:
@@ -1178,7 +1192,7 @@ def main():
     print("QUARTERLY PERFORMANCE BREAKDOWN (Full Year)")
     print(f"{'='*80}")
     
-    for q_name, (q_start, q_end) in QUARTERS_2024.items():
+    for q_name, (q_start, q_end) in sorted(QUARTERS_ALL.items()):
         q_filtered = []
         for t in full_year_trades:
             entry = getattr(t, 'entry_date', None)
