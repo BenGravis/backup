@@ -2006,36 +2006,35 @@ class OptunaOptimizer:
     
     def _objective(self, trial) -> float:
         """
-        Optuna objective function with strict rejection logic.
+        Optuna objective function with RELAXED penalty-based logic (no hard -inf rejects).
         
-        Search space:
-        - risk_per_trade_pct: 0.5-0.9 (step 0.05) - Safe increase for compounding/scaling
+        Search space (widened for faster convergence):
+        - risk_per_trade_pct: 0.5-0.8 (step 0.05)
         - min_confluence_score: 3-6
         - min_quality_factors: 1-4
-        - atr_min_percentile: 65-90 (step 5) - Strong filter to skip chop
-        - trail_activation_r: 1.8-3.5 (step 0.2) - Delay trailing to capture bigger runners
-        - december_atr_multiplier: 1.2-2.0 (step 0.1) - Extra strict in December
-        - volatile_asset_boost: 1.2-2.2 (step 0.1) - Boost for high-ATR assets
+        - atr_min_percentile: 60-85 (step 5)
+        - trail_activation_r: 1.8-3.2 (step 0.2)
+        - december_atr_multiplier: 1.3-1.8 (step 0.1)
+        - volatile_asset_boost: 1.3-2.0 (step 0.1)
         
         Objective:
-        - Primary: total_net_profit_dollars + (total_R * 800)
-        - Bonus: +50000 if all quarterly R >= 0 and December R >= 0
-        - Bonus: +30000 if Monte Carlo mean > 50R
+        - Primary: total_net_profit_dollars + (total_R * 1000)
+        - Bonus: +50000 if all quarters >= 0R and December >= 0R
         
-        REJECTION (return -inf) if:
-        - Any challenge simulation fails
-        - Monte Carlo 5th percentile return < +10R
-        - Monte Carlo 95th percentile max DD > 15R
-        - Any quarter has negative R < -5R
+        PENALTIES (instead of rejection):
+        - Per quarter < 0R: -20000 per quarter
+        - Per quarter < -10R: reject (return -inf)
+        - MC 5th percentile < 0R: -100000 penalty
+        - Max DD > 15R: -(max_dd - 15) * 10000
         """
         params = {
-            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.5, 0.9, step=0.05),
+            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.5, 0.8, step=0.05),
             'min_confluence_score': trial.suggest_int('min_confluence_score', 3, 6),
             'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 4),
-            'atr_min_percentile': trial.suggest_float('atr_min_percentile', 65.0, 90.0, step=5.0),
-            'trail_activation_r': trial.suggest_float('trail_activation_r', 1.8, 3.5, step=0.2),
-            'december_atr_multiplier': trial.suggest_float('december_atr_multiplier', 1.2, 2.0, step=0.1),
-            'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', 1.2, 2.2, step=0.1),
+            'atr_min_percentile': trial.suggest_float('atr_min_percentile', 60.0, 85.0, step=5.0),
+            'trail_activation_r': trial.suggest_float('trail_activation_r', 1.8, 3.2, step=0.2),
+            'december_atr_multiplier': trial.suggest_float('december_atr_multiplier', 1.3, 1.8, step=0.1),
+            'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', 1.3, 2.0, step=0.1),
             'bollinger_std': trial.suggest_float('bollinger_std', 1.8, 2.5),
             'rsi_period': trial.suggest_int('rsi_period', 10, 20),
             'ml_min_prob': trial.suggest_float('ml_min_prob', 0.55, 0.75),
@@ -2053,8 +2052,12 @@ class OptunaOptimizer:
             rsi_period=params['rsi_period'],
         )
         
-        if not all_trades or len(all_trades) < 20:
-            return float('-inf')
+        total_r = sum(getattr(t, 'rr', 0) for t in all_trades) if all_trades else 0
+        
+        if not all_trades or len(all_trades) < 10:
+            if total_r <= 0:
+                return float('-inf')
+            return total_r * 100
         
         quarterly_r = {}
         december_r = 0.0
@@ -2076,28 +2079,31 @@ class OptunaOptimizer:
                             december_r += getattr(t, 'rr', 0)
             quarterly_r[q] = sum(getattr(t, 'rr', 0) for t in q_trades)
         
+        penalty = 0.0
+        
         for q, r_val in quarterly_r.items():
-            if r_val < -5.0:
+            if r_val < -10.0:
                 return float('-inf')
+            elif r_val < 0.0:
+                penalty += 20000
         
         mc_results = None
+        max_dd_r = 0.0
         if len(all_trades) >= 30:
             try:
                 mc = MonteCarloSimulator(all_trades, num_simulations=500)
                 mc_results = mc.run_simulation()
                 
                 worst_return = mc_results.get('worst_case_return', 0)
-                if worst_return < 10.0:
-                    return float('-inf')
+                if worst_return < 0.0:
+                    penalty += 100000
                 
-                worst_dd = mc_results.get('worst_case_dd', 0)
-                if worst_dd > 15.0:
-                    return float('-inf')
+                max_dd_r = mc_results.get('worst_case_dd', 0)
+                if max_dd_r > 15.0:
+                    penalty += (max_dd_r - 15.0) * 10000
                     
             except Exception:
                 pass
-        
-        total_r = sum(getattr(t, 'rr', 0) for t in all_trades)
         
         win_trades = [t for t in all_trades if getattr(t, 'rr', 0) > 0]
         loss_trades = [t for t in all_trades if getattr(t, 'rr', 0) <= 0]
@@ -2108,7 +2114,7 @@ class OptunaOptimizer:
         risk_usd = self.ACCOUNT_SIZE * (params['risk_per_trade_pct'] / 100)
         total_net_profit = total_r * risk_usd
         
-        score = total_net_profit + (total_r * 800)
+        score = total_net_profit + (total_r * 1000) - penalty
         
         all_quarters_positive = all(r >= 0 for r in quarterly_r.values())
         if all_quarters_positive and december_r >= 0:
@@ -2119,7 +2125,7 @@ class OptunaOptimizer:
             if mean_return > 50:
                 score += 30000
         
-        print(f"Trial {trial.number}: Score={score:.0f}, R={total_r:.1f}, Dec R={december_r:.1f}")
+        print(f"Trial {trial.number}: Score={score:.0f}, R={total_r:.1f}, Trades={len(all_trades)}, Dec R={december_r:.1f}, MaxDD={max_dd_r:.1f}R")
         
         return score
     
@@ -2713,7 +2719,7 @@ def main():
     """
     Clean Optuna-based optimization for FTMO Challenge.
     
-    Runs 50 trials to find optimal parameters, then:
+    Runs 5 trials (quick test mode) to find optimal parameters, then:
     1. Saves best params to params/current_params.json
     2. Trains ML model on best trades
     3. Runs Monte Carlo simulation for robustness
@@ -2725,11 +2731,11 @@ def main():
     print(f"\nData Partitioning:")
     print(f"  TRAINING:    Jan 1, 2024 - Sep 30, 2024")
     print(f"  VALIDATION:  Oct 1, 2024 - Dec 31, 2024")
-    print(f"\nRunning 50 Optuna trials...")
+    print(f"\nRunning 5 Optuna trials (quick test mode)...")
     print(f"{'='*80}\n")
     
     optimizer = OptunaOptimizer(FTMO_CONFIG)
-    results = optimizer.run_optimization(n_trials=50)
+    results = optimizer.run_optimization(n_trials=5)
     
     print(f"\n{'='*80}")
     print("RUNNING MONTE CARLO SIMULATION")
