@@ -54,3 +54,12 @@
 [2025-12-17 17:54:08] Trial #49: value=91722, best_value=93008, params={"risk_per_trade_pct": 0.75, "min_confluence_score": 5, "min_quality_factors": 2, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
 [2025-12-17 17:55:53] Trial #50: value=91722, best_value=93008, params={"risk_per_trade_pct": 0.75, "min_confluence_score": 5, "min_quality_factors": 2, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
 [2025-12-17 17:57:36] Trial #51: value=66996, best_value=93008, params={"risk_per_trade_pct": 0.75, "min_confluence_score": 5, "min_quality_factors": 2, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 17:59:19] Trial #52: value=98170, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:01:13] Trial #53: value=60743, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:03:00] Trial #54: value=72462, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:04:50] Trial #55: value=98170, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:06:38] Trial #56: value=30325, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:08:32] Trial #57: value=71058, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:10:25] Trial #58: value=72462, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:12:14] Trial #59: value=82997, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
+[2025-12-17 18:14:01] Trial #60: value=98170, best_value=98170, params={"risk_per_trade_pct": 0.8, "min_confluence_score": 5, "min_quality_factors": 1, "atr_min_percentile": 70.0, "trail_activation_r": 2.6}
