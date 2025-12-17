@@ -19,7 +19,6 @@ deploymentTarget = "cloudrun"
 expertMode = true
 
 [workflows]
-runButton = "Project"
 
 [[workflows.workflow]]
 name = "Live Trading Bot"
@@ -29,27 +28,6 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "python live_bot.py"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Web Server"
-
-[[workflows.workflow]]
-name = "Web Server"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "python main.py"
-waitForPort = 5000
 
 [[ports]]
 localPort = 5000
