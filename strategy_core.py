@@ -16,6 +16,11 @@ from typing import Optional, List, Dict, Tuple, Any
 
 from indicators import bollinger_bands, calculate_adx_with_slope, check_di_crossover
 
+try:
+    from fibonacci_strategy import analyze_fib_setup
+except ImportError:
+    analyze_fib_setup = None
+
 
 def _get_candle_datetime(candle: Dict) -> Optional[datetime]:
     """Extract datetime from candle dictionary."""
@@ -2031,7 +2036,7 @@ def _fib_context(
     fib_high: float = 0.886,
 ) -> Tuple[str, bool]:
     """
-    Check if price is within a Fibonacci retracement zone.
+    Check if price is within a Fibonacci retracement zone using new Fibonacci module.
     
     Returns:
         Tuple of (note, is_in_fib_zone)
@@ -2041,6 +2046,14 @@ def _fib_context(
         
         if not candles or len(candles) < 20:
             return "Fib: Insufficient data", False
+        
+        # Use new Fibonacci analysis if available
+        if analyze_fib_setup:
+            fib_analysis = analyze_fib_setup(candles, direction, price)
+            if fib_analysis.get("valid"):
+                in_zone = fib_analysis.get("in_golden_zone", False)
+                pattern_note = fib_analysis.get("pattern_notes", "")
+                return f"Fib: Golden Zone {in_zone}, Patterns: {pattern_note}", in_zone
         
         leg = _find_last_swing_leg_for_fib(candles, direction)
         
