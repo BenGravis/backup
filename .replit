@@ -60,7 +60,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python ftmo_challenge_analyzer.py --trials 500"
+args = "python ftmo_challenge_analyzer.py --trials 100"
 
 [workflows.workflow.metadata]
 outputType = "console"
