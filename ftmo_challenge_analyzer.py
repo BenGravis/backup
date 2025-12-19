@@ -58,6 +58,18 @@ from params.params_loader import save_optimized_params
 OUTPUT_DIR = Path("ftmo_analysis_output")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
+def save_best_params_persistent(best_params: Dict) -> None:
+    """
+    Save best parameters to best_params.json for instant bot updates.
+    This persists even if optimization run is halted abruptly.
+    """
+    try:
+        params_file = Path("best_params.json")
+        params_file.write_text(json.dumps(best_params, indent=2))
+        print(f"✓ Best parameters saved to best_params.json")
+    except Exception as e:
+        print(f"[!] Error saving best_params.json: {e}")
+
 OPTUNA_DB_PATH = "sqlite:///regime_adaptive_v2_clean.db"
 
 _DATA_CACHE: Dict[str, List[Dict]] = {}
@@ -1631,6 +1643,9 @@ def main():
     results = optimizer.run_optimization(n_trials=n_trials)
     
     best_params = results['best_params']
+    
+    # INSTANTLY SAVE BEST PARAMS FOR LIVE BOT
+    save_best_params_persistent(best_params)
     
     print(f"\n{'='*80}")
     print("=== TRAINING RESULTS (2023-01-01 to 2024-09-30) ===")

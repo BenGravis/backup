@@ -118,6 +118,24 @@ log = setup_logger("tradr", log_file="logs/tradr_live.log")
 running = True
 
 
+def load_best_params_from_file() -> Dict:
+    """
+    Load best parameters from best_params.json (optimizer output).
+    Falls back to defaults if file doesn't exist.
+    """
+    try:
+        best_params_file = Path("best_params.json")
+        if best_params_file.exists():
+            with open(best_params_file, 'r') as f:
+                params_dict = json.load(f)
+            log.info("✓ Loaded best parameters from best_params.json (from optimizer)")
+            return params_dict
+    except Exception as e:
+        log.warning(f"Could not load best_params.json: {e}")
+    
+    return {}  # Return empty dict to use StrategyParams defaults
+
+
 def signal_handler(sig, frame):
     """Handle shutdown signals gracefully."""
     global running
@@ -149,7 +167,14 @@ class LiveTradingBot:
             password=MT5_PASSWORD,
         )
         self.risk_manager = RiskManager(state_file="challenge_state.json")
-        self.params = StrategyParams()
+        
+        # Load best params from optimizer (if available), otherwise use defaults
+        best_params_dict = load_best_params_from_file()
+        if best_params_dict:
+            self.params = StrategyParams(**best_params_dict)
+        else:
+            self.params = StrategyParams()
+        
         self.last_scan_time: Optional[datetime] = None
         self.last_validate_time: Optional[datetime] = None
         self.scan_count = 0
