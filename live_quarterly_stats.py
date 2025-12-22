@@ -146,10 +146,11 @@ def monitor_live():
     while True:
         try:
             # Connect to Optuna study
-            study = optuna.load_study(
+            study = optuna.create_study(
                 study_name="regime_adaptive_v2_clean",
                 storage=DB_PATH,
-                load_if_exists=True
+                load_if_exists=True,
+                direction='maximize'
             )
             
             current_trial_count = len(study.trials)
