@@ -61,6 +61,7 @@ from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
 from tradr.risk.position_sizing import calculate_lot_size, get_contract_specs
 from params.params_loader import save_optimized_params
 from params.optimization_config import get_optimization_config, OptimizationConfig
+from output_manager import OutputManager, get_output_manager
 
 # Professional Quant Suite Integration
 from professional_quant_suite import (
@@ -1048,11 +1049,13 @@ class OptunaOptimizer:
     Optuna-based optimizer for FTMO strategy parameters.
     Runs optimization ONLY on training data (2023-01-01 to 2024-09-30).
     Uses persistent SQLite storage for resumability.
+    Uses OutputManager for structured CSV output.
     """
     
     def __init__(self):
         self.best_params: Dict = {}
         self.best_score: float = -float('inf')
+        self.output_manager = get_output_manager()
     
     def _objective(self, trial) -> float:
         """
@@ -1491,6 +1494,20 @@ class OptunaOptimizer:
             
             print(f"{'─'*70}\n")
             
+            # Log trial to CSV for nohup tracking
+            om = get_output_manager()
+            om.log_trial(
+                trial_number=trial.number,
+                score=trial.value if trial.value else 0,
+                total_r=trial.user_attrs.get('total_r', 0),
+                sharpe_ratio=trial.user_attrs.get('sharpe_ratio', 0),
+                win_rate=trial.user_attrs.get('win_rate', 0),
+                profit_factor=trial.user_attrs.get('profit_factor', 0),
+                total_trades=overall_stats.get('trades', 0) if overall_stats else 0,
+                profit_usd=overall_stats.get('profit', 0) if overall_stats else 0,
+                max_drawdown_pct=trial.user_attrs.get('max_drawdown_pct', 0),
+            )
+            
             # If this is the new best trial, immediately export CSVs and update best_params.json
             if is_new_best and study.best_trial:
                 try:
@@ -1573,15 +1590,22 @@ class OptunaOptimizer:
                         partial_exit_at_1r=current_best_params.get('partial_exit_at_1r', True),
                     )
                     
-                    # Export updated CSV files
-                    print("  Exporting all_trades_jan_dec_2024.csv...")
-                    export_trades_to_csv(training_trades_best, "all_trades_jan_dec_2024.csv", risk_pct)
+                    # Use OutputManager for structured CSV exports
+                    om = get_output_manager()
+                    om.save_best_trial_trades(
+                        training_trades=training_trades_best,
+                        validation_trades=validation_trades_best,
+                        final_trades=full_trades_best,
+                        risk_pct=risk_pct,
+                    )
                     
-                    print("  Exporting all_trades_2024_full.csv...")
-                    export_trades_to_csv(validation_trades_best, "all_trades_2024_full.csv", risk_pct)
+                    # Generate monthly stats for each period
+                    om.generate_monthly_stats(training_trades_best, "training", risk_pct)
+                    om.generate_monthly_stats(validation_trades_best, "validation", risk_pct)
+                    om.generate_monthly_stats(full_trades_best, "final", risk_pct)
                     
-                    print("  Exporting all_trades_2023_2025_full.csv...")
-                    export_trades_to_csv(full_trades_best, "all_trades_2023_2025_full.csv", risk_pct)
+                    # Generate symbol performance
+                    om.generate_symbol_performance(full_trades_best, risk_pct)
                     
                     # Save best_params.json immediately for live bot
                     params_to_save = {
@@ -1608,10 +1632,10 @@ class OptunaOptimizer:
                     print("  Saving best_params.json for live bot...")
                     save_optimized_params(params_to_save, backup=True)
                     
-                    print(f"✅ Updated CSV exports and best_params.json for trial #{trial.number}\n")
+                    print(f"✅ Updated best trial exports for trial #{trial.number}\n")
                     
                 except Exception as e:
-                    print(f"⚠️  Error exporting CSVs for best trial: {e}\n")
+                    print(f"⚠️  Error exporting for best trial: {e}\n")
         
         try:
             study.optimize(
@@ -2438,15 +2462,52 @@ def main():
     # Generate Professional Report
     print(f"\n  Generating professional report...")
     try:
-        report_text = generate_professional_report(
+        # Use OutputManager for final report (CSV format for AI analysis)
+        om = get_output_manager()
+        risk_pct = best_params.get('risk_per_trade_pct', 0.5)
+        risk_per_trade = ACCOUNT_SIZE * (risk_pct / 100)
+        
+        # Calculate profit USD for each period
+        training_profit = sum(getattr(t, 'rr', 0) for t in training_trades) * risk_per_trade if training_trades else 0
+        validation_profit = sum(getattr(t, 'rr', 0) for t in validation_trades) * risk_per_trade if validation_trades else 0
+        final_profit = sum(getattr(t, 'rr', 0) for t in full_year_trades) * risk_per_trade if full_year_trades else 0
+        
+        training_dict = {
+            'total_r': training_risk_metrics.total_return,
+            'sharpe': training_risk_metrics.sharpe_ratio,
+            'sortino': training_risk_metrics.sortino_ratio,
+            'win_rate': training_risk_metrics.win_rate * 100,
+            'profit_usd': training_profit,
+            'total_trades': len(training_trades) if training_trades else 0,
+            'max_drawdown': training_risk_metrics.max_drawdown,
+        }
+        validation_dict = {
+            'total_r': validation_risk_metrics.total_return,
+            'sharpe': validation_risk_metrics.sharpe_ratio,
+            'sortino': validation_risk_metrics.sortino_ratio,
+            'win_rate': validation_risk_metrics.win_rate * 100,
+            'profit_usd': validation_profit,
+            'total_trades': len(validation_trades) if validation_trades else 0,
+            'max_drawdown': validation_risk_metrics.max_drawdown,
+        }
+        final_dict = {
+            'total_r': full_risk_metrics.total_return,
+            'sharpe': full_risk_metrics.sharpe_ratio,
+            'sortino': full_risk_metrics.sortino_ratio,
+            'win_rate': full_risk_metrics.win_rate * 100,
+            'profit_usd': final_profit,
+            'total_trades': len(full_year_trades) if full_year_trades else 0,
+            'max_drawdown': full_risk_metrics.max_drawdown,
+        }
+        
+        om.generate_final_report(
             best_params=best_params,
-            training_metrics=training_risk_metrics,
-            validation_metrics=validation_risk_metrics,
-            full_metrics=full_risk_metrics,
-            walk_forward_results=wf_results,
-            output_file=OUTPUT_DIR / "professional_backtest_report.txt"
+            training_metrics=training_dict,
+            validation_metrics=validation_dict,
+            final_metrics=final_dict,
+            total_trials=results.get('total_trials', results['n_trials']),
         )
-        print(f"  ✓ Report saved to: ftmo_analysis_output/professional_backtest_report.txt")
+        print(f"  ✓ Report saved to: ftmo_analysis_output/optimization_report.csv")
     except Exception as e:
         print(f"  [!] Report generation failed: {e}")
     
@@ -2458,21 +2519,14 @@ def main():
     print(f"Total Trials in Study: {results.get('total_trials', results['n_trials'])}")
     print(f"\nFiles Created:")
     print(f"  - params/current_params.json (optimized parameters)")
-    print(f"  - ftmo_analysis_output/all_trades_2024_full.csv ({len(full_year_trades) if full_year_trades else 0} trades)")
-    print(f"  - models/best_rf.joblib (ML model)")
-    print(f"  - optuna_study.db (resumable optimization state)")
-    print(f"  - ftmo_optimization_progress.txt (progress log)")
+    print(f"  - ftmo_analysis_output/best_trades_*.csv (training/validation/final trades)")
+    print(f"  - ftmo_analysis_output/monthly_stats.csv (monthly breakdown)")
+    print(f"  - ftmo_analysis_output/symbol_performance.csv (per-symbol stats)")
+    print(f"  - ftmo_analysis_output/optimization.log (trial history)")
+    print(f"  - ftmo_analysis_output/optimization_report.csv (final report)")
+    print(f"  - {config.db_path} (resumable optimization state)")
     
-    print(f"\nDocumentation updated. CSV exported. Ready for live trading.")
-    
-    summary_file = generate_summary_txt(
-        results=results,
-        training_trades=training_trades,
-        validation_trades=validation_trades,
-        full_year_trades=full_year_trades,
-        best_params=best_params
-    )
-    print(f"\nSummary saved to: {summary_file}")
+    print(f"\n✅ Optimization complete. Ready for live trading.")
 
 
 if __name__ == "__main__":
