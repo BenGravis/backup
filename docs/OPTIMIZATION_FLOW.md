@@ -2,49 +2,53 @@
 
 ## Overview
 
-This document describes the optimized NSGA-II flow that combines speed with robustness.
+This document describes the TPE/NSGA-II optimization flow with end-of-run validation for speed and robustness.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PHASE 1: NSGA-II Multi-Objective (Training Only)                   │
-│ • All trials run training backtest only (speed optimization)       │
-│ • Output: Pareto frontier with 5-15 non-dominated solutions        │
+│ PHASE 1: TPE/NSGA-II Optimization (Training Only)                  │
+│ • All trials run training backtest only (2023-01 to 2024-09)       │
+│ • No validation runs during optimization (speed optimization)       │
+│ • Output: Best training trial + study database                     │
 │ • Time: ~1-2 hours for 100 trials                                  │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PHASE 2: Top-5 Pareto Validation (OOS Check)                       │
-│ • Run Oct-Dec 2024 backtest on top 5 Pareto trials                 │
-│ • Filter: OOS R > 0, WR > 45%, no blowup                           │
+│ PHASE 2: Top-5 Trial Validation (OOS Check)                        │
+│ • Run 2024-10-01 to 2025-12-26 backtest on top 5 trials            │
+│ • Select best OOS performer (highest validation R)                 │
 │ • Time: ~10 minutes                                                │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PHASE 3: Top-3 Robustness Check                                    │
+│ PHASE 3: Robustness Testing (Best OOS Params)                      │
 │ • Monte Carlo (500 sims): 95th percentile drawdown                 │
-│ • Walk-Forward (3 windows): parameter stability                    │
+│ • Walk-Forward (22 windows): parameter stability                   │
 │ • Time: ~15 minutes                                                │
 └─────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────────┐
-│ PHASE 4: Final Selection & Export                                  │
-│ • Combined score = OOS_R * 0.4 + MC_robust * 0.3 + WF_stable * 0.3 │
-│ • Full 2023-2025 backtest with winner                              │
-│ • Export to params/current_params.json                             │
+│ PHASE 4: Final Backtest & Export                                   │
+│ • Full 2023-2025 backtest with best OOS parameters                 │
+│ • Generate comprehensive CSV reports (all 34 symbols)              │
+│ • Export to params/current_params.json + history archive           │
+│ • Professional report with metrics breakdown                       │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Why This Design?
 
-### Speed Optimization
-- Training-only during exploration (NSGA-II phase)
-- Validation only on top 5 candidates
-- Monte Carlo only on top 3 finalists
+### Speed Optimization (10x faster than before)
+- Training-only during exploration phase (TPE/NSGA-II)
+- Validation only on top 5 candidates (not every best trial)
+- Monte Carlo only on final winner
+- Removed redundant backtests in callback
 
 ### Robustness Checks
-- OOS validation prevents overfitting
-- Monte Carlo tests strategy under random trade order
-- Walk-forward validates parameter stability over time
+- OOS validation prevents overfitting (2024-10 to 2025-12)
+- Monte Carlo tests strategy under random trade order (500 simulations)
+- Walk-forward validates parameter stability (22 rolling windows)
+- All 34 symbols tested in final backtest
 
 ## Time Estimates
 

@@ -31,6 +31,19 @@ data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
 
 ## Critical Conventions
 
+### Recent Bug Fixes (Dec 28, 2025)
+**IMPORTANT**: The following bugs were recently fixed - avoid reintroducing:
+
+1. **params_loader.py**: Removed `liquidity_sweep_lookback` parameter (doesn't exist in StrategyParams)
+2. **professional_quant_suite.py**:
+   - Win rate: Remove duplicate `* 100` (already percentage)
+   - Calmar ratio: Use `max_drawdown_pct` not `max_drawdown` (USD)
+   - Total return: Return USD value, not percentage
+3. **ftmo_challenge_analyzer.py**:
+   - Quarterly stats must be calculated BEFORE early return for losing trials
+   - Use `overall_stats['r_total']` not `user_attrs.get('total_r')` for logging
+   - ADX filter disabled: `require_adx_filter=False` everywhere
+
 ### Symbol Format
 - **Config/data files**: OANDA format with underscores (`EUR_USD`, `XAU_USD`)
 - **MT5 execution**: FTMO format (`EURUSD`, `XAUUSD`, `US500.cash`)

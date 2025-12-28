@@ -5,15 +5,25 @@
 
 ---
 
-## Recent Changes
-
-### Features
-- [c6da3a2] feat: Comprehensive auto-updating documentation system (2025-12-28)
-- [56850d8] feat: Add --single flag and separate NSGA/TPE output directories (2025-12-28)
-- [5c926b5] feat: Smart NSGA-II flow with OOS validation (2025-12-28)
-- [0c4f28d] feat: Expand NSGA-II parameter space (25+ params) (2025-12-28)
+## Recent Changes (Session: Dec 28, 2025)
 
 ### Bug Fixes
+- **CRITICAL**: Fixed `params_loader.py` - removed obsolete `liquidity_sweep_lookback` parameter causing optimizer crashes
+- **CRITICAL**: Fixed metric calculations in `professional_quant_suite.py`:
+  - Win rate: Removed duplicate `* 100` multiplication (was showing 4700% instead of 47%)
+  - Calmar ratio: Fixed unit mismatch - now uses `max_drawdown_pct` instead of USD
+  - Total return: Now returns USD value instead of percentage
+- **CRITICAL**: Fixed quarterly stats display for losing trials - stats now shown even when R < 0
+- **CRITICAL**: Fixed optimization.log showing incorrect R=0.0 for losing trials - now uses `overall_stats['r_total']`
+- Disabled ADX filter completely (`require_adx_filter=False`) - incompatible with current strategy
+
+### Features
+- Removed validation/final backtest runs on every new best trial - now only runs once at end for top 5 trials (massive speedup)
+- All 34 symbols now appear in output CSVs (fixed trade combination bug)
+
+### Configuration Changes
+- ADX regime filter disabled in `optimization_config.json` and all backtest calls
+- Updated `params_loader.py` with complete StrategyParams mapping (60+ parameters)
 
 ### Documentation
 - [CURRENT] docs: Add comprehensive baseline performance analysis (BASELINE_ANALYSIS.md) (2025-12-28)

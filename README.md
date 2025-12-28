@@ -1,18 +1,17 @@
 # MT5 FTMO Trading Bot
 
-Automated MetaTrader 5 trading bot for FTMO 200K Challenge accounts. Uses a 7-Pillar Confluence system with ADX regime detection.
+Automated MetaTrader 5 trading bot for FTMO 200K Challenge accounts. Uses a 7-Pillar Confluence system with multi-timeframe analysis.
 
 ## Quick Start
 
 ```bash
 # Run optimization (recommended: use helper script for background runs)
-./run_optimization.sh --multi --trials 100   # NSGA-II (auto-logs to ftmo_analysis_output/NSGA/run.log)
 ./run_optimization.sh --single --trials 100  # TPE (auto-logs to ftmo_analysis_output/TPE/run.log)
+./run_optimization.sh --multi --trials 100   # NSGA-II (auto-logs to ftmo_analysis_output/NSGA/run.log)
 
 # Or run directly
+python ftmo_challenge_analyzer.py --single --trials 100  # TPE single-objective (recommended)
 python ftmo_challenge_analyzer.py --multi --trials 100   # NSGA-II multi-objective
-python ftmo_challenge_analyzer.py --single --trials 100  # TPE single-objective
-python ftmo_challenge_analyzer.py --multi --adx --trials 100  # With ADX regime filter
 
 # Monitor live progress
 tail -f ftmo_analysis_output/TPE/run.log          # Complete output
@@ -27,6 +26,22 @@ python ftmo_challenge_analyzer.py --config
 # Run live bot (Windows VM with MT5)
 python main_live_bot.py
 ```
+
+## Recent Updates (Dec 28, 2025)
+
+### Critical Bug Fixes
+- ✅ **params_loader.py**: Removed obsolete `liquidity_sweep_lookback` parameter
+- ✅ **Metric calculations**: Fixed win_rate (4700%→47%), Calmar ratio (0.00→proper values), total_return units
+- ✅ **Optimization logs**: Fixed R=0.0 display bug for losing trials
+- ✅ **Trade exports**: All 34 symbols now appear in CSV outputs
+
+### Performance Improvements
+- ⚡ **Validation runs**: Only execute on top 5 trials at end (not every best trial)
+- ⚡ **Faster optimization**: ~10x speedup by removing redundant backtests
+
+### Configuration
+- 🔧 **ADX filter**: Disabled (incompatible with current strategy baseline)
+- 🔧 **Parameter loader**: Updated with complete 60+ parameter mapping
 
 ## Project Structure
 
@@ -46,17 +61,19 @@ python main_live_bot.py
 
 The optimizer uses professional quant best practices:
 
-- **TRAINING PERIOD**: January 1, 2024 – September 30, 2024 (in-sample optimization)
-- **VALIDATION PERIOD**: October 1, 2024 – December 31, 2024 (out-of-sample test)
-- **FINAL BACKTEST**: Full year 2024 (December fully open for trading)
-- **ADX > 25 trend-strength filter** applied to avoid ranging markets.
+- **TRAINING PERIOD**: 2023-01-01 to 2024-09-30 (in-sample optimization)
+- **VALIDATION PERIOD**: 2024-10-01 to 2025-12-26 (out-of-sample test)
+- **FINAL BACKTEST**: Full 2023-2025 period (December fully open for trading)
+- **Top 5 validation**: Best OOS performer selected from top 5 training trials
 
 All trades from the final backtest are exported to:
-`ftmo_analysis_output/all_trades_2024_full.csv`
+- `ftmo_analysis_output/TPE/best_trades_training.csv`
+- `ftmo_analysis_output/TPE/best_trades_validation.csv`
+- `ftmo_analysis_output/TPE/best_trades_final.csv`
 
 Parameters are saved to `params/current_params.json`
 
-Optimization is resumable and can be checked with: `python ftmo_challenge_analyzer.py --status`
+Optimization is resumable (SQLite storage) and can be checked with: `python ftmo_challenge_analyzer.py --status`
 
 
 ## Documentation
