@@ -61,19 +61,17 @@ python main_live_bot.py
 
 The optimizer uses professional quant best practices:
 
-- **TRAINING PERIOD**: 2023-01-01 to 2024-09-30 (in-sample optimization)
-- **VALIDATION PERIOD**: 2024-10-01 to 2025-12-26 (out-of-sample test)
-- **FINAL BACKTEST**: Full 2023-2025 period (December fully open for trading)
-- **Top 5 validation**: Best OOS performer selected from top 5 training trials
+- **TRAINING PERIOD**: January 1, 2024 – September 30, 2024 (in-sample optimization)
+- **VALIDATION PERIOD**: October 1, 2024 – December 31, 2024 (out-of-sample test)
+- **FINAL BACKTEST**: Full year 2024 (December fully open for trading)
+- **ADX > 25 trend-strength filter** applied to avoid ranging markets.
 
 All trades from the final backtest are exported to:
-- `ftmo_analysis_output/TPE/best_trades_training.csv`
-- `ftmo_analysis_output/TPE/best_trades_validation.csv`
-- `ftmo_analysis_output/TPE/best_trades_final.csv`
+`ftmo_analysis_output/all_trades_2024_full.csv`
 
 Parameters are saved to `params/current_params.json`
 
-Optimization is resumable (SQLite storage) and can be checked with: `python ftmo_challenge_analyzer.py --status`
+Optimization is resumable and can be checked with: `python ftmo_challenge_analyzer.py --status`
 
 
 ## Documentation

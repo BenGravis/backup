@@ -147,6 +147,140 @@ TRAINING_QUARTERS = {
 ACCOUNT_SIZE = 200000.0
 
 
+@dataclass
+class FTMOComplianceTracker:
+    """Track FTMO compliance during backtest simulation."""
+
+    account_size: float = 200000.0
+    current_balance: float = 200000.0
+    highest_balance: float = 200000.0
+    day_start_balance: float = 200000.0
+    current_day: Optional[date] = None
+
+    # Tracking stats
+    trades_skipped_daily: int = 0
+    trades_skipped_dd: int = 0
+    trades_skipped_streak: int = 0
+    consecutive_losses: int = 0
+    halted_reason: Optional[str] = None
+
+    # FTMO Limits (configurable)
+    daily_loss_halt_pct: float = 4.2
+    total_dd_halt_pct: float = 8.0
+    consecutive_loss_halt: int = 5
+
+    @property
+    def daily_loss_pct(self) -> float:
+        """Current daily loss as percentage."""
+        if self.current_balance >= self.day_start_balance:
+            return 0.0
+        return ((self.day_start_balance - self.current_balance) / self.day_start_balance) * 100
+
+    @property
+    def total_dd_pct(self) -> float:
+        """Current total drawdown as percentage from initial balance."""
+        if self.current_balance >= self.account_size:
+            return 0.0
+        return ((self.account_size - self.current_balance) / self.account_size) * 100
+
+    def check_new_day(self, trade_date: date) -> None:
+        """Check if it's a new trading day and reset daily tracking."""
+        if trade_date != self.current_day:
+            self.current_day = trade_date
+            self.day_start_balance = self.current_balance
+
+    def can_take_trade(self, potential_loss_usd: float) -> Tuple[bool, str]:
+        """
+        Check if a trade can be taken given current compliance state.
+
+        Args:
+            potential_loss_usd: Maximum potential loss in USD (if SL hit)
+
+        Returns:
+            (can_trade, reason)
+        """
+        # Check consecutive losses
+        if self.consecutive_losses >= self.consecutive_loss_halt:
+            self.trades_skipped_streak += 1
+            return False, f"Streak halt: {self.consecutive_losses} consecutive losses"
+
+        # Check daily loss before trade
+        if self.daily_loss_pct >= self.daily_loss_halt_pct:
+            self.trades_skipped_daily += 1
+            return False, f"Daily loss halt: {self.daily_loss_pct:.1f}%"
+
+        # Check total DD before trade
+        if self.total_dd_pct >= self.total_dd_halt_pct:
+            self.trades_skipped_dd += 1
+            return False, f"Total DD halt: {self.total_dd_pct:.1f}%"
+
+        # Simulate if trade loss would breach limits
+        simulated_balance = self.current_balance - abs(potential_loss_usd)
+
+        # Check simulated daily loss
+        if simulated_balance < self.day_start_balance:
+            simulated_daily_loss = ((self.day_start_balance - simulated_balance) / self.day_start_balance) * 100
+            if simulated_daily_loss >= 5.0:  # Hard FTMO limit
+                self.trades_skipped_daily += 1
+                return False, f"Would breach daily: {simulated_daily_loss:.1f}%"
+
+        # Check simulated total DD
+        if simulated_balance < self.account_size:
+            simulated_total_dd = ((self.account_size - simulated_balance) / self.account_size) * 100
+            if simulated_total_dd >= 10.0:  # Hard FTMO limit
+                self.trades_skipped_dd += 1
+                return False, f"Would breach total DD: {simulated_total_dd:.1f}%"
+
+        return True, "OK"
+
+    def update_after_trade(self, pnl: float) -> bool:
+        """
+        Update tracker after a trade completes.
+
+        Args:
+            pnl: Trade P&L in USD (positive = profit, negative = loss)
+
+        Returns:
+            True if challenge is still valid, False if failed
+        """
+        self.current_balance += pnl
+
+        # Update consecutive losses
+        if pnl < 0:
+            self.consecutive_losses += 1
+        else:
+            self.consecutive_losses = 0
+
+        # Update highest balance
+        if self.current_balance > self.highest_balance:
+            self.highest_balance = self.current_balance
+
+        # Check for hard limit breach
+        if self.daily_loss_pct >= 5.0:
+            self.halted_reason = f"FAILED: Daily loss {self.daily_loss_pct:.1f}% >= 5%"
+            return False
+
+        if self.total_dd_pct >= 10.0:
+            self.halted_reason = f"FAILED: Total DD {self.total_dd_pct:.1f}% >= 10%"
+            return False
+
+        return True
+
+    def get_report(self) -> Dict:
+        """Get compliance tracking report."""
+        return {
+            'final_balance': self.current_balance,
+            'total_return_pct': ((self.current_balance - self.account_size) / self.account_size) * 100,
+            'max_dd_pct': self.total_dd_pct,
+            'trades_skipped_daily': self.trades_skipped_daily,
+            'trades_skipped_dd': self.trades_skipped_dd,
+            'trades_skipped_streak': self.trades_skipped_streak,
+            'total_skipped': self.trades_skipped_daily + self.trades_skipped_dd + self.trades_skipped_streak,
+            'halted_reason': self.halted_reason,
+            'challenge_passed': self.halted_reason is None,
+        }
+
+
 def calculate_adx(candles: List[Dict], period: int = 14) -> float:
     """
     Calculate Average Directional Index (ADX) for trend strength measurement.
@@ -606,6 +740,19 @@ def run_full_period_backtest(
     excluded_assets: Optional[List[str]] = None,
     require_adx_filter: bool = True,
     min_adx: float = 25.0,
+    enable_compliance_tracking: bool = True,
+    tp1_r_multiple: float = 1.2,
+    tp2_r_multiple: float = 2.0,
+    tp3_r_multiple: float = 3.5,
+    tp1_close_pct: float = 0.35,
+    tp2_close_pct: float = 0.35,
+    tp3_close_pct: float = 0.25,
+    use_htf_filter: bool = False,
+    use_structure_filter: bool = False,
+    use_fib_filter: bool = False,
+    use_confirmation_filter: bool = False,
+    use_displacement_filter: bool = False,
+    use_candle_rejection: bool = False,
     # ============================================================================
     # REGIME-ADAPTIVE V2 PARAMETERS
     # ============================================================================
@@ -622,7 +769,7 @@ def run_full_period_backtest(
     partial_exit_pct: float = 0.5,  # % to close at 1R
     use_adx_slope_rising: bool = False,  # Enable ADX slope rising early trend detection
     atr_vol_ratio_range: float = 0.8,  # ATR volatility ratio for range mode filter
-) -> List[Trade]:
+) -> Tuple[List[Trade], Dict]:
     """
     Run backtest for a given period with Regime-Adaptive V2 filtering.
     
@@ -700,6 +847,18 @@ def run_full_period_backtest(
                 adx_trend_threshold=adx_trend_threshold,
                 adx_range_threshold=adx_range_threshold,
                 use_adx_regime_filter=use_adx_regime_filter,  # Pass ADX filter toggle to params
+                atr_tp1_multiplier=tp1_r_multiple,
+                atr_tp2_multiplier=tp2_r_multiple,
+                atr_tp3_multiplier=tp3_r_multiple,
+                tp1_close_pct=tp1_close_pct,
+                tp2_close_pct=tp2_close_pct,
+                tp3_close_pct=tp3_close_pct,
+                use_htf_filter=use_htf_filter,
+                use_structure_filter=use_structure_filter,
+                use_fib_filter=use_fib_filter,
+                use_confirmation_filter=use_confirmation_filter,
+                use_displacement_filter=use_displacement_filter,
+                use_candle_rejection=use_candle_rejection,
             )
             
             trades = simulate_trades(
@@ -767,7 +926,47 @@ def run_full_period_backtest(
             if start_date <= entry <= end_date:
                 filtered_trades.append(trade)
     
-    return filtered_trades
+    if enable_compliance_tracking:
+        tracker = FTMOComplianceTracker(account_size=ACCOUNT_SIZE, current_balance=ACCOUNT_SIZE)
+        accepted_trades: List[Trade] = []
+        challenge_failed = False
+
+        for trade in filtered_trades:
+            entry_dt = getattr(trade, 'entry_date', None)
+            if isinstance(entry_dt, str):
+                try:
+                    entry_dt = datetime.fromisoformat(entry_dt.replace("Z", "+00:00"))
+                except:
+                    entry_dt = None
+
+            trade_date = entry_dt.date() if isinstance(entry_dt, datetime) else None
+            if trade_date:
+                tracker.check_new_day(trade_date)
+
+            trade_risk_pct = getattr(trade, 'risk_pct', risk_per_trade_pct)
+            potential_loss_usd = ACCOUNT_SIZE * (trade_risk_pct / 100.0)
+
+            can_trade, reason = tracker.can_take_trade(potential_loss_usd)
+            if not can_trade:
+                trade.validation_notes = getattr(trade, 'validation_notes', '') + f" | Skipped: {reason}"
+                continue
+
+            trade_pnl_usd = potential_loss_usd * getattr(trade, 'rr', 0.0)
+            challenge_ok = tracker.update_after_trade(trade_pnl_usd)
+            accepted_trades.append(trade)
+
+            if not challenge_ok:
+                challenge_failed = True
+                break
+
+        compliance_report = tracker.get_report()
+        if challenge_failed:
+            compliance_report['halted_reason'] = tracker.halted_reason or "FAILED: Challenge rules breached"
+            compliance_report['challenge_passed'] = False
+
+        return accepted_trades, compliance_report
+
+    return filtered_trades, {'challenge_passed': True, 'halted_reason': None}
 
 
 def convert_to_backtest_trade(
@@ -1076,6 +1275,22 @@ class OptunaOptimizer:
             'partial_exit_at_1r': trial.suggest_categorical('partial_exit_at_1r', [True, False]),
             'partial_exit_pct': trial.suggest_float('partial_exit_pct', 0.25, 0.75, step=0.1),     # Fixed: (0.75-0.25)/0.1=5
             'trail_activation_r': trial.suggest_float('trail_activation_r', 1.0, 3.0, step=0.5),   # Fixed: (3.0-1.0)/0.5=4
+
+            # TP & Scaling (NEW)
+            'tp1_r_multiple': trial.suggest_float('tp1_r_multiple', 1.0, 2.0, step=0.1),
+            'tp2_r_multiple': trial.suggest_float('tp2_r_multiple', 1.8, 3.0, step=0.1),
+            'tp3_r_multiple': trial.suggest_float('tp3_r_multiple', 2.5, 5.0, step=0.25),
+            'tp1_close_pct': trial.suggest_float('tp1_close_pct', 0.2, 0.5, step=0.05),
+            'tp2_close_pct': trial.suggest_float('tp2_close_pct', 0.2, 0.5, step=0.05),
+            'tp3_close_pct': trial.suggest_float('tp3_close_pct', 0.1, 0.4, step=0.05),
+
+            # Filter Toggles (NEW)
+            'use_htf_filter': trial.suggest_categorical('use_htf_filter', [True, False]),
+            'use_structure_filter': trial.suggest_categorical('use_structure_filter', [True, False]),
+            'use_fib_filter': trial.suggest_categorical('use_fib_filter', [True, False]),
+            'use_confirmation_filter': trial.suggest_categorical('use_confirmation_filter', [True, False]),
+            'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', [True, False]),
+            'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', [True, False]),
             
             # Seasonality Adjustments
             'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', 1.0, 2.0, step=0.2),       # Fixed: (2.0-1.0)/0.2=5
@@ -1085,8 +1300,20 @@ class OptunaOptimizer:
             'fib_zone_low': trial.suggest_float('fib_zone_low', 0.5, 0.65, step=0.05),   # NEW: Golden pocket low
             'fib_zone_high': trial.suggest_float('fib_zone_high', 0.75, 0.9, step=0.05), # NEW: Golden pocket high
         }
+
+        # =========================================================================
+        # Hard Constraints (prune early for invalid parameter combos)
+        # =========================================================================
+        if params['tp1_r_multiple'] >= params['tp2_r_multiple']:
+            return -100000.0
+        if params['tp2_r_multiple'] >= params['tp3_r_multiple']:
+            return -100000.0
+        if (params['tp1_close_pct'] + params['tp2_close_pct'] + params['tp3_close_pct']) > 0.85:
+            return -100000.0
+        if params['adx_trend_threshold'] <= params['adx_range_threshold']:
+            return -100000.0
         
-        training_trades = run_full_period_backtest(
+        training_trades, compliance_report = run_full_period_backtest(
             start_date=TRAINING_START,
             end_date=TRAINING_END,
             min_confluence=params['min_confluence_score'],
@@ -1108,7 +1335,24 @@ class OptunaOptimizer:
             atr_trail_multiplier=params['atr_trail_multiplier'],
             partial_exit_at_1r=params['partial_exit_at_1r'],
             partial_exit_pct=params['partial_exit_pct'],
+            enable_compliance_tracking=True,
+            tp1_r_multiple=params['tp1_r_multiple'],
+            tp2_r_multiple=params['tp2_r_multiple'],
+            tp3_r_multiple=params['tp3_r_multiple'],
+            tp1_close_pct=params['tp1_close_pct'],
+            tp2_close_pct=params['tp2_close_pct'],
+            tp3_close_pct=params['tp3_close_pct'],
+            use_htf_filter=params['use_htf_filter'],
+            use_structure_filter=params['use_structure_filter'],
+            use_fib_filter=params['use_fib_filter'],
+            use_confirmation_filter=params['use_confirmation_filter'],
+            use_displacement_filter=params['use_displacement_filter'],
+            use_candle_rejection=params['use_candle_rejection'],
         )
+
+        trial.set_user_attr('compliance_report', compliance_report)
+        if not compliance_report.get('challenge_passed', True):
+            return -100000.0
         
         if not training_trades or len(training_trades) == 0:
             trial.set_user_attr('quarterly_stats', {})
@@ -1646,7 +1890,7 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
         print(f"[{rank}/{len(sorted_trials)}] Trial #{trial.number} (Training Score: {score_display})")
         
         # Run validation backtest
-        validation_trades = run_full_period_backtest(
+        validation_trades, validation_compliance = run_full_period_backtest(
             start_date=VALIDATION_START,
             end_date=VALIDATION_END,
             min_confluence=params.get('min_confluence_score', 3),
@@ -1666,6 +1910,19 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
             atr_trail_multiplier=params.get('atr_trail_multiplier', 1.5),
             partial_exit_at_1r=params.get('partial_exit_at_1r', True),
             partial_exit_pct=params.get('partial_exit_pct', 0.5),
+            enable_compliance_tracking=True,
+            tp1_r_multiple=params.get('tp1_r_multiple', 1.2),
+            tp2_r_multiple=params.get('tp2_r_multiple', 2.0),
+            tp3_r_multiple=params.get('tp3_r_multiple', 3.5),
+            tp1_close_pct=params.get('tp1_close_pct', 0.35),
+            tp2_close_pct=params.get('tp2_close_pct', 0.35),
+            tp3_close_pct=params.get('tp3_close_pct', 0.25),
+            use_htf_filter=params.get('use_htf_filter', False),
+            use_structure_filter=params.get('use_structure_filter', False),
+            use_fib_filter=params.get('use_fib_filter', False),
+            use_confirmation_filter=params.get('use_confirmation_filter', False),
+            use_displacement_filter=params.get('use_displacement_filter', False),
+            use_candle_rejection=params.get('use_candle_rejection', False),
         )
         
         # Calculate validation metrics
@@ -1683,6 +1940,7 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
             'validation_wins': val_wins,
             'validation_wr': val_wr,
             'validation_trade_objects': validation_trades,
+            'validation_compliance': validation_compliance,
         }
         validation_results.append(result)
         
@@ -1891,6 +2149,22 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
         'partial_exit_at_1r': trial.suggest_categorical('partial_exit_at_1r', [True, False]),
         'partial_exit_pct': trial.suggest_float('partial_exit_pct', 0.25, 0.75, step=0.1),
         'trail_activation_r': trial.suggest_float('trail_activation_r', 1.0, 3.0, step=0.5),
+
+        # TP & Scaling
+        'tp1_r_multiple': trial.suggest_float('tp1_r_multiple', 1.0, 2.0, step=0.1),
+        'tp2_r_multiple': trial.suggest_float('tp2_r_multiple', 1.8, 3.0, step=0.1),
+        'tp3_r_multiple': trial.suggest_float('tp3_r_multiple', 2.5, 5.0, step=0.25),
+        'tp1_close_pct': trial.suggest_float('tp1_close_pct', 0.2, 0.5, step=0.05),
+        'tp2_close_pct': trial.suggest_float('tp2_close_pct', 0.2, 0.5, step=0.05),
+        'tp3_close_pct': trial.suggest_float('tp3_close_pct', 0.1, 0.4, step=0.05),
+
+        # Filter Toggles
+        'use_htf_filter': trial.suggest_categorical('use_htf_filter', [True, False]),
+        'use_structure_filter': trial.suggest_categorical('use_structure_filter', [True, False]),
+        'use_fib_filter': trial.suggest_categorical('use_fib_filter', [True, False]),
+        'use_confirmation_filter': trial.suggest_categorical('use_confirmation_filter', [True, False]),
+        'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', [True, False]),
+        'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', [True, False]),
         
         # Seasonality Adjustments
         'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', 1.0, 2.0, step=0.2),
@@ -1902,9 +2176,18 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
     }
     
     risk_pct = params['risk_per_trade_pct']
+
+    if params['tp1_r_multiple'] >= params['tp2_r_multiple']:
+        return (-1000.0, -10.0, 0.0)
+    if params['tp2_r_multiple'] >= params['tp3_r_multiple']:
+        return (-1000.0, -10.0, 0.0)
+    if (params['tp1_close_pct'] + params['tp2_close_pct'] + params['tp3_close_pct']) > 0.85:
+        return (-1000.0, -10.0, 0.0)
+    if params['adx_trend_threshold'] <= params['adx_range_threshold']:
+        return (-1000.0, -10.0, 0.0)
     
     # Run training backtest
-    training_trades = run_full_period_backtest(
+    training_trades, compliance_report = run_full_period_backtest(
         start_date=TRAINING_START,
         end_date=TRAINING_END,
         min_confluence=params['min_confluence_score'],
@@ -1924,7 +2207,23 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
         atr_trail_multiplier=params['atr_trail_multiplier'],
         partial_exit_at_1r=params['partial_exit_at_1r'],
         partial_exit_pct=params['partial_exit_pct'],
+        enable_compliance_tracking=True,
+        tp1_r_multiple=params['tp1_r_multiple'],
+        tp2_r_multiple=params['tp2_r_multiple'],
+        tp3_r_multiple=params['tp3_r_multiple'],
+        tp1_close_pct=params['tp1_close_pct'],
+        tp2_close_pct=params['tp2_close_pct'],
+        tp3_close_pct=params['tp3_close_pct'],
+        use_htf_filter=params['use_htf_filter'],
+        use_structure_filter=params['use_structure_filter'],
+        use_fib_filter=params['use_fib_filter'],
+        use_confirmation_filter=params['use_confirmation_filter'],
+        use_displacement_filter=params['use_displacement_filter'],
+        use_candle_rejection=params['use_candle_rejection'],
     )
+
+    if not compliance_report.get('challenge_passed', True):
+        return (-1000.0, -10.0, 0.0)
     
     # Calculate objectives
     if not training_trades or len(training_trades) < 10:
@@ -2069,7 +2368,7 @@ def run_multi_objective_optimization(n_trials: int = 50) -> Dict:
             
             print(f"  [{rank}/5] Trial #{trial.number} (Training R: {training_r:+.1f})")
             
-            val_trades = run_full_period_backtest(
+            val_trades, val_compliance = run_full_period_backtest(
                 start_date=VALIDATION_START,
                 end_date=VALIDATION_END,
                 min_confluence=params.get('min_confluence_score', 3),
@@ -2089,6 +2388,19 @@ def run_multi_objective_optimization(n_trials: int = 50) -> Dict:
                 atr_trail_multiplier=params.get('atr_trail_multiplier', 1.5),
                 partial_exit_at_1r=params.get('partial_exit_at_1r', True),
                 partial_exit_pct=params.get('partial_exit_pct', 0.5),
+                enable_compliance_tracking=True,
+                tp1_r_multiple=params.get('tp1_r_multiple', 1.2),
+                tp2_r_multiple=params.get('tp2_r_multiple', 2.0),
+                tp3_r_multiple=params.get('tp3_r_multiple', 3.5),
+                tp1_close_pct=params.get('tp1_close_pct', 0.35),
+                tp2_close_pct=params.get('tp2_close_pct', 0.35),
+                tp3_close_pct=params.get('tp3_close_pct', 0.25),
+                use_htf_filter=params.get('use_htf_filter', False),
+                use_structure_filter=params.get('use_structure_filter', False),
+                use_fib_filter=params.get('use_fib_filter', False),
+                use_confirmation_filter=params.get('use_confirmation_filter', False),
+                use_displacement_filter=params.get('use_displacement_filter', False),
+                use_candle_rejection=params.get('use_candle_rejection', False),
             )
             
             val_r = sum(getattr(t, 'rr', 0) for t in val_trades) if val_trades else 0
@@ -2104,6 +2416,7 @@ def run_multi_objective_optimization(n_trials: int = 50) -> Dict:
                 'val_trades': val_n,
                 'val_wr': val_wr,
                 'val_trade_objects': val_trades,
+                'val_compliance': val_compliance,
             })
             print(f"      → Validation: {val_n} trades, R={val_r:+.1f}, WR={val_wr:.1f}%")
         
@@ -2315,15 +2628,18 @@ def main():
             best_oos = top_5_results[0]
             best_params = best_oos['params']
             validation_trades = best_oos['validation_trade_objects']
+            validation_compliance = best_oos.get('validation_compliance', {})
             
             print(f"\n✅ Selected Trial #{best_oos['trial_number']} as FINAL (best OOS performance)")
         else:
             # Fallback to best training params
             best_params = results['best_params']
             validation_trades = []
+            validation_compliance = {}
     else:
         best_params = results['best_params']
         validation_trades = []
+        validation_compliance = {}
     
     # INSTANTLY SAVE BEST PARAMS FOR LIVE BOT
     save_best_params_persistent(best_params)
@@ -2338,7 +2654,7 @@ def main():
     print("Running training period backtest...")
     
     # Run training period backtest
-    training_trades = run_full_period_backtest(
+    training_trades, training_compliance = run_full_period_backtest(
         start_date=TRAINING_START,
         end_date=TRAINING_END,
         min_confluence=best_params.get('min_confluence_score', 3),
@@ -2358,13 +2674,26 @@ def main():
         atr_trail_multiplier=best_params.get('atr_trail_multiplier', 1.5),
         partial_exit_at_1r=best_params.get('partial_exit_at_1r', True),
         partial_exit_pct=best_params.get('partial_exit_pct', 0.5),
+        enable_compliance_tracking=True,
+        tp1_r_multiple=best_params.get('tp1_r_multiple', 1.2),
+        tp2_r_multiple=best_params.get('tp2_r_multiple', 2.0),
+        tp3_r_multiple=best_params.get('tp3_r_multiple', 3.5),
+        tp1_close_pct=best_params.get('tp1_close_pct', 0.35),
+        tp2_close_pct=best_params.get('tp2_close_pct', 0.35),
+        tp3_close_pct=best_params.get('tp3_close_pct', 0.25),
+        use_htf_filter=best_params.get('use_htf_filter', False),
+        use_structure_filter=best_params.get('use_structure_filter', False),
+        use_fib_filter=best_params.get('use_fib_filter', False),
+        use_confirmation_filter=best_params.get('use_confirmation_filter', False),
+        use_displacement_filter=best_params.get('use_displacement_filter', False),
+        use_candle_rejection=best_params.get('use_candle_rejection', False),
     )
     
     print("Running validation period backtest...")
     
     # Run validation period backtest (if not already from top_5_results)
     if not validation_trades:
-        validation_trades = run_full_period_backtest(
+        validation_trades, validation_compliance = run_full_period_backtest(
             start_date=VALIDATION_START,
             end_date=VALIDATION_END,
             min_confluence=best_params.get('min_confluence_score', 3),
@@ -2384,6 +2713,19 @@ def main():
             atr_trail_multiplier=best_params.get('atr_trail_multiplier', 1.5),
             partial_exit_at_1r=best_params.get('partial_exit_at_1r', True),
             partial_exit_pct=best_params.get('partial_exit_pct', 0.5),
+            enable_compliance_tracking=True,
+            tp1_r_multiple=best_params.get('tp1_r_multiple', 1.2),
+            tp2_r_multiple=best_params.get('tp2_r_multiple', 2.0),
+            tp3_r_multiple=best_params.get('tp3_r_multiple', 3.5),
+            tp1_close_pct=best_params.get('tp1_close_pct', 0.35),
+            tp2_close_pct=best_params.get('tp2_close_pct', 0.35),
+            tp3_close_pct=best_params.get('tp3_close_pct', 0.25),
+            use_htf_filter=best_params.get('use_htf_filter', False),
+            use_structure_filter=best_params.get('use_structure_filter', False),
+            use_fib_filter=best_params.get('use_fib_filter', False),
+            use_confirmation_filter=best_params.get('use_confirmation_filter', False),
+            use_displacement_filter=best_params.get('use_displacement_filter', False),
+            use_candle_rejection=best_params.get('use_candle_rejection', False),
         )
     
     # Combine training + validation for full period (ensures consistency)
