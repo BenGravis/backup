@@ -2110,7 +2110,8 @@ def generate_summary_txt(
 ) -> str:
     """Generate a summary text file after each analyzer run."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    summary_filename = OUTPUT_DIR / f"analysis_summary_{timestamp}.txt"
+    output_mgr = get_output_manager()
+    summary_filename = output_mgr.output_dir / f"analysis_summary_{timestamp}.txt"
     
     def calc_stats(trades):
         if not trades:
@@ -2769,15 +2770,16 @@ def main():
     # Generate Professional Report
     print(f"\n  Generating professional report...")
     try:
+        output_mgr = get_output_manager()
         report_text = generate_professional_report(
             best_params=best_params,
             training_metrics=training_risk_metrics,
             validation_metrics=validation_risk_metrics,
             full_metrics=full_risk_metrics,
             walk_forward_results=wf_results,
-            output_file=OUTPUT_DIR / "professional_backtest_report.txt"
+            output_file=output_mgr.output_dir / "professional_backtest_report.txt"
         )
-        print(f"  ✓ Report saved to: ftmo_analysis_output/professional_backtest_report.txt")
+        print(f"  ✓ Report saved to: {output_mgr.output_dir}/professional_backtest_report.txt")
     except Exception as e:
         print(f"  [!] Report generation failed: {e}")
     
