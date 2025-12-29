@@ -2713,7 +2713,10 @@ def main():
     )
     output_mgr.generate_monthly_stats(full_year_trades, "final", risk_pct)
     output_mgr.generate_symbol_performance(full_year_trades, risk_pct)
-    print("✅ All CSV files exported successfully\n")
+
+    # CRITICAL: Save best_params to output directory for archiving
+    output_mgr.save_best_params(best_params)
+    print("✅ All CSV files and best_params.json exported successfully\n")
     
     full_year_results = print_period_results(
         full_year_trades, f"FULL PERIOD FINAL RESULTS ({FULL_PERIOD_START.year}-{FULL_PERIOD_END.year})",
