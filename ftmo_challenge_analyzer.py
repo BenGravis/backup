@@ -1611,13 +1611,20 @@ class OptunaOptimizer:
         zero_trade_quarters = sum(1 for c in quarterly_trade_counts.values() if c == 0)
         
         # ============================================================================
-        # MULTI-OBJECTIVE SCORING FORMULA V4
-        # Combines: Profit, Sharpe Ratio, Win Rate, Consistency
-        # All components normalized to similar scales for balanced optimization
+        # MULTI-OBJECTIVE SCORING FORMULA V6 (PROFIT-AWARE)
+        # Combines: R-multiples (60%) + Absolute Profit (40%) + Quality Metrics
+        # This balances risk-normalized returns with actual dollar performance
         # ============================================================================
         
-        # Base score: Total R (simple and interpretable)
-        base_score = total_r
+        # Calculate total profit in USD
+        total_profit_usd = total_r * risk_usd
+        
+        # Base score: Weighted combination of R and absolute profit
+        # V6: 60% R-multiples (risk-normalized) + 40% dollar profit (scaled)
+        # Scaling: $5000 profit = 1 point, so $250k = 50 points
+        r_component = total_r * 0.6
+        profit_component = (total_profit_usd / 5000.0) * 0.4
+        base_score = r_component + profit_component
         
         # Sharpe Ratio Bonus: Reward risk-adjusted returns (NEW!)
         # Scaled to contribute 10-30 points at good levels
@@ -1737,12 +1744,15 @@ class OptunaOptimizer:
         trial.set_user_attr('max_drawdown_pct', round(max_drawdown_pct * 100, 2))
         trial.set_user_attr('negative_quarters', negative_quarter_count)
         trial.set_user_attr('total_r', round(total_r, 2))
+        trial.set_user_attr('total_profit_usd', round(total_profit_usd, 2))
         trial.set_user_attr('win_rate', round(overall_win_rate, 2))
         trial.set_user_attr('max_ftmo_dd_pct', round(max_ftmo_dd, 2))
         trial.set_user_attr('ftmo_challenge_passed', compliance_report.get('challenge_passed', False))
         trial.set_user_attr('compliance_report', compliance_report)
         trial.set_user_attr('score_breakdown', {
-            'base_r': round(base_score, 2),
+            'base_r_component': round(r_component, 2),
+            'base_profit_component': round(profit_component, 2),
+            'base_score_total': round(base_score, 2),
             'sharpe_bonus': round(sharpe_bonus, 2),
             'pf_bonus': round(pf_bonus, 2),
             'wr_bonus': round(wr_bonus, 2),
@@ -3078,8 +3088,10 @@ def main():
         print(f"   Objectives: Total R, Sharpe Ratio, Win Rate (all maximized)")
         print(f"   Sampler: NSGA-II (evolutionary algorithm)")
     else:
-        print(f"\n📊 SINGLE-OBJECTIVE MODE: Composite Score Optimization")
-        print(f"   Score = R + Sharpe_bonus + PF_bonus + WR_bonus - penalties")
+        print(f"\n📊 SINGLE-OBJECTIVE MODE: Composite Score Optimization (V6 Profit-Aware)")
+        print(f"   Base Score = (R × 0.6) + (Profit_USD / 5000 × 0.4)")
+        print(f"   Final Score = Base + Sharpe_bonus + PF_bonus + WR_bonus - penalties")
+        print(f"   This balances risk-normalized returns with absolute dollar performance")
     
     print(f"\nResumable: Study stored in {OPTUNA_DB_PATH}")
     print(f"{'='*80}\n")
