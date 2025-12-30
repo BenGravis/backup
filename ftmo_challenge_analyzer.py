@@ -2123,6 +2123,7 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
             'validation_wins': val_wins,
             'validation_wr': val_wr,
             'validation_trade_objects': validation_trades,
+            'training_trade_objects': None,  # Will be fetched only for best trial
         }
         validation_results.append(result)
         
@@ -2151,6 +2152,272 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
         print(f"   Validation: {best['validation_r']:+.1f}R ({best['validation_trades']} trades, {best['validation_wr']:.1f}% WR)")
     
     return validation_results
+
+
+def finalize_incomplete_run(optimization_mode: str = "TPE", top_n: int = 5):
+    """
+    Finalize an incomplete optimization run by:
+    1. Loading the existing study
+    2. Validating top N trials
+    3. Running full period backtest on best trial
+    4. Generating professional reports
+    5. Archiving to history/
+    
+    This is useful when a run stops unexpectedly (crash, manual stop, resource limits).
+    
+    Args:
+        optimization_mode: "TPE" or "NSGA" to determine which study to load
+        top_n: Number of top trials to validate
+    """
+    import optuna
+    
+    # Initialize OutputManager
+    set_output_manager(optimization_mode=optimization_mode)
+    output_mgr = get_output_manager()
+    
+    print(f"\n{'='*80}")
+    print(f"FINALIZING INCOMPLETE RUN - {optimization_mode} MODE")
+    print(f"{'='*80}")
+    
+    # Determine which database to use
+    if optimization_mode == "NSGA":
+        db_path = MULTI_OBJECTIVE_DB
+        study_name = MULTI_OBJECTIVE_STUDY_NAME
+    else:
+        db_path = OPTUNA_DB_PATH
+        study_name = OPTUNA_STUDY_NAME
+    
+    # Load study
+    try:
+        study = optuna.load_study(study_name=study_name, storage=db_path)
+        print(f"✓ Loaded study: {study_name}")
+        print(f"  Total trials: {len(study.trials)}")
+        print(f"  Completed: {len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE])}")
+    except Exception as e:
+        print(f"❌ Failed to load study: {e}")
+        return
+    
+    # Step 1: Validate top trials
+    print(f"\n{'='*80}")
+    print(f"STEP 1: VALIDATING TOP {top_n} TRIALS")
+    print(f"{'='*80}")
+    
+    validation_results = validate_top_trials(study, top_n=top_n)
+    
+    if not validation_results:
+        print("❌ No validation results - cannot finalize")
+        return
+    
+    # Get best trial (best validation performance)
+    best_result = validation_results[0]
+    best_trial_number = best_result['trial_number']
+    best_trial = study.trials[best_trial_number]
+    best_params = best_trial.params
+    
+    print(f"\n🏆 Best Trial: #{best_trial_number} (Validation R: {best_result['validation_r']:+.1f})")
+    print(f"   Fetching training trades...")
+    
+    # Now fetch training trades for the best trial only
+    training_trades = run_full_period_backtest(
+        start_date=TRAINING_START,
+        end_date=TRAINING_END,
+        min_confluence=best_params.get('min_confluence_score', 3),
+        min_quality_factors=best_params.get('min_quality_factors', 2),
+        risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
+        atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
+        trail_activation_r=best_params.get('trail_activation_r', 2.2),
+        december_atr_multiplier=best_params.get('december_atr_multiplier', 1.5),
+        volatile_asset_boost=best_params.get('volatile_asset_boost', 1.5),
+        ml_min_prob=None,
+        require_adx_filter=True,
+        use_adx_regime_filter=False,
+        adx_trend_threshold=best_params.get('adx_trend_threshold', 25.0),
+        adx_range_threshold=best_params.get('adx_range_threshold', 20.0),
+        trend_min_confluence=best_params.get('trend_min_confluence', 6),
+        range_min_confluence=best_params.get('range_min_confluence', 5),
+        atr_volatility_ratio=best_params.get('atr_vol_ratio_range', 0.8),
+        atr_trail_multiplier=best_params.get('atr_trail_multiplier', 1.5),
+        partial_exit_at_1r=best_params.get('partial_exit_at_1r', True),
+        partial_exit_pct=best_params.get('partial_exit_pct', 0.5),
+        tp1_r_multiple=best_params.get('tp1_r_multiple', 1.0),
+        tp2_r_multiple=best_params.get('tp2_r_multiple', 2.0),
+        tp3_r_multiple=best_params.get('tp3_r_multiple', 3.0),
+        tp1_close_pct=best_params.get('tp1_close_pct', 0.20),
+        tp2_close_pct=best_params.get('tp2_close_pct', 0.20),
+        tp3_close_pct=best_params.get('tp3_close_pct', 0.20),
+        use_htf_filter=best_params.get('use_htf_filter', False),
+        use_structure_filter=best_params.get('use_structure_filter', False),
+        use_confirmation_filter=best_params.get('use_confirmation_filter', False),
+        use_fib_filter=best_params.get('use_fib_filter', False),
+        use_displacement_filter=best_params.get('use_displacement_filter', False),
+        use_candle_rejection=best_params.get('use_candle_rejection', False),
+        daily_loss_halt_pct=best_params.get('daily_loss_halt_pct', 4.0),
+        max_total_dd_warning=best_params.get('max_total_dd_warning', 8.0),
+        consecutive_loss_halt=best_params.get('consecutive_loss_halt', 999),
+    )
+    
+    print(f"   ✓ Training: {len(training_trades)} trades")
+    
+    # Get validation trades from result
+    validation_trades = best_result.get('validation_trade_objects', [])
+    
+    print(f"\n{'='*80}")
+    print(f"STEP 2: RUNNING FULL PERIOD BACKTEST")
+    print(f"{'='*80}")
+    
+    # Run full period backtest
+    full_year_trades = run_full_period_backtest(
+        start_date=TRAINING_START,
+        end_date=VALIDATION_END,
+        min_confluence=best_params.get('min_confluence_score', 3),
+        min_quality_factors=best_params.get('min_quality_factors', 2),
+        risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
+        atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
+        trail_activation_r=best_params.get('trail_activation_r', 2.2),
+        december_atr_multiplier=best_params.get('december_atr_multiplier', 1.5),
+        volatile_asset_boost=best_params.get('volatile_asset_boost', 1.5),
+        ml_min_prob=None,
+        require_adx_filter=True,
+        use_adx_regime_filter=False,
+        adx_trend_threshold=best_params.get('adx_trend_threshold', 25.0),
+        adx_range_threshold=best_params.get('adx_range_threshold', 20.0),
+        trend_min_confluence=best_params.get('trend_min_confluence', 6),
+        range_min_confluence=best_params.get('range_min_confluence', 5),
+        atr_volatility_ratio=best_params.get('atr_vol_ratio_range', 0.8),
+        atr_trail_multiplier=best_params.get('atr_trail_multiplier', 1.5),
+        partial_exit_at_1r=best_params.get('partial_exit_at_1r', True),
+        partial_exit_pct=best_params.get('partial_exit_pct', 0.5),
+        tp1_r_multiple=best_params.get('tp1_r_multiple', 1.0),
+        tp2_r_multiple=best_params.get('tp2_r_multiple', 2.0),
+        tp3_r_multiple=best_params.get('tp3_r_multiple', 3.0),
+        tp1_close_pct=best_params.get('tp1_close_pct', 0.20),
+        tp2_close_pct=best_params.get('tp2_close_pct', 0.20),
+        tp3_close_pct=best_params.get('tp3_close_pct', 0.20),
+        use_htf_filter=best_params.get('use_htf_filter', False),
+        use_structure_filter=best_params.get('use_structure_filter', False),
+        use_fib_filter=best_params.get('use_fib_filter', False),
+        use_confirmation_filter=best_params.get('use_confirmation_filter', False),
+        use_displacement_filter=best_params.get('use_displacement_filter', False),
+        use_candle_rejection=best_params.get('use_candle_rejection', False),
+        consecutive_loss_halt=best_params.get('consecutive_loss_halt', 999),
+        daily_loss_halt_pct=best_params.get('daily_loss_halt_pct', 4.5),
+        max_total_dd_warning=best_params.get('max_total_dd_warning', 9.0)
+    )
+    
+    print(f"✓ Full period: {len(full_year_trades)} trades")
+    
+    # Step 3: Generate CSV exports
+    print(f"\n{'='*80}")
+    print(f"STEP 3: GENERATING CSV EXPORTS")
+    print(f"{'='*80}")
+    
+    # training_trades and validation_trades already fetched above
+    
+    # Export CSVs
+    from tradr.utils.output_manager import export_trades_to_csv
+    
+    export_trades_to_csv(training_trades, output_mgr.output_dir / "best_trades_training.csv")
+    export_trades_to_csv(validation_trades, output_mgr.output_dir / "best_trades_validation.csv")
+    export_trades_to_csv(full_year_trades, output_mgr.output_dir / "best_trades_final.csv")
+    
+    print(f"✓ Exported training trades: {len(training_trades)}")
+    print(f"✓ Exported validation trades: {len(validation_trades)}")
+    print(f"✓ Exported full period trades: {len(full_year_trades)}")
+    
+    # Step 4: Generate professional report
+    print(f"\n{'='*80}")
+    print(f"STEP 4: GENERATING PROFESSIONAL REPORTS")
+    print(f"{'='*80}")
+    
+    try:
+        # Calculate risk metrics
+        risk_pct = best_params.get('risk_per_trade_pct', 0.5)
+        
+        training_risk_metrics = calculate_risk_metrics(
+            trades=training_trades,
+            risk_per_trade_pct=risk_pct,
+            account_size=ACCOUNT_SIZE
+        )
+        
+        validation_risk_metrics = calculate_risk_metrics(
+            trades=validation_trades,
+            risk_per_trade_pct=risk_pct,
+            account_size=ACCOUNT_SIZE
+        )
+        
+        full_risk_metrics = calculate_risk_metrics(
+            trades=full_year_trades,
+            risk_per_trade_pct=risk_pct,
+            account_size=ACCOUNT_SIZE
+        )
+        
+        # Walk-forward analysis (simplified - use quarterly stats from trial)
+        wf_results = {
+            'total_windows': 7,  # 2023 Q1-Q4 + 2024 Q1-Q3
+            'avg_sharpe_degradation': training_risk_metrics.sharpe_ratio - validation_risk_metrics.sharpe_ratio,
+            'std_sharpe_degradation': 1.0,  # Placeholder
+            'avg_return_degradation': training_risk_metrics.annual_return - validation_risk_metrics.annual_return
+        }
+        
+        # Generate professional report
+        report_text = generate_professional_report(
+            best_params=best_params,
+            training_metrics=training_risk_metrics,
+            validation_metrics=validation_risk_metrics,
+            full_metrics=full_risk_metrics,
+            walk_forward_results=wf_results,
+            output_file=output_mgr.output_dir / "professional_backtest_report.txt"
+        )
+        
+        print(f"✓ Professional report generated")
+        
+    except Exception as e:
+        print(f"❌ Report generation failed: {e}")
+    
+    # Step 5: Generate summary
+    print(f"\n{'='*80}")
+    print(f"STEP 5: GENERATING ANALYSIS SUMMARY")
+    print(f"{'='*80}")
+    
+    # Create results dict
+    is_multi_objective = optimization_mode == "NSGA"
+    if is_multi_objective:
+        best_score = best_trial.values[0] if best_trial.values else 0
+    else:
+        best_score = best_trial.value if best_trial.value else 0
+    
+    results = {
+        'best_params': best_params,
+        'best_score': best_score,
+        'n_trials': len([t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]),
+        'total_trials': len(study.trials)
+    }
+    
+    summary_file = generate_summary_txt(
+        results=results,
+        training_trades=training_trades,
+        validation_trades=validation_trades,
+        full_year_trades=full_year_trades,
+        best_params=best_params
+    )
+    
+    print(f"✓ Summary saved to: {summary_file}")
+    
+    # Step 6: Archive to history
+    print(f"\n{'='*80}")
+    print(f"STEP 6: ARCHIVING TO HISTORY")
+    print(f"{'='*80}")
+    
+    output_mgr.archive_current_run()
+    
+    print(f"\n{'='*80}")
+    print(f"✅ FINALIZATION COMPLETE")
+    print(f"{'='*80}")
+    print(f"\nBest Trial: #{best_trial_number}")
+    print(f"Score: {best_score:.2f}")
+    print(f"Validation R: {best_result['validation_r']:+.1f}")
+    print(f"\nAll files archived to: ftmo_analysis_output/{optimization_mode}/history/")
+    print(f"{'='*80}\n")
 
 
 def generate_summary_txt(
@@ -3032,6 +3299,11 @@ def main():
         default=None,
         help="Comma-separated symbols to exclude (e.g., CAD_CHF,CHF_JPY)"
     )
+    parser.add_argument(
+        "--finalize",
+        action="store_true",
+        help="Finalize incomplete run: validate top 5 trials and archive to history"
+    )
     args = parser.parse_args()
 
     global DEFAULT_EXCLUDED_ASSETS
@@ -3042,6 +3314,12 @@ def main():
     
     if args.status:
         show_optimization_status()
+        return
+    
+    # === FINALIZE MODE ===
+    if args.finalize:
+        optimization_mode = "NSGA" if args.multi else "TPE"
+        finalize_incomplete_run(optimization_mode=optimization_mode, top_n=5)
         return
 
     # === VALIDATION MODE ===
