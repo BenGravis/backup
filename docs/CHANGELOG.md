@@ -1,11 +1,39 @@
 # Changelog
 
-**Last Updated**: 2025-12-29
+**Last Updated**: 2025-12-30
 **Auto-generated**: From git commits
 
 ---
 
-## Recent Changes (Session: Dec 29, 2025)
+## Recent Changes (Session: Dec 30, 2025)
+
+### Bug Fixes
+- **CRITICAL**: Fixed validation file organization - eliminated duplicate summary files
+  - `analysis_summary_*.txt` files were being saved to both VALIDATE root AND history subdirectories
+  - Now writes summary files, professional reports, and params ONLY to history/val_YYYY_YYYY_XXX/ directories
+  - Trade CSVs remain in VALIDATE root for quick access (also archived to history)
+  - Added automatic cleanup of old summary files from VALIDATE root on each validation run
+  - Result: Clean VALIDATE directory with full audit trail in history subdirectories
+
+### Rollbacks
+- **Drawdown Controls**: Removed unnecessary DD control implementation (Stap 6)
+  - Analysis showed FTMO DD was only 0.5% over 2017-2019 (not the 17-18% peak-to-trough we initially saw)
+  - Removed: `check_drawdown_controls()`, `calculate_position_size()`, `apply_drawdown_controls()` functions
+  - Removed: `DEFAULT_DRAWDOWN_CONTROLS` constant and `replace` import
+  - Kept: Symbol exclusion feature (`--exclude-symbols` CLI flag) for asset-specific tuning
+  - Simplified codebase while retaining useful features
+
+### Validation Results
+- **Multi-period validation** (9-year robustness test):
+  - 2014-2016: 2,461 trades, +627.23R, 48.7% WR
+  - 2017-2019: 2,607 trades, +631.30R, 48.7% WR
+  - 2020-2022: 2,602 trades, +615.23R, 48.3% WR
+  - **Aggregate**: 7,670 trades, +1,873.76R, 48.6% WR, $2.25M estimated profit
+  - Consistency: 0.19% WR std dev (EXCELLENT stability across different market regimes)
+
+---
+
+## Previous Changes (Session: Dec 29, 2025)
 
 ### New Features
 - **Validation Mode**: Test existing parameters on different date ranges without running optimization

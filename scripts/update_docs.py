@@ -224,13 +224,13 @@ def update_strategy_doc(output_path: Path) -> bool:
     content = f"""# Trading Strategy Guide
 
 **Last Updated**: {datetime.now().strftime("%Y-%m-%d")}  
-**Strategy**: 7-Pillar Confluence System with ADX Regime Detection
+**Strategy**: 6-Pillar Confluence System with ADX Regime Detection
 
 ---
 
 ## Table of Contents
 1. [Strategy Overview](#strategy-overview)
-2. [7 Confluence Pillars](#7-confluence-pillars)
+2. [6 Confluence Pillars](#6-confluence-pillars)
 3. [ADX Regime Detection](#adx-regime-detection)
 4. [Entry Rules](#entry-rules)
 5. [Exit Management](#exit-management)
@@ -241,7 +241,9 @@ def update_strategy_doc(output_path: Path) -> bool:
 
 ## Strategy Overview
 
-The bot uses a **multi-timeframe confluence system** that combines 7 independent signals to identify high-probability setups. Each pillar votes on trade direction and quality, with entries requiring a minimum confluence score.
+The bot uses a **multi-timeframe confluence system** that combines 6 independent signals to identify high-probability setups. Each pillar votes on trade direction and quality, with entries requiring a minimum confluence score.
+
+> **Note**: The Liquidity pillar (sweep of equal highs/lows) was deprecated and removed from the scoring system.
 
 ### Key Principles
 - **Confluence over single indicators**: Requires multiple confirmations
@@ -251,11 +253,11 @@ The bot uses a **multi-timeframe confluence system** that combines 7 independent
 
 ---
 
-## 7 Confluence Pillars
+## 6 Confluence Pillars
 
-### 1. Trend Alignment (Daily → Weekly → Monthly)
-**Weight**: 2 points  
-**Logic**: Entry must align with higher timeframe trend direction
+### 1. Trend Alignment (HTF Bias)
+**Weight**: 1-2 points  
+**Logic**: Entry must align with higher timeframe trend direction (D1/W1/MN)
 
 ```python
 # Weekly trend trumps daily, monthly trumps weekly
@@ -278,55 +280,42 @@ if abs(entry_price - sr_level) / entry_price < 0.005:
 
 ### 3. Fibonacci Zone Alignment
 **Weight**: 1 point  
-**Logic**: Entry at Fibonacci retracement level (38.2%, 50%, 61.8%)
+**Logic**: Entry in Golden Pocket (38.2%-88.6% retracement)
 
 ```python
 # Calculate Fib levels from recent swing
-fib_levels = [0.382, 0.5, 0.618]
-for level in fib_levels:
-    if abs(entry_price - fib_price) < fib_tolerance:
-        pillar_score += 1
-```
-
-### 4. RSI Divergence
-**Weight**: 1 point  
-**Logic**: Price makes new high/low but RSI doesn't (reversal signal)
-
-```python
-# Bullish divergence: price lower low, RSI higher low
-if price_trend == "down" and rsi_trend == "up":
+if fib_low <= retracement_level <= fib_high:
     pillar_score += 1
 ```
 
-### 5. ADX Trend Strength
+### 4. Structure (BOS/CHoCH)
 **Weight**: 1 point  
-**Logic**: ADX > threshold confirms strong trend
+**Logic**: Break of Structure or Change of Character confirmation
 
 ```python
-adx_value = calculate_adx(daily_candles, period=14)
-if adx_value >= params['adx_trend_threshold']:
+# Bullish BOS: price breaks above previous swing high
+# CHoCH: trend reversal signal (lower high after higher highs)
+if has_bos or has_choch:
     pillar_score += 1
 ```
 
-### 6. ATR Volatility Filter
+### 5. Confirmation (H4 Pattern)
 **Weight**: 1 point  
-**Logic**: Current ATR above minimum percentile (avoid dead markets)
+**Logic**: 4H candle pattern confirms entry (engulfing, pin bar, rejection)
 
 ```python
-current_atr = calculate_atr(daily_candles, period=14)
-atr_percentile = get_atr_percentile(current_atr, historical_atr)
-
-if atr_percentile >= params['atr_min_percentile']:
+pattern = detect_candlestick_pattern(h4_candles[-3:])
+if pattern in ['engulfing', 'pin_bar', 'rejection'] and pattern_direction == direction:
     pillar_score += 1
 ```
 
-### 7. Candlestick Pattern
+### 6. Risk:Reward Validation
 **Weight**: 1 point  
-**Logic**: Bullish/bearish engulfing, pin bar, inside bar
+**Logic**: Minimum R:R ratio met (typically 1:1 or higher)
 
 ```python
-pattern = detect_candlestick_pattern(daily_candles[-3:])
-if pattern in ['engulfing', 'pin_bar'] and pattern_direction == direction:
+rr_ratio = abs(tp1 - entry) / abs(entry - stop_loss)
+if rr_ratio >= params['min_rr_ratio']:
     pillar_score += 1
 ```
 
@@ -1037,7 +1026,7 @@ def update_changelog(output_path: Path) -> bool:
 **Initial Release**: Production-Ready FTMO Bot
 
 **Core Features**:
-- 7-Pillar Confluence System
+- 6-Pillar Confluence System (Liquidity pillar deprecated in v2.x)
 - Optuna TPE optimization
 - FTMO risk management
 - MT5 integration (Windows)

@@ -10,7 +10,7 @@ This is an automated **MetaTrader 5 Trading Bot** designed specifically for **FT
 
 - **Account Size**: $200,000 USD
 - **Platform**: MetaTrader 5 (MT5)
-- **Strategy**: 7 Confluence Pillars (multi-timeframe analysis)
+- **Strategy**: 6 Confluence Pillars (multi-timeframe analysis, Liquidity pillar deprecated)
 - **Optimization**: Parameter optimization saves to JSON config (no source code mutation)
 
 ### Post-Fix Status: All Critical Issues Resolved
@@ -32,7 +32,7 @@ This is an automated **MetaTrader 5 Trading Bot** designed specifically for **FT
 **Runs on: Windows VM with MetaTrader 5**
 
 The primary live trading bot that:
-- Executes trades 24/7 using the "7 Confluence Pillars" strategy
+- Executes trades 24/7 using the "6 Confluence Pillars" strategy
 - Connects directly to MT5 for order execution
 - **Loads all tunable parameters from `params/current_params.json` at startup**
 - Includes comprehensive FTMO-compliant risk management
@@ -118,21 +118,20 @@ python ftmo_challenge_analyzer.py
 
 ## 4. Trading Strategy Overview
 
-### The 7 Confluence Pillars
+### The 6 Confluence Pillars
 
-Each trade setup is scored 0-7 based on how many pillars align:
+Each trade setup is scored 0-6 based on how many pillars align:
 
 | # | Pillar | Description |
 |---|--------|-------------|
 | 1 | **HTF Bias** | Monthly/Weekly/Daily trend alignment |
 | 2 | **Location** | Price at significant S/R zones |
 | 3 | **Fibonacci** | Price in Golden Pocket (0.382-0.886 retracement) |
-| 4 | **Liquidity** | Sweep of equal highs/lows (liquidity grab) |
-| 5 | **Structure** | Break of Structure (BOS) or Change of Character (CHoCH) |
-| 6 | **Confirmation** | 4H candle pattern confirmation |
-| 7 | **Risk:Reward** | Minimum 1:1 R:R ratio |
+| 4 | **Structure** | Break of Structure (BOS) or Change of Character (CHoCH) |
+| 5 | **Confirmation** | 4H candle pattern confirmation |
+| 6 | **Risk:Reward** | Minimum 1:1 R:R ratio |
 
-**Trade Entry Requirement**: Minimum 5/7 confluence (configurable via params)
+**Trade Entry Requirement**: Minimum 4-5/6 confluence (configurable via params)
 
 ### Multi-Timeframe Analysis (Look-Ahead Bias Fixed)
 
@@ -162,7 +161,7 @@ Each trade setup is scored 0-7 based on how many pillars align:
 |------|---------|
 | `main_live_bot.py` | Live trading bot (runs on Windows VM, loads params from JSON) |
 | `ftmo_challenge_analyzer.py` | Walk-forward optimizer (saves params to JSON) |
-| `strategy_core.py` | Core strategy logic (7 Confluence Pillars) |
+| `strategy_core.py` | Core strategy logic (6 Confluence Pillars) |
 | `ftmo_config.py` | FTMO-specific configuration and risk parameters |
 
 ### Parameter Management

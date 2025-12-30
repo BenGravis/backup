@@ -1,6 +1,6 @@
 # MT5 FTMO Trading Bot
 
-Automated MetaTrader 5 trading bot for FTMO 200K Challenge accounts. Uses a 7-Pillar Confluence system with multi-timeframe analysis.
+Automated MetaTrader 5 trading bot for FTMO 200K Challenge accounts. Uses a 6-Pillar Confluence system with multi-timeframe analysis (Liquidity pillar deprecated).
 
 ## Quick Start
 
@@ -76,7 +76,7 @@ python main_live_bot.py
 ## Project Structure
 
 ```
-├── strategy_core.py          # Core trading logic (7 Confluence Pillars)
+├── strategy_core.py          # Core trading logic (6 Confluence Pillars)
 ├── ftmo_challenge_analyzer.py # Optuna optimization & backtesting
 ├── main_live_bot.py          # Live MT5 trading entry point
 ├── config.py                 # Account settings, CONTRACT_SPECS

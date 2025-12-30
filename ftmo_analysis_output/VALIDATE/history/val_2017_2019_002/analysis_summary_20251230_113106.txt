@@ -1,6 +1,6 @@
 ================================================================================
 FTMO CHALLENGE ANALYZER - SUMMARY REPORT
-Generated: 2025-12-29 18:34:53
+Generated: 2025-12-30 11:31:06
 ================================================================================
 
 OPTIMIZATION RESULTS
@@ -45,46 +45,46 @@ BEST PARAMETERS
   use_structure_filter: False
   volatile_asset_boost: 1.3000
 
-TRAINING PERIOD (2023-01-01 to 2024-09-30)
+TRAINING PERIOD (2017-01-01 to 2019-02-05)
 ----------------------------------------
-  Trades: 0
-  Total R: +0.00
-  Estimated Profit: $+0.00
-  Win Rate: 0.0%
-  Avg R per Trade: +0.000
+  Trades: 1754
+  Total R: +418.23
+  Estimated Profit: $+501,875.99
+  Win Rate: 48.3%
+  Avg R per Trade: +0.238
 
-VALIDATION PERIOD (2024-10-01 to 2025-12-26)
+VALIDATION PERIOD (2019-02-06 to 2019-12-31)
 ----------------------------------------
-  Trades: 0
-  Total R: +0.00
-  Estimated Profit: $+0.00
-  Win Rate: 0.0%
-  Avg R per Trade: +0.000
+  Trades: 817
+  Total R: +204.94
+  Estimated Profit: $+245,926.88
+  Win Rate: 49.6%
+  Avg R per Trade: +0.251
 
-FULL PERIOD (2023-2025)
+FULL PERIOD (2017-01-01 to 2019-12-31)
 ----------------------------------------
-  Trades: 0
-  Total R: +0.00
-  Estimated Profit: $+0.00
-  Win Rate: 0.0%
-  Avg R per Trade: +0.000
+  Trades: 2607
+  Total R: +631.05
+  Estimated Profit: $+757,255.85
+  Win Rate: 48.7%
+  Avg R per Trade: +0.242
 
 QUARTERLY BREAKDOWN
 ----------------------------------------
-  2023_Q1: 0 trades, +0.0R, 0% win rate, $+0.00
-  2023_Q2: 0 trades, +0.0R, 0% win rate, $+0.00
-  2023_Q3: 0 trades, +0.0R, 0% win rate, $+0.00
-  2023_Q4: 0 trades, +0.0R, 0% win rate, $+0.00
-  2024_Q1: 0 trades, +0.0R, 0% win rate, $+0.00
-  2024_Q2: 0 trades, +0.0R, 0% win rate, $+0.00
-  2024_Q3: 0 trades, +0.0R, 0% win rate, $+0.00
-  2024_Q4: 0 trades, +0.0R, 0% win rate, $+0.00
-  2025_Q1: 0 trades, +0.0R, 0% win rate, $+0.00
-  2025_Q2: 0 trades, +0.0R, 0% win rate, $+0.00
-  2025_Q3: 0 trades, +0.0R, 0% win rate, $+0.00
-  2025_Q4: 0 trades, +0.0R, 0% win rate, $+0.00
+  2017_Q1: 240 trades, +38.3R, 44% win rate, $+45,988.89
+  2017_Q2: 231 trades, +77.0R, 52% win rate, $+92,449.27
+  2017_Q3: 227 trades, +85.7R, 53% win rate, $+102,893.32
+  2017_Q4: 206 trades, +51.7R, 50% win rate, $+62,043.92
+  2018_Q1: 218 trades, +43.2R, 47% win rate, $+51,899.17
+  2018_Q2: 199 trades, +23.4R, 45% win rate, $+28,050.07
+  2018_Q3: 169 trades, +69.4R, 53% win rate, $+83,243.56
+  2018_Q4: 202 trades, +47.1R, 49% win rate, $+56,471.09
+  2019_Q1: 269 trades, +32.9R, 46% win rate, $+39,481.66
+  2019_Q2: 199 trades, +28.5R, 46% win rate, $+34,205.34
+  2019_Q3: 232 trades, +73.6R, 51% win rate, $+88,272.19
+  2019_Q4: 215 trades, +60.2R, 50% win rate, $+72,257.36
 
-TOTAL PROFIT (Full Period 2023-2025): $+0.00
+TOTAL PROFIT (Full Period 2017-01-01 to 2019-12-31): $+757,255.85
 ================================================================================
 End of Summary
 ================================================================================

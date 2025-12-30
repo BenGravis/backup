@@ -2,14 +2,14 @@
 
 **Purpose**: This file helps AI assistants (GitHub Copilot, ChatGPT, Claude, etc.) quickly understand the MT5 FTMO Trading Bot project.
 
-**Last Updated**: 2025-12-28 (Auto-updated on every commit)
+**Last Updated**: 2025-12-30 (Auto-updated on every commit)
 
 ---
 
 ## 🎯 Project Summary in 30 Seconds
 
 **What**: Automated MetaTrader 5 trading bot for FTMO $200K Challenge accounts  
-**Strategy**: 7-Pillar Confluence System with ADX regime detection  
+**Strategy**: 6-Pillar Confluence System with ADX regime detection (Liquidity pillar deprecated)  
 **Optimization**: Optuna (TPE/NSGA-II) with 25+ parameters (TP scaling, filter toggles, ADX regime)  
 **Compliance**: FTMOComplianceTracker monitors daily DD (4.5%), total DD (9%), streak halts  
 **Deployment**: Windows (live bot) + Linux (optimizer)  
@@ -21,8 +21,8 @@
 ## 📁 Essential Files (Read These First)
 
 ### 1. Core Trading Logic
-- **`strategy_core.py`** (1500 lines) - Complete trading strategy implementation
-  - `compute_confluence()` - Main entry signal logic (7 pillars)
+- **`strategy_core.py`** (3000+ lines) - Complete trading strategy implementation
+  - `compute_confluence()` - Main entry signal logic (6 pillars)
   - `simulate_trades()` - Backtest engine
   - `detect_regime()` - ADX-based market classification
 
@@ -52,7 +52,7 @@
 ```
 mt5bot-new/
 ├── Core Files (CRITICAL - Never hardcode values)
-│   ├── strategy_core.py           # Trading strategy (7 pillars)
+│   ├── strategy_core.py           # Trading strategy (6 pillars)
 │   ├── ftmo_challenge_analyzer.py # Optimization engine
 │   ├── main_live_bot.py           # Live MT5 bot (Windows)
 │   ├── config.py                  # Contract specs, symbols
@@ -368,7 +368,7 @@ tail -f logs/tradr_live.log                                # Watch live bot
 **Day 2**: Understand the strategy
 - Read `docs/STRATEGY_GUIDE.md`
 - Examine `strategy_core.py` - focus on `compute_confluence()`
-- Understand 7-pillar scoring system
+- Understand 6-pillar scoring system
 
 **Day 3**: Understand optimization
 - Read `docs/OPTIMIZATION_FLOW.md`

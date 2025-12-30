@@ -1,14 +1,28 @@
 # MT5 FTMO Trading Bot - Project Status Report
-**Date**: 2025-12-28  
-**Status**: ✅ **READY FOR OPTIMIZATION** - Critical bugs fixed, baseline established
+**Date**: 2025-12-30  
+**Status**: ✅ **PRODUCTION READY** - Validated across 9 years, file organization optimized
 
 ---
 
 ## 📊 Executive Summary
 
-The mt5bot-new project is a **professional-grade automated trading system** for FTMO 200K Challenge accounts. Recent baseline analysis (Trial #0) reveals the system has a solid foundation with **all critical bugs now resolved**.
+The mt5bot-new project is a **professional-grade automated trading system** for FTMO 200K Challenge accounts. Multi-period validation (2014-2022) confirms exceptional robustness with **consistent ~48.6% win rate** across vastly different market regimes.
 
-### ✅ Recent Fixes (Dec 28, 2025)
+### ✅ Recent Achievements (Dec 30, 2025)
+- **Multi-period validation**: 9-year robustness test complete (2014-2022)
+  - Aggregate: 7,670 trades, +1,873.76R, 48.6% WR, $2.25M estimated profit
+  - Consistency: 0.19% WR std dev (exceptional stability)
+  - Per period: 2,461-2,607 trades each, all >48% WR
+- **File organization fix**: Eliminated duplicate validation summary files
+  - Summary/report files now write ONLY to history/val_YYYY_YYYY_XXX/ directories
+  - VALIDATE root stays clean (only trade CSVs + latest shared stats)
+  - Auto-cleanup of old summaries on each validation run
+- **Symbol exclusion**: CLI flag `--exclude-symbols` for asset-specific tuning (e.g., CAD_CHF)
+- **Drawdown analysis**: FTMO DD only 0.5% over 2017-2019 (peak-to-trough was 17-18% but irrelevant)
+  - Removed unnecessary DD controls (Stap 6) to simplify codebase
+- **Validation mode**: Fully functional for testing params on different periods without optimization
+
+### ✅ Previous Fixes (Dec 28-29, 2025)
 - **FTMOComplianceTracker**: Implemented FTMO compliance tracking with daily DD (4.5%), total DD (9%), and streak halt metrics
 - **Parameter expansion**: Expanded search space from 17→25+ parameters (TP multiples, close percentages, 6 filter toggles)
 - **Filter toggles**: Added 6 optimizable filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)
@@ -78,7 +92,7 @@ data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (136 historical CSV files)
 ```
 mt5bot-new/
 ├── ftmo_challenge_analyzer.py   # 117KB - Optimization engine
-├── strategy_core.py              # 114KB - Trading strategy (7 pillars)
+├── strategy_core.py              # 114KB - Trading strategy (6 pillars)
 ├── main_live_bot.py              #  80KB - Live MT5 bot
 ├── professional_quant_suite.py   #  20KB - Professional metrics
 ├── best_params.json              # Latest optimized parameters
@@ -216,14 +230,16 @@ mt5bot-new/
 
 ## 🏗️ Core Features
 
-### 1. **7-Pillar Confluence Trading System**
-- **Trend Alignment**: Multi-timeframe (D1/W1/MN) trend confirmation
-- **S/R Levels**: Dynamic support/resistance detection
-- **Fibonacci Zones**: 38.2%, 50%, 61.8% retracement entries
-- **RSI Divergence**: Price vs RSI divergence detection
-- **Candlestick Patterns**: 15+ patterns (engulfing, pin bars, etc.)
-- **Volume Profile**: VWAP and volume validation
-- **ADX Regime**: Trend/Range/Transition detection
+### 1. **6-Pillar Confluence Trading System**
+- **Trend Alignment (HTF Bias)**: Multi-timeframe (D1/W1/MN) trend confirmation
+- **S/R Levels (Location)**: Dynamic support/resistance detection
+- **Fibonacci Zones**: 38.2%-88.6% retracement (Golden Pocket) entries
+- **Structure**: Break of Structure (BOS) / Change of Character (CHoCH)
+- **Confirmation**: 4H candle pattern confirmation
+- **Risk:Reward**: Minimum 1:1 R:R validation
+- **ADX Regime**: Trend/Range/Transition detection (separate from pillars)
+
+> **Note**: Liquidity pillar (sweep detection) was deprecated and removed from scoring.
 
 ### 2. **Dual Optimization Modes**
 

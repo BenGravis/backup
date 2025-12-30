@@ -1,7 +1,7 @@
 # Trading Strategy Guide
 
-**Last Updated**: 2025-12-28  
-**Strategy**: 7-Pillar Confluence System with ADX Regime Detection
+**Last Updated**: 2025-12-30  
+**Strategy**: 6-Pillar Confluence System with ADX Regime Detection
 
 ---
 
@@ -18,7 +18,9 @@
 
 ## Strategy Overview
 
-The bot uses a **multi-timeframe confluence system** that combines 7 independent signals to identify high-probability setups. Each pillar votes on trade direction and quality, with entries requiring a minimum confluence score.
+The bot uses a **multi-timeframe confluence system** that combines 6 independent signals to identify high-probability setups. Each pillar votes on trade direction and quality, with entries requiring a minimum confluence score.
+
+> **Note**: The Liquidity pillar (sweep of equal highs/lows) was removed from the system as it was found to be unreliable and is now always treated as passed.
 
 ### Key Principles
 - **Confluence over single indicators**: Requires multiple confirmations
@@ -28,7 +30,7 @@ The bot uses a **multi-timeframe confluence system** that combines 7 independent
 
 ---
 
-## 7 Confluence Pillars
+## 6 Confluence Pillars
 
 ### 1. Trend Alignment (Daily → Weekly → Monthly)
 **Weight**: 2 points  

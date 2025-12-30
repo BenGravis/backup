@@ -20,7 +20,7 @@
 ## System Overview
 
 ### Purpose
-Automated trading system for FTMO 200K Challenge accounts using a 7-Pillar Confluence strategy with ADX regime detection and professional quantitative optimization.
+Automated trading system for FTMO 200K Challenge accounts using a 6-Pillar Confluence strategy with ADX regime detection and professional quantitative optimization.
 
 ### Key Metrics (Current Performance)
 - **Account Size**: $200,000 USD
@@ -64,7 +64,7 @@ mt5bot-new/
 │   │   ├── manager.py            # FTMO drawdown tracking
 │   │   └── position_sizing.py   # Lot size calculations
 │   ├── strategy/
-│   │   └── confluence.py         # 7-Pillar confluence system
+│   │   └── confluence.py         # 6-Pillar confluence system
 │   └── utils/
 │       └── output_manager.py     # Centralized output file management
 │
@@ -150,7 +150,7 @@ OutputManager (ftmo_analysis_output/NSGA/ or TPE/)
 │   ├── Scan 34 assets every 4 hours                          │
 │   ├── compute_confluence() with loaded params               │
 │   │   ├── Check ADX regime (Trend/Range/Transition)         │
-│   │   ├── Calculate 7-pillar confluence score               │
+│   │   ├── Calculate 6-pillar confluence score               │
 │   │   └── Apply parameter thresholds                        │
 │   ├── Place pending orders (if signal valid)                │
 │   ├── Manage positions                                      │

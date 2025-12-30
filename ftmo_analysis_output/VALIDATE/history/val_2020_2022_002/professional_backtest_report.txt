@@ -1,28 +1,28 @@
 ====================================================================================================
 PROFESSIONAL QUANTITATIVE TRADING ANALYSIS REPORT
 ====================================================================================================
-Generated: 2025-12-29 18:34:53
+Generated: 2025-12-30 11:25:51
 
 EXECUTIVE SUMMARY
 ----------------------------------------------------------------------------------------------------
-Strategy Status: NEEDS IMPROVEMENT
-Training Sharpe Ratio: +0.00
-Validation Sharpe Ratio: +0.00
-Degradation: 0.00
+Strategy Status: APPROVED
+Training Sharpe Ratio: +2.48
+Validation Sharpe Ratio: +3.07
+Degradation: -0.60
 
 PERFORMANCE METRICS COMPARISON
 ----------------------------------------------------------------------------------------------------
 Metric                                     Training           Validation          Full Period
 ----------------------------------------------------------------------------------------------------
-Total Return                                  0.00%                0.00%                0.00%
-Annual Return                                 0.00%                0.00%                0.00%
-Sharpe Ratio                                   0.00                 0.00                 0.00
-Sortino Ratio                                  0.00                 0.00                 0.00
-Calmar Ratio                                   0.00                 0.00                 0.00
-Max Drawdown                                  0.00$                0.00$                0.00$
-Win Rate                                       0.0%                 0.0%                 0.0%
-Profit Factor                                  0.00                 0.00                 0.00
-Recovery Factor                                0.00                 0.00                 0.00
+Total Return                             441188.62%           247659.02%           737946.73%
+Annual Return                               105.39%              139.07%              123.33%
+Sharpe Ratio                                   2.48                 3.07                 2.81
+Sortino Ratio                                 48.67                73.67                57.75
+Calmar Ratio                                   4.96                 7.69                 5.80
+Max Drawdown                              42516.31$            36182.01$            42516.31$
+Win Rate                                      47.6%                48.4%                48.3%
+Profit Factor                                  1.38                 1.50                 1.45
+Recovery Factor                               10.38                 6.84                17.36
 
 ROBUSTNESS ANALYSIS (Walk-Forward Testing)
 ----------------------------------------------------------------------------------------------------
@@ -69,10 +69,10 @@ OPTIMAL PARAMETERS
 
 APPROVAL CRITERIA
 ----------------------------------------------------------------------------------------------------
-✓ Sharpe Ratio > 0.5: False
-✓ Win Rate > 45%: False
+✓ Sharpe Ratio > 0.5: True
+✓ Win Rate > 45%: True
 ✓ Profit Factor > 1.5: False
 ✓ IS-OOS Degradation < 0.5: True
-✓ Consistency Score: 0.00%
+✓ Consistency Score: 123.52%
 
 ====================================================================================================

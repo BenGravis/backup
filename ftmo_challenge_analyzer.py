@@ -132,6 +132,8 @@ TRAINING_QUARTERS = {
 
 ACCOUNT_SIZE = 200000.0
 
+DEFAULT_EXCLUDED_ASSETS: List[str] = []
+
 
 def calculate_adx(candles: List[Dict], period: int = 14) -> float:
     """
@@ -926,9 +928,10 @@ def run_full_period_backtest(
     December is fully open for trading.
     """
     assets = get_all_trading_assets()
+    effective_excluded = excluded_assets if excluded_assets is not None else DEFAULT_EXCLUDED_ASSETS
     
-    if excluded_assets:
-        assets = [a for a in assets if a not in excluded_assets]
+    if effective_excluded:
+        assets = [a for a in assets if a not in effective_excluded]
     
     all_trades: List[Trade] = []
     seen_trades = set()
@@ -2145,12 +2148,32 @@ def generate_summary_txt(
     training_trades: List,
     validation_trades: List,
     full_year_trades: List,
-    best_params: Dict
+    best_params: Dict,
+    training_start: Optional[datetime] = None,
+    training_end: Optional[datetime] = None,
+    validation_start: Optional[datetime] = None,
+    validation_end: Optional[datetime] = None,
+    full_start: Optional[datetime] = None,
+    full_end: Optional[datetime] = None
 ) -> str:
-    """Generate a summary text file after each analyzer run."""
+    """Generate a summary text file after each analyzer run with dynamic date ranges."""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_mgr = get_output_manager()
     summary_filename = output_mgr.output_dir / f"analysis_summary_{timestamp}.txt"
+    
+    # Default dates for normal optimization mode (use hardcoded dates)
+    if training_start is None:
+        training_start = TRAINING_START
+    if training_end is None:
+        training_end = TRAINING_END
+    if validation_start is None:
+        validation_start = VALIDATION_START
+    if validation_end is None:
+        validation_end = VALIDATION_END
+    if full_start is None:
+        full_start = TRAINING_START
+    if full_end is None:
+        full_end = VALIDATION_END
     
     def calc_stats(trades):
         if not trades:
@@ -2199,7 +2222,7 @@ def generate_summary_txt(
     
     lines.extend([
         "",
-        "TRAINING PERIOD (2023-01-01 to 2024-09-30)",
+        f"TRAINING PERIOD ({training_start.strftime('%Y-%m-%d')} to {training_end.strftime('%Y-%m-%d')})",
         "-" * 40,
         f"  Trades: {training_stats['count']}",
         f"  Total R: {training_stats['total_r']:+.2f}",
@@ -2207,7 +2230,7 @@ def generate_summary_txt(
         f"  Win Rate: {training_stats['win_rate']:.1f}%",
         f"  Avg R per Trade: {training_stats['avg_r']:+.3f}",
         "",
-        f"VALIDATION PERIOD (2024-10-01 to {VALIDATION_END.strftime('%Y-%m-%d')})",
+        f"VALIDATION PERIOD ({validation_start.strftime('%Y-%m-%d')} to {validation_end.strftime('%Y-%m-%d')})",
         "-" * 40,
         f"  Trades: {validation_stats['count']}",
         f"  Total R: {validation_stats['total_r']:+.2f}",
@@ -2215,7 +2238,7 @@ def generate_summary_txt(
         f"  Win Rate: {validation_stats['win_rate']:.1f}%",
         f"  Avg R per Trade: {validation_stats['avg_r']:+.3f}",
         "",
-        "FULL PERIOD (2023-2025)",
+        f"FULL PERIOD ({full_start.strftime('%Y-%m-%d')} to {full_end.strftime('%Y-%m-%d')})",
         "-" * 40,
         f"  Trades: {full_stats['count']}",
         f"  Total R: {full_stats['total_r']:+.2f}",
@@ -2229,34 +2252,62 @@ def generate_summary_txt(
     
     total_full_period_profit_usd = 0.0
     
-    for q_name, (q_start, q_end) in sorted(QUARTERS_ALL.items()):
-        q_filtered = []
-        for t in full_year_trades:
-            entry = getattr(t, 'entry_date', None)
-            if entry:
-                if isinstance(entry, str):
-                    try:
-                        entry = datetime.fromisoformat(entry.replace("Z", "+00:00"))
-                    except:
-                        continue
-                if hasattr(entry, 'replace') and entry.tzinfo:
-                    entry = entry.replace(tzinfo=None)
-                if q_start <= entry <= q_end:
-                    q_filtered.append(t)
-        
-        q_r = sum(getattr(t, 'rr', 0) for t in q_filtered)
-        q_wins = sum(1 for t in q_filtered if getattr(t, 'rr', 0) > 0)
-        q_wr = (q_wins / len(q_filtered) * 100) if q_filtered else 0
-        
-        # Calculate USD profit for this quarter
-        q_profit_usd = q_r * risk_per_trade_decimal * account_size
-        total_full_period_profit_usd += q_profit_usd
-        
-        lines.append(f"  {q_name}: {len(q_filtered)} trades, {q_r:+.1f}R, {q_wr:.0f}% win rate, ${q_profit_usd:+,.2f}")
+    # Generate dynamic quarterly breakdown based on actual period
+    year_start = full_start.year
+    year_end = full_end.year
+    
+    for year in range(year_start, year_end + 1):
+        for quarter in range(1, 5):
+            # Define quarter months
+            quarter_months = {
+                1: (1, 2, 3),
+                2: (4, 5, 6),
+                3: (7, 8, 9),
+                4: (10, 11, 12)
+            }
+            months = quarter_months[quarter]
+            q_start = datetime(year, months[0], 1)
+            q_end = datetime(year, months[2], 1)
+            # Get last day of quarter
+            if months[2] == 12:
+                q_end = datetime(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                q_end = datetime(year, months[2] + 1, 1) - timedelta(days=1)
+            q_end = q_end.replace(hour=23, minute=59, second=59)
+            
+            # Skip quarters outside our range
+            if q_end < full_start or q_start > full_end:
+                continue
+            
+            q_name = f"{year}_Q{quarter}"
+            
+            q_filtered = []
+            for t in full_year_trades:
+                entry = getattr(t, 'entry_date', None)
+                if entry:
+                    if isinstance(entry, str):
+                        try:
+                            entry = datetime.fromisoformat(entry.replace("Z", "+00:00"))
+                        except:
+                            continue
+                    if hasattr(entry, 'replace') and entry.tzinfo:
+                        entry = entry.replace(tzinfo=None)
+                    if q_start <= entry <= q_end:
+                        q_filtered.append(t)
+            
+            q_r = sum(getattr(t, 'rr', 0) for t in q_filtered)
+            q_wins = sum(1 for t in q_filtered if getattr(t, 'rr', 0) > 0)
+            q_wr = (q_wins / len(q_filtered) * 100) if q_filtered else 0
+            
+            # Calculate USD profit for this quarter
+            q_profit_usd = q_r * risk_per_trade_decimal * account_size
+            total_full_period_profit_usd += q_profit_usd
+            
+            lines.append(f"  {q_name}: {len(q_filtered)} trades, {q_r:+.1f}R, {q_wr:.0f}% win rate, ${q_profit_usd:+,.2f}")
     
     lines.extend([
         "",
-        f"TOTAL PROFIT (Full Period 2023-2025): ${total_full_period_profit_usd:+,.2f}",
+        f"TOTAL PROFIT (Full Period {full_start.strftime('%Y-%m-%d')} to {full_end.strftime('%Y-%m-%d')}): ${total_full_period_profit_usd:+,.2f}",
         "=" * 80,
         "End of Summary",
         "=" * 80,
@@ -2595,6 +2646,16 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
     set_output_manager(optimization_mode="VALIDATE")
     output_mgr = get_output_manager()
 
+    # Clean up any old analysis_summary files from VALIDATE root to prevent accumulation
+    import glob as glob_module
+    old_summaries = list(output_mgr.output_dir.glob("analysis_summary_*.txt"))
+    for old_file in old_summaries:
+        try:
+            old_file.unlink()
+            print(f"  Cleaned up old summary: {old_file.name}")
+        except Exception as e:
+            pass  # Silently ignore cleanup errors
+
     # Calculate training/validation split (70/30 of the period)
     total_days = (val_end - val_start).days
     training_days = int(total_days * 0.7)
@@ -2779,7 +2840,10 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         else:
             print(f"\n{period_name_str}: No trades")
 
-    # Save results
+    # Archive to history with period-specific naming FIRST
+    run_dir = output_mgr.archive_validation_run(year_start, year_end)
+    
+    # Save results (trades go to VALIDATE/, other files to run_dir)
     print(f"\n📊 Exporting results to {output_mgr.output_dir}...")
     output_mgr.save_best_trial_trades(
         training_trades=training_trades,
@@ -2787,44 +2851,96 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         final_trades=full_trades,
         risk_pct=risk_pct,
     )
-    output_mgr.generate_monthly_stats(full_trades, "final", risk_pct)
-    output_mgr.generate_symbol_performance(full_trades, risk_pct)
-    output_mgr.save_best_params(best_params)
 
-    # Generate summary
-    validation_results = {
-        'best_score': 0,
-        'n_trials': 1,
-        'total_trials': 1,
-    }
-    generate_summary_txt(
-        results=validation_results,
-        training_trades=training_trades,
-        validation_trades=validation_trades,
-        full_year_trades=full_trades,
-        best_params=best_params
-    )
-
-    # Generate professional report
-    try:
-        training_risk = calculate_risk_metrics(training_trades, risk_pct)
-        validation_risk = calculate_risk_metrics(validation_trades, risk_pct)
-        full_risk = calculate_risk_metrics(full_trades, risk_pct)
-
-        generate_professional_report(
+    # If we have a run_dir, redirect to it for summaries, params, and reports
+    if run_dir:
+        original_output_dir = output_mgr.output_dir
+        output_mgr.output_dir = run_dir
+        output_mgr.generate_monthly_stats(full_trades, "final", risk_pct)
+        output_mgr.generate_symbol_performance(full_trades, risk_pct)
+        output_mgr.save_best_params(best_params)
+        
+        # Generate summary
+        validation_results = {
+            'best_score': 0,
+            'n_trials': 1,
+            'total_trials': 1,
+        }
+        generate_summary_txt(
+            results=validation_results,
+            training_trades=training_trades,
+            validation_trades=validation_trades,
+            full_year_trades=full_trades,
             best_params=best_params,
-            training_metrics=training_risk,
-            validation_metrics=validation_risk,
-            full_metrics=full_risk,
-            walk_forward_results={'total_windows': 0, 'avg_sharpe_degradation': 0, 'std_sharpe_degradation': 0},
-            output_file=output_mgr.output_dir / "professional_backtest_report.txt"
+            training_start=val_start,
+            training_end=training_end_date,
+            validation_start=validation_start_date,
+            validation_end=val_end,
+            full_start=val_start,
+            full_end=val_end
         )
-        print(f"✓ Professional report saved")
-    except Exception as e:
-        print(f"[!] Report generation failed: {e}")
 
-    # Archive to history with period-specific naming
-    output_mgr.archive_validation_run(year_start, year_end)
+        # Generate professional report to run_dir
+        try:
+            training_risk = calculate_risk_metrics(training_trades, risk_pct)
+            validation_risk = calculate_risk_metrics(validation_trades, risk_pct)
+            full_risk = calculate_risk_metrics(full_trades, risk_pct)
+
+            generate_professional_report(
+                best_params=best_params,
+                training_metrics=training_risk,
+                validation_metrics=validation_risk,
+                full_metrics=full_risk,
+                walk_forward_results={'total_windows': 0, 'avg_sharpe_degradation': 0, 'std_sharpe_degradation': 0},
+                output_file=run_dir / "professional_backtest_report.txt"
+            )
+            print(f"✓ Professional report saved to run directory")
+        except Exception as e:
+            print(f"[!] Report generation failed: {e}")
+        
+        # Restore original output_dir
+        output_mgr.output_dir = original_output_dir
+    else:
+        # Fallback if archive failed (should not happen)
+        output_mgr.generate_monthly_stats(full_trades, "final", risk_pct)
+        output_mgr.generate_symbol_performance(full_trades, risk_pct)
+        output_mgr.save_best_params(best_params)
+        
+        validation_results = {
+            'best_score': 0,
+            'n_trials': 1,
+            'total_trials': 1,
+        }
+        generate_summary_txt(
+            results=validation_results,
+            training_trades=training_trades,
+            validation_trades=validation_trades,
+            full_year_trades=full_trades,
+            best_params=best_params,
+            training_start=val_start,
+            training_end=training_end_date,
+            validation_start=validation_start_date,
+            validation_end=val_end,
+            full_start=val_start,
+            full_end=val_end
+        )
+
+        try:
+            training_risk = calculate_risk_metrics(training_trades, risk_pct)
+            validation_risk = calculate_risk_metrics(validation_trades, risk_pct)
+            full_risk = calculate_risk_metrics(full_trades, risk_pct)
+
+            generate_professional_report(
+                best_params=best_params,
+                training_metrics=training_risk,
+                validation_metrics=validation_risk,
+                full_metrics=full_risk,
+                walk_forward_results={'total_windows': 0, 'avg_sharpe_degradation': 0, 'std_sharpe_degradation': 0},
+                output_file=output_mgr.output_dir / "professional_backtest_report.txt"
+            )
+            print(f"✓ Professional report saved")
+        except Exception as e:
+            print(f"[!] Report generation failed: {e}")
 
     print(f"\n{'='*80}")
     print(f"✅ VALIDATION COMPLETE")
@@ -2899,7 +3015,19 @@ def main():
         default="best_params.json",
         help="Path to params JSON file for validation mode (default: best_params.json)"
     )
+    parser.add_argument(
+        "--exclude-symbols",
+        type=str,
+        default=None,
+        help="Comma-separated symbols to exclude (e.g., CAD_CHF,CHF_JPY)"
+    )
     args = parser.parse_args()
+
+    global DEFAULT_EXCLUDED_ASSETS
+    if args.exclude_symbols:
+        DEFAULT_EXCLUDED_ASSETS = [s.strip().upper() for s in args.exclude_symbols.split(',') if s.strip()]
+        if DEFAULT_EXCLUDED_ASSETS:
+            print(f"Excluding symbols: {', '.join(DEFAULT_EXCLUDED_ASSETS)}")
     
     if args.status:
         show_optimization_status()
