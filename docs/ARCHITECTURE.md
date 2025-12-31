@@ -184,7 +184,7 @@ For each symbol:
     │   └── apply_volatile_asset_boost(symbol, score, quality)
     ├── If confluence >= MIN_CONFLUENCE:
     │   ├── Check spread
-    │   ├── If spread OK + session active → Place order
+    │   ├── If spread OK → Execute with market order
     │   └── If spread wide → Save to awaiting_spread.json
     └── Log signal details
          ↓
@@ -266,10 +266,11 @@ for signal in awaiting_spread.json:
         remove(signal)
 ```
 
-### Session Filter
-- **Active Hours**: 08:00-22:00 UTC (London/NY sessions)
-- **Exception**: Fresh signals with tight spread can execute after daily close
-- **Off-hours Spread Requirement**: 25% tighter than normal max
+### Entry Filter: Spread Quality Only
+- **No session filter** - all signals checked for spread only
+- **Spread OK** → Execute immediately with market order
+- **Spread wide** → Save to `awaiting_spread.json` for retry
+- **Signal expiry**: 12 hours after creation
 
 ### 3-Tier Graduated Risk Management
 

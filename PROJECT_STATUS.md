@@ -12,8 +12,9 @@ The trading bot is a **professional-grade automated trading system** for **5ers 
 
 #### Live Bot Enhancements
 - **Daily Close Scanning**: Only at 22:05 UTC (matches backtest exactly)
-- **Spread Monitoring**: Every 10 min after daily close, execute when spread is tight
-- **Session Filter**: Orders only during London/NY (08:00-22:00 UTC)
+- **Spread-Only Entry Filter**: No session filter, just spread quality check
+- **Spread Monitoring**: Every 10 min, execute when spread improves
+- **Signal Expiry**: 12 hours after creation if spread never improves
 - **3-Tier Graduated Risk**: 2% → reduce risk, 3.5% → cancel pending, 4.5% → emergency close
 - **Synced with TPE**: Quality factors now identical (`max(1, confluence_score // 3)`)
 

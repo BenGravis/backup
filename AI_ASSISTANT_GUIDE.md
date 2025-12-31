@@ -37,7 +37,7 @@
 - **`main_live_bot.py`** (2000+ lines) - Production MT5 execution
   - Loads params from `params/current_params.json`
   - Scans at 22:05 UTC (daily close only)
-  - Session filter (08:00-22:00 UTC)
+  - Spread-only entry filter (no session filter)
   - Spread monitoring every 10 min
   - 3-tier graduated risk management
 
@@ -98,14 +98,11 @@ ftmotrial/
 - Ensures complete daily candles
 - Matches backtest exactly
 
-**Spread Monitoring**:
-- Fresh signals saved to `awaiting_spread.json`
+**Spread-Only Entry Filter (No Session Filter)**:
+- Fresh signals saved to `awaiting_spread.json` if spread too wide
 - Every 10 min: check if spread improved
 - Good spread → MARKET ORDER immediately
-
-**Session Filter**:
-- Orders only during London/NY (08:00-22:00 UTC)
-- Exception: Fresh signals with tight spread after daily close
+- Signals expire after 12 hours
 
 **3-Tier Graduated Risk**:
 | Tier | Daily DD | Action |

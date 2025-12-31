@@ -53,9 +53,9 @@ python main_live_bot.py
 
 ### Live Bot Enhancements
 - ✨ **Daily Close Scanning**: Scan only at 22:05 UTC (after NY close) - matches backtest exactly
-- ✨ **Spread Monitoring**: Every 10 min after daily close, check if spread improved for pending signals
-- ✨ **Market Orders for Fresh Signals**: When spread is tight, execute immediately with market order
-- ✨ **Session Filter**: Orders only during London/NY (08:00-22:00 UTC), exceptions for fresh signals
+- ✨ **Spread-Only Entry Filter**: No session filter, just check spread quality
+- ✨ **Spread Monitoring**: Every 10 min, check if spread improved for pending signals
+- ✨ **Signal Expiry**: Signals expire after 12 hours if spread never improves
 - ✨ **3-Tier Graduated Risk**: 2% DD → reduce risk, 3.5% → cancel pending, 4.5% → emergency close
 
 ### Live Bot Synced with TPE Optimizer

@@ -45,16 +45,12 @@ data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
 - **Why**: Ensures complete daily candles, matches backtest exactly
 - **Benefit**: No partial candle analysis, consistent with TPE optimizer
 
-### Spread Monitoring (After Daily Close)
-- Fresh signals saved to `awaiting_spread.json` if spread too wide
-- Every 10 minutes: check if spread improved
-- Good spread → Execute with **MARKET ORDER** immediately
-- Signals expire after 12 hours
-
-### Session Filter
-- Orders only placed during London/NY hours (08:00-22:00 UTC)
-- Exception: Fresh signals with tight spread can execute after daily close
-- Spread requirement for off-hours: 25% tighter than normal max
+### Entry Filter: Spread Quality Only (No Session Filter)
+- **Only check**: Is spread acceptable? (no session hours filter)
+- **If spread OK** → Execute immediately with market order
+- **If spread wide** → Save to `awaiting_spread.json`
+- **Every 10 min**: Check if spread improved for pending signals
+- **Signal expiry**: 12 hours after creation
 
 ### Graduated Risk Management (3-Tier)
 | Tier | Daily DD | Action |

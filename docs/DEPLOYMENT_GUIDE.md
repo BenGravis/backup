@@ -153,13 +153,15 @@ python ftmo_challenge_analyzer.py --validate --start 2020-01-01 --end 2022-12-31
 - Matches backtest exactly
 
 ### Spread Monitoring
-- Fresh signals saved to `awaiting_spread.json`
+- Fresh signals saved to `awaiting_spread.json` if spread too wide
 - Every 10 minutes: check if spread improved
 - Good spread → Execute with MARKET ORDER
+- Signals expire after 12 hours
 
-### Session Filter
-- Orders only during London/NY (08:00-22:00 UTC)
-- Exception: Fresh signals with tight spread after daily close
+### Entry Filter: Spread Quality Only
+- **No session filter** - signals checked for spread only
+- Spread OK → Execute immediately with market order
+- Spread wide → Save to `awaiting_spread.json` for retry
 
 ### 3-Tier Graduated Risk
 | Tier | Daily DD | Action |

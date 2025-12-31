@@ -12,14 +12,15 @@
   - Ensures complete daily candles, matches backtest exactly
   - No more 4-hour interval scanning with partial candles
   
-- ✨ **Spread Monitoring**: Every 10 min after daily close
+- ✨ **Spread Monitoring**: Every 10 min for signals awaiting better spread
   - Fresh signals saved to `awaiting_spread.json` if spread too wide
   - When spread improves → Execute with MARKET ORDER immediately
   - Signals expire after 12 hours
   
-- ✨ **Session Filter**: Orders only during London/NY (08:00-22:00 UTC)
-  - Exception: Fresh signals with tight spread can execute after daily close
-  - Off-hours spread requirement: 25% tighter than normal max
+- ✨ **Spread-Only Entry Filter**: No session filter needed
+  - All signals check spread quality only
+  - Spread OK → Execute immediately
+  - Spread wide → Save for retry every 10 min
   
 - ✨ **3-Tier Graduated Risk Management**:
   | Tier | Daily DD | Action |
