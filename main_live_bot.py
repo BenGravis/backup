@@ -533,10 +533,9 @@ class LiveTradingBot:
         
         Returns trade setup dict if signal is active AND tradeable, None otherwise.
         """
-        # Session filter: Only scan during London/NY hours (skip Asian session)
-        if not self._is_tradable_session():
-            log.debug(f"[{symbol}] Outside trading hours (London/NY only), skipping")
-            return None
+        # NOTE: Session filter moved to place_setup_order() instead of scanning
+        # This allows scanning 24/7 but only executes during London/NY hours
+        # Benefit: We capture all signals, won't miss setups that form at daily close
         
         from ftmo_config import FIVEERS_CONFIG, get_pip_size, get_sl_limits
         
@@ -815,7 +814,15 @@ class LiveTradingBot:
         - Uses pending order when price is near but not at entry
         - Validates all risk limits before placing
         - Calculates proper lot size for 60K account
+        
+        SESSION FILTER: Only place orders during London/NY hours (08:00-22:00 UTC)
+        This ensures execution during high liquidity, avoiding Asian session whipsaws.
         """
+        # Session filter: Only execute during London/NY hours
+        if not self._is_tradable_session():
+            log.info(f"[{setup['symbol']}] Outside trading hours (08:00-22:00 UTC), waiting for London/NY session")
+            return False  # Keep setup pending, try again later
+        
         from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
         
         symbol = setup["symbol"]
@@ -1736,7 +1743,8 @@ class LiveTradingBot:
         log.info(f"    * Tier 1: 2.0% daily -> Reduce risk to 0.4%")
         log.info(f"    * Tier 2: 3.5% daily -> Cancel pending orders")
         log.info(f"    * Tier 3: 4.5% daily -> Emergency close")
-        log.info(f"  - Session Filter: London/NY only (08:00-22:00 UTC)")
+        log.info(f"  - Session Filter: Orders only during London/NY (08:00-22:00 UTC)")
+        log.info(f"  - Scanning: 24/7 (captures all signals)")
         log.info(f"  - Partial TPs: 45% TP1, 30% TP2, 25% TP3 (Challenge Mode)")
         log.info(f"Server: {MT5_SERVER}")
         log.info(f"Login: {MT5_LOGIN}")
