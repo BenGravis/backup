@@ -294,6 +294,18 @@ class LiveTradingBot:
         except Exception as e:
             log.error(f"Error saving awaiting spread signals: {e}")
     
+    def _is_tradable_session(self) -> bool:
+        """
+        Check if current time is within tradable session hours.
+        Only allow orders during London/NY hours (08:00-22:00 UTC).
+        """
+        now = datetime.now(timezone.utc)
+        current_hour = now.hour
+        
+        # London opens 08:00 UTC, NY closes 22:00 UTC
+        # Only trade during active market hours
+        return 8 <= current_hour < 22
+    
     def _load_trading_days(self):
         """Load trading days from file for FTMO minimum trading days tracking."""
         try:
