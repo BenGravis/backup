@@ -875,63 +875,64 @@ class LiveTradingBot:
         - Validates all risk limits before placing
         - Calculates proper lot size for 60K account
         
-        SESSION FILTER: Only place orders during London/NY hours (08:00-22:00 UTC)
-        This ensures execution during high liquidity, avoiding Asian session whipsaws.
+        DAILY CLOSE STRATEGY:
+        - Signals from daily close scan (22:05 UTC) are ALWAYS fresh
+        - Fresh signals check spread quality, NOT session hours
+        - If spread is good → execute immediately with market order
+        - If spread is wide → save to awaiting_spread.json for retry every 10 min
         
-        EXCEPTION: Fresh signals (< 2 hours old) with good spread can execute after daily close.
-        This captures moves that start right at NY close without waiting for London.
+        SESSION FILTER: Only applies to OLD pending setups being re-validated.
         """
         from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
         
         symbol = setup["symbol"]
         broker_symbol = setup.get("broker_symbol", self.symbol_map.get(symbol, symbol))
         
-        # Session filter with fresh signal + spread exception
+        # Check spread quality for fresh signals (from daily close scan)
+        # Fresh signals = no 'created_at' (just generated) OR created within last 2 hours
         now = datetime.now(timezone.utc)
-        is_fresh_signal = False
+        is_fresh_signal = True  # Default: newly scanned signals are fresh
         
-        # Check if this is a fresh signal (created within last 2 hours)
         if 'created_at' in setup:
             created_at = setup['created_at']
             if isinstance(created_at, str):
                 try:
                     created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                    age_hours = (now - created_at).total_seconds() / 3600
+                    is_fresh_signal = age_hours < 2.0
                 except:
-                    created_at = None
-            if created_at:
-                age_hours = (now - created_at).total_seconds() / 3600
-                is_fresh_signal = age_hours < 2.0
+                    is_fresh_signal = True  # Can't parse, assume fresh
         
-        # Normal session filter, but allow fresh signals with good spread through
-        if not self._is_tradable_session():
-            if is_fresh_signal:
-                # Fresh signal - check if spread is acceptable for immediate entry
-                tick = self.mt5.get_tick(broker_symbol)
-                if tick is not None:
-                    pip_size = get_pip_size(symbol)
-                    if pip_size <= 0:
-                        pip_size = 0.0001
-                    current_spread_pips = tick.spread / pip_size
-                    
-                    # Use tighter spread requirement for off-hours execution
-                    max_spread_off_hours = FIVEERS_CONFIG.get_max_spread_pips(symbol) * 0.75  # 25% tighter
-                    
-                    if current_spread_pips <= max_spread_off_hours:
-                        log.info(f"[{symbol}] Fresh signal + good spread ({current_spread_pips:.1f} pips): executing despite off-hours")
-                    else:
-                        # Save to awaiting_spread for retry every 10 minutes
-                        log.info(f"[{symbol}] Fresh signal but spread too wide ({current_spread_pips:.1f} > {max_spread_off_hours:.1f} pips): saving for spread monitoring")
-                        self.awaiting_spread[symbol] = setup
-                        self._save_awaiting_spread()
-                        return False
+        if is_fresh_signal:
+            # Fresh signal from daily close scan - check spread quality only
+            tick = self.mt5.get_tick(broker_symbol)
+            if tick is not None:
+                pip_size = get_pip_size(symbol)
+                if pip_size <= 0:
+                    pip_size = 0.0001
+                current_spread_pips = tick.spread / pip_size
+                max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
+                
+                if current_spread_pips <= max_spread:
+                    log.info(f"[{symbol}] Fresh signal + good spread ({current_spread_pips:.1f} <= {max_spread:.1f} pips): executing")
                 else:
-                    log.info(f"[{symbol}] Fresh signal but cannot check spread: saving for spread monitoring")
+                    # Spread too wide - save for retry every 10 minutes
+                    log.info(f"[{symbol}] Fresh signal but spread too wide ({current_spread_pips:.1f} > {max_spread:.1f} pips): saving for spread monitoring")
+                    setup['created_at'] = now.isoformat()  # Mark creation time for expiry
                     self.awaiting_spread[symbol] = setup
                     self._save_awaiting_spread()
                     return False
             else:
-                log.info(f"[{setup['symbol']}] Outside trading hours (08:00-22:00 UTC), waiting for London/NY session")
-                return False  # Keep setup pending, try again later
+                log.info(f"[{symbol}] Fresh signal but cannot check spread: saving for spread monitoring")
+                setup['created_at'] = now.isoformat()
+                self.awaiting_spread[symbol] = setup
+                self._save_awaiting_spread()
+                return False
+        else:
+            # Old signal - apply session filter
+            if not self._is_tradable_session():
+                log.info(f"[{symbol}] Old signal outside trading hours (08:00-22:00 UTC), waiting for London/NY session")
+                return False
         
         direction = setup["direction"]
         current_price = setup.get("current_price", 0)
