@@ -165,10 +165,11 @@ OANDA_TO_FOREXCOM: Dict[str, str] = {
     "BTC_USD": "BTCUSD",
     "ETH_USD": "ETHUSD",
     
-    # ============ INDICES (2) ============
-    # Forex.com variations: US500, SPX500, USA500 - verify!
-    "SPX500_USD": "US500",
-    "NAS100_USD": "USTEC",  # or NAS100, US100, USTEC100
+    # ============ INDICES (3) ============
+    # Forex.com uses: SPX500, NAS100, UK100 (verified Dec 31, 2025)
+    "SPX500_USD": "SPX500",
+    "NAS100_USD": "NAS100",
+    "UK100_USD": "UK100",
 }
 
 
