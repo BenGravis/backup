@@ -199,11 +199,13 @@ class LiveTradingBot:
         )
         self.risk_manager = RiskManager(state_file="challenge_state.json")
         
-        # Load best params from optimizer (if available), otherwise use defaults
-        best_params_dict = load_best_params_from_file()
-        if best_params_dict:
-            self.params = StrategyParams(**best_params_dict)
-        else:
+        # Load optimized params from params/current_params.json
+        from params.params_loader import load_strategy_params
+        try:
+            self.params = load_strategy_params()
+            log.info("✓ Loaded optimized parameters from params/current_params.json")
+        except Exception as e:
+            log.warning(f"Could not load params, using defaults: {e}")
             self.params = StrategyParams()
         
         self.last_scan_time: Optional[datetime] = None
