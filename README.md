@@ -49,51 +49,32 @@ python main_live_bot.py
 - Risk per trade: 0.6% = $360 per R
 - Min profitable days: 3 (5ers requirement)
 
-## Recent Updates (Dec 29, 2025)
+## Latest Updates (Dec 31, 2025)
 
-### New Features
-- ✨ **Validation Mode**: Test existing parameters on different date ranges
-  ```bash
-  python ftmo_challenge_analyzer.py --validate --start 2020-01-01 --end 2022-12-31
-  ```
-- ✨ **Parameter saving fix**: ALL 30+ Optuna parameters now saved correctly (was only 15)
-- ✨ **Archive improvements**: `professional_backtest_report.txt` and `analysis_summary_*.txt` now included in history archives
-- ✨ **VALIDATE output folder**: Validation runs save to `ftmo_analysis_output/VALIDATE/history/val_YYYY_YYYY_XXX/`
+### Live Bot Enhancements
+- ✨ **Daily Close Scanning**: Scan only at 22:05 UTC (after NY close) - matches backtest exactly
+- ✨ **Spread Monitoring**: Every 10 min after daily close, check if spread improved for pending signals
+- ✨ **Market Orders for Fresh Signals**: When spread is tight, execute immediately with market order
+- ✨ **Session Filter**: Orders only during London/NY (08:00-22:00 UTC), exceptions for fresh signals
+- ✨ **3-Tier Graduated Risk**: 2% DD → reduce risk, 3.5% → cancel pending, 4.5% → emergency close
 
-### Bug Fixes (Dec 29)
-- ✅ **Parameter saving**: Fixed incomplete parameter saving in OptunaOptimizer (missing TP multiples, filter toggles, FTMO params)
-- ✅ **Date handling**: Fixed `datetime.date` vs `datetime` object mismatch in validation mode
-- ✅ **Archive completeness**: Added missing files to archive (reports, summaries)
+### Live Bot Synced with TPE Optimizer
+- ✅ **Quality Factors**: Now uses `max(1, confluence_score // 3)` (identical to backtest)
+- ✅ **Volatile Asset Boost**: Applied for XAU_USD, NAS100_USD, GBP_JPY, BTC_USD
+- ✅ **Active Status Check**: Uses boosted scores with `min_quality_for_active = max(1, min_quality_factors - 1)`
 
-### Validation Results (superseded by Dec 31, 2025)
-- **2023-2024 (original)**: +701R, 1400+ trades
-- **2020-2022 (validation)**: +614.96R, 2602 trades, 48.3% win rate, $737,947 profit
+### Multi-Broker Support
+- ✨ **Forex.com Demo** ($50K): For testing before 5ers live
+- ✨ **5ers Live** ($60K): Production trading
+- ✨ **Symbol Mapping**: Automatic conversion (SPX500_USD → SPX500 for Forex.com)
+
+### Previous Updates (Dec 28-30, 2025)
+- ✅ **Validation Mode**: Test parameters on different date ranges
+- ✅ **Parameter saving fix**: ALL 30+ Optuna parameters now saved correctly
+- ✅ **12-year validation**: Confirmed robustness across 2014-2025
+- ✅ **NSGA-II directories**: Separate output for multi-objective runs
 
 ---
-
-## Previous Updates (Dec 28, 2025)
-
-### New Features
-- ✨ **FTMOComplianceTracker**: FTMO compliance tracking with daily DD (4.5%), total DD (9%), streak halt
-- ✨ **Parameter expansion**: 25+ optimizable parameters (TP scaling, 6 filter toggles, ADX regime)
-- ✨ **TP scaling**: tp1/2/3_r_multiple (1.0-6.0R) and tp1/2/3_close_pct (0.15-0.40) for dynamic profit taking
-- ✨ **Filter toggles**: 6 new filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)
-- ✨ **Successful test**: 5 trials generated 800-1400 trades each, best: +549R (Sharpe 2.80)
-
-### Critical Bug Fixes
-- ✅ **0-trade bug**: Fixed aggressive filters/compliance penalties causing 0 trades - now 800-1400/trial
-- ✅ **params_loader.py**: Removed obsolete `liquidity_sweep_lookback` parameter
-- ✅ **Metric calculations**: Fixed win_rate (4700%→47%), Calmar ratio (0.00→proper values), total_return units
-- ✅ **Optimization logs**: Fixed R=0.0 display bug for losing trials
-- ✅ **Trade exports**: All 34 symbols now appear in CSV outputs
-
-### Performance Improvements
-- ⚡ **Validation runs**: Only execute on top 5 trials at end (not every best trial)
-- ⚡ **Faster optimization**: ~10x speedup by removing redundant backtests
-
-### Configuration
-- 🔧 **ADX filter**: Disabled (incompatible with current strategy baseline)
-- 🔧 **Filter toggles**: Hard-coded to False during optimization (baseline establishment)
 
 ## Project Structure
 
@@ -101,8 +82,10 @@ python main_live_bot.py
 ├── strategy_core.py          # Core trading logic (6 Confluence Pillars)
 ├── ftmo_challenge_analyzer.py # Optuna optimization & backtesting
 ├── main_live_bot.py          # Live MT5 trading entry point
+├── broker_config.py          # Multi-broker configuration (Forex.com, 5ers)
+├── symbol_mapping.py         # Symbol conversion (OANDA ↔ broker format)
 ├── config.py                 # Account settings, CONTRACT_SPECS
-├── ftmo_config.py            # FTMO challenge rules & risk limits
+├── ftmo_config.py            # 5ers challenge rules & risk limits
 ├── docs/                     # Documentation (system guide, strategy analysis)
 ├── scripts/                  # Utility scripts (monitoring, debugging)
 ├── params/                   # Optimized parameters (current_params.json)
@@ -128,25 +111,18 @@ Optimization is resumable and can be checked with: `python ftmo_challenge_analyz
 
 ## Documentation
 
-### Core Documentation (Auto-Updated)
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete system architecture & data flow (28KB)
-- **[STRATEGY_GUIDE.md](docs/STRATEGY_GUIDE.md)** - Trading strategy deep dive with current parameters (11KB)
-- **[API_REFERENCE.md](docs/API_REFERENCE.md)** - Complete API documentation for all modules (46KB)
-- **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Installation, deployment & troubleshooting (8.3KB)
-- **[OPTIMIZATION_FLOW.md](docs/OPTIMIZATION_FLOW.md)** - 4-phase optimization process (5.3KB)
-- **[BASELINE_ANALYSIS.md](docs/BASELINE_ANALYSIS.md)** - Comprehensive performance analysis & roadmap (NEW)
-- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history & recent changes (2.2KB)
-
-### Legacy Documentation
-- **[PROFESSIONAL_SYSTEM_GUIDE.md](docs/PROFESSIONAL_SYSTEM_GUIDE.md)** - Original system guide
-- **[TRADING_STRATEGY_ANALYSIS.txt](docs/TRADING_STRATEGY_ANALYSIS.txt)** - Strategy analysis notes
+### Core Documentation
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - Complete system architecture & data flow
+- **[STRATEGY_GUIDE.md](docs/STRATEGY_GUIDE.md)** - Trading strategy deep dive with current parameters
+- **[API_REFERENCE.md](docs/API_REFERENCE.md)** - Complete API documentation for all modules
+- **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Installation, deployment & troubleshooting
+- **[OPTIMIZATION_FLOW.md](docs/OPTIMIZATION_FLOW.md)** - 4-phase optimization process
+- **[BASELINE_ANALYSIS.md](docs/BASELINE_ANALYSIS.md)** - Comprehensive performance analysis & roadmap
+- **[CHANGELOG.md](docs/CHANGELOG.md)** - Version history & recent changes
 
 ### Quick References
 - **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - AI assistant context & commands
 
-**📝 Documentation Auto-Update**: All core docs are auto-generated from source code on every commit via GitHub Actions. Manual update: `python scripts/update_docs.py`
-
 ---
 
-**Last Documentation Update**: 2025-12-29
-**Auto-generated**: Run `python scripts/update_docs.py` to regenerate docs
+**Last Documentation Update**: 2025-12-31

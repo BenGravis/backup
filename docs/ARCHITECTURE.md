@@ -1,7 +1,7 @@
-# MT5 FTMO Trading Bot - Complete System Architecture
+# MT5 5ers Trading Bot - Complete System Architecture
 
-**Last Updated**: 2025-12-28  
-**Version**: 3.0 (Unified Optimization Config + Smart NSGA-II Flow)
+**Last Updated**: 2025-12-31  
+**Version**: 4.0 (Live Bot Synced with TPE Optimizer + Multi-Broker Support)
 
 ---
 
@@ -10,44 +10,70 @@
 2. [Component Architecture](#component-architecture)
 3. [Data Flow](#data-flow)
 4. [Optimization System](#optimization-system)
-5. [Parameter Management](#parameter-management)
-6. [Risk Management](#risk-management)
-7. [Output Management](#output-management)
-8. [Deployment Architecture](#deployment-architecture)
+5. [Live Bot Features (Dec 2025)](#live-bot-features-dec-2025)
+6. [Parameter Management](#parameter-management)
+7. [Risk Management](#risk-management)
+8. [Multi-Broker Support](#multi-broker-support)
+9. [Output Management](#output-management)
+10. [Deployment Architecture](#deployment-architecture)
 
 ---
 
 ## System Overview
 
 ### Purpose
-Automated trading system for FTMO 200K Challenge accounts using a 6-Pillar Confluence strategy with ADX regime detection and professional quantitative optimization.
+Automated trading system for **5ers 60K High Stakes Challenge** accounts using a 7-Pillar Confluence strategy with ADX regime detection and professional quantitative optimization.
 
 ### Key Metrics (Current Performance)
-- **Account Size**: $200,000 USD
-- **Win Rate**: ~48% (target: 60%+)
-- **Annual Return**: ~40% (target: 100%+)
-- **Max Drawdown**: <10% (FTMO hard limit)
-- **Risk per Trade**: 0.2-1.0% (optimized)
+- **Account Size**: $60,000 USD (5ers High Stakes)
+- **Win Rate**: Target 55%+
+- **Max Drawdown**: <10% (5ers hard limit)
+- **Daily Loss Limit**: <5% (5ers rule)
+- **Risk per Trade**: 0.6% = $360 per R
+- **Symbols**: 25 tradable assets
 
 ### Technology Stack
 - **Language**: Python 3.11+
-- **Trading Platform**: MetaTrader 5 (Windows)
+- **Trading Platform**: MetaTrader 5 (Windows VM)
+- **Brokers**: Forex.com Demo (testing), 5ers Live (production)
 - **Optimization**: Optuna 3.x (TPE + NSGA-II)
 - **Data Storage**: SQLite (optimization state), CSV (historical OHLCV)
-- **Deployment**: Windows VM (live bot) + Linux/Replit (optimizer)
+- **Deployment**: Windows Server 2016 VM (live bot) + Linux (optimizer)
+
+### Two-Environment Architecture
+```
+┌─────────────────────────────────────────────────────────────┐
+│ LIVE BOT (Windows VM)                                       │
+│ main_live_bot.py - MT5 required                             │
+│ - Runs 24/7 via Task Scheduler                              │
+│ - Scans at 22:05 UTC (after daily close)                    │
+│ - Spread monitoring every 10 min                            │
+│ - 3-tier graduated risk management                          │
+│ - Partial take profits via market orders                    │
+└─────────────────────────────────────────────────────────────┘
+                        ↕ Git sync
+┌─────────────────────────────────────────────────────────────┐
+│ OPTIMIZER (Linux/Replit)                                    │
+│ ftmo_challenge_analyzer.py - NO MT5 required                │
+│ - Runs anywhere (Replit, local, dev container)              │
+│ - TPE or NSGA-II optimization                               │
+│ - Saves best params to params/current_params.json           │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Component Architecture
 
 ```
-mt5bot-new/
+ftmotrial/
 ├── main_live_bot.py              # PRODUCTION: Live MT5 trading execution
 ├── ftmo_challenge_analyzer.py    # OPTIMIZATION: Backtest & parameter tuning
-├── strategy_core.py              # CORE: Trading strategy logic
+├── strategy_core.py              # CORE: Trading strategy logic (7 pillars)
+├── broker_config.py              # BROKERS: Multi-broker configuration
 ├── config.py                     # SETTINGS: Account, symbols, contract specs
-├── ftmo_config.py                # FTMO: Challenge rules, risk limits
-├── symbol_mapping.py             # UTILS: OANDA ↔ FTMO symbol conversion
+├── ftmo_config.py                # 5ERS: Challenge rules, risk limits
+├── symbol_mapping.py             # UTILS: Internal ↔ Broker symbol conversion
 │
 ├── params/                       # PARAMETER MANAGEMENT
 │   ├── optimization_config.py    # Unified config loader
@@ -61,69 +87,49 @@ mt5bot-new/
 │   │   ├── client.py             # MT5 API wrapper (Windows only)
 │   │   └── reconnect.py          # Exponential backoff reconnection
 │   ├── risk/
-│   │   ├── manager.py            # FTMO drawdown tracking
-│   │   └── position_sizing.py   # Lot size calculations
+│   │   ├── manager.py            # Drawdown tracking + graduated risk
+│   │   └── position_sizing.py    # Lot size calculations
 │   ├── strategy/
-│   │   └── confluence.py         # 6-Pillar confluence system
+│   │   └── confluence.py         # 7-Pillar confluence system
 │   └── utils/
 │       └── output_manager.py     # Centralized output file management
 │
 ├── data/                         # HISTORICAL DATA
 │   ├── ohlcv/                    # OHLCV CSV files (2003-2025)
-│   │   ├── EURUSD_D1_2003_2025.csv
-│   │   ├── EURUSD_H4_2003_2025.csv
-│   │   └── ... (34 assets × 4 timeframes)
-│   ├── sr_cache/                 # Support/Resistance cache
-│   └── sr_levels/                # S/R level database
+│   │   ├── EUR_USD_D1_2003_2025.csv
+│   │   ├── XAU_USD_H4_2003_2025.csv
+│   │   └── ... (25 assets × 4 timeframes)
+│   └── sr_levels/                # S/R level database (unused)
 │
 ├── ftmo_analysis_output/         # OPTIMIZATION RESULTS
 │   ├── NSGA/                     # Multi-objective runs
-│   │   ├── optimization.log      # Real-time NSGA-II progress
-│   │   ├── best_trades_*.csv     # Trade exports
-│   │   └── optimization_report.csv
-│   └── TPE/                      # Single-objective runs
-│       ├── optimization.log      # Real-time TPE progress
-│       └── ... (same structure)
+│   ├── NSGA_H4/                  # H4 timeframe runs
+│   ├── TPE/                      # Single-objective runs
+│   ├── TPE_H4/                   # H4 timeframe runs
+│   └── VALIDATE/                 # Validation outputs
 │
 ├── docs/                         # DOCUMENTATION
 │   ├── ARCHITECTURE.md           # This file (system design)
 │   ├── STRATEGY_GUIDE.md         # Trading strategy deep dive
 │   ├── OPTIMIZATION_FLOW.md      # Optimization process
 │   ├── API_REFERENCE.md          # Code API documentation
-│   └── DEPLOYMENT_GUIDE.md       # Setup & deployment instructions
+│   ├── DEPLOYMENT_GUIDE.md       # Setup & deployment instructions
+│   └── CHANGELOG.md              # Version history
 │
 ├── scripts/                      # UTILITIES
-│   ├── update_docs.py            # Auto-generate documentation
+│   ├── download_oanda_data.py    # Download historical data
 │   ├── monitor_optimization.sh   # Watch optimization progress
-│   └── validate_setup.py         # Pre-deployment validation
+│   └── validate_broker_symbols.py # Validate symbol mappings
 │
 └── .github/
-    ├── copilot-instructions.md   # AI assistant context
-    └── workflows/
-        └── update-docs.yml       # Auto-update docs on commit
+    └── copilot-instructions.md   # AI assistant context
 ```
 
 ---
 
 ## Data Flow
 
-### 1. Historical Data Pipeline
-
-```
-OANDA API / Data Provider
-         ↓
-data/ohlcv/{SYMBOL}_{TIMEFRAME}_2003_2025.csv
-         ↓
-ftmo_challenge_analyzer.py (loads via load_ohlcv_data())
-         ↓
-Backtest Engine (simulate_trades())
-         ↓
-Trade Objects with entry/exit/profit
-         ↓
-OutputManager (ftmo_analysis_output/NSGA/ or TPE/)
-```
-
-### 2. Optimization → Live Bot Flow
+### 1. Optimization → Live Bot Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -134,7 +140,7 @@ OutputManager (ftmo_analysis_output/NSGA/ or TPE/)
 │   ├── Initialize Optuna study (SQLite DB)                   │
 │   ├── Run trials (TPE or NSGA-II)                           │
 │   │   ├── Suggest parameters                                │
-│   │   ├── Backtest 2023-2024 (training)                     │
+│   │   ├── Backtest Jan-Sep 2024 (training)                  │
 │   │   ├── Validate Oct-Dec 2024 (OOS)                       │
 │   │   └── Score: R + Sharpe + Win Rate                      │
 │   ├── Select best trial (OOS validation)                    │
@@ -146,39 +152,49 @@ OutputManager (ftmo_analysis_output/NSGA/ or TPE/)
 ├─────────────────────────────────────────────────────────────┤
 │ main_live_bot.py                                            │
 │   ├── LOAD params/current_params.json (startup)             │
-│   ├── Connect to MT5 (FTMO broker)                          │
-│   ├── Scan 34 assets every 4 hours                          │
-│   ├── compute_confluence() with loaded params               │
-│   │   ├── Check ADX regime (Trend/Range/Transition)         │
-│   │   ├── Calculate 6-pillar confluence score               │
-│   │   └── Apply parameter thresholds                        │
-│   ├── Place pending orders (if signal valid)                │
-│   ├── Manage positions                                      │
-│   │   ├── Partial exits at loaded params['trail_activation_r']│
-│   │   ├── ATR trailing stop (params['atr_trail_multiplier'])│
-│   │   └── FTMO risk checks (RiskManager)                    │
+│   ├── Connect to MT5 (broker-specific server)               │
+│   ├── At 22:05 UTC: Scan 25 assets (daily close)            │
+│   │   ├── compute_confluence() with loaded params           │
+│   │   ├── quality_factors = max(1, confluence_score // 3)   │
+│   │   ├── apply_volatile_asset_boost()                      │
+│   │   └── Check spread, if wide → save to awaiting_spread   │
+│   ├── Every 10 min: Check awaiting_spread.json              │
+│   │   └── Good spread → Execute with market order           │
+│   ├── Every 30 sec: Manage positions                        │
+│   │   ├── Partial exits (45% at 0.8R, 30% at 2R, 25% at 3R) │
+│   │   ├── Move SL to BE after TP1                           │
+│   │   └── 3-tier risk checks                                │
 │   └── Log to logs/tradr_live.log                            │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Parameter Update Cycle
+### 2. Signal Flow (Daily Close Scan)
 
 ```
-Developer modifies strategy_core.py (new indicator/filter)
+22:05 UTC Daily Close
          ↓
-Run: python ftmo_challenge_analyzer.py --multi --trials 100
+scan_all_symbols()
          ↓
-Optuna explores parameter space (25+ parameters)
+For each symbol:
+    ├── Get MT5 data (24mo, 104wk, 500d)
+    ├── compute_confluence(data, params)
+    │   ├── Check ADX regime (Trend/Range/Transition)
+    │   ├── Calculate 7-pillar confluence score
+    │   ├── quality_factors = max(1, confluence_score // 3)
+    │   └── apply_volatile_asset_boost(symbol, score, quality)
+    ├── If confluence >= MIN_CONFLUENCE:
+    │   ├── Check spread
+    │   ├── If spread OK + session active → Place order
+    │   └── If spread wide → Save to awaiting_spread.json
+    └── Log signal details
          ↓
-Top-5 OOS validation (prevents overfitting)
-         ↓
-Best OOS params → params/current_params.json
-         ↓
-Git commit & push
-         ↓
-Windows VM: git pull
-         ↓
-Restart main_live_bot.py (loads new params)
+Every 10 minutes:
+    ├── Load awaiting_spread.json
+    ├── For each pending signal:
+    │   ├── Check current spread
+    │   ├── If spread improved → Execute market order
+    │   └── If expired (12h) → Remove
+    └── Save updated awaiting_spread.json
 ```
 
 ---
@@ -197,19 +213,7 @@ python ftmo_challenge_analyzer.py --single --trials 100
 **Speed**: ~1.5 min/trial  
 **Output**: `ftmo_analysis_output/TPE/`
 
-**Scoring Formula**:
-```python
-score = total_r
-if sharpe_ratio > 1.5: score += 10
-if sharpe_ratio > 2.0: score += 20
-if profit_factor > 1.8: score += 15
-if win_rate > 55: score += 20
-if win_rate > 60: score += 30
-if negative_quarters > 0: score -= (negative_quarters * 10)
-if max_drawdown_pct > 15: score -= 50
-```
-
-#### Mode 2: NSGA-II Multi-Objective (Recommended for FTMO)
+#### Mode 2: NSGA-II Multi-Objective (Recommended)
 ```bash
 python ftmo_challenge_analyzer.py --multi --trials 100
 ```
@@ -221,14 +225,7 @@ python ftmo_challenge_analyzer.py --multi --trials 100
 3. **Maximize Win Rate** (consistency)
 
 **Speed**: ~1.5 min/trial  
-**Output**: `ftmo_analysis_output/NSGA/`  
-**Advantage**: Finds Pareto frontier - multiple optimal solutions balancing profit vs risk
-
-**4-Phase Smart Flow** (prevents overfitting):
-1. **Training** (1-2h): All trials on Jan 2023 - Sep 2024 data
-2. **Top-5 OOS Validation** (10m): Validate on Oct-Dec 2024
-3. **Selection**: Best OOS performer (not best training score)
-4. **Final Backtest**: Full 2023-2025 verification
+**Output**: `ftmo_analysis_output/NSGA/`
 
 ### Configuration File: `params/optimization_config.json`
 
@@ -238,14 +235,7 @@ python ftmo_challenge_analyzer.py --multi --trials 100
   "study_name": "ftmo_unified_study",
   "use_multi_objective": true,
   "use_adx_regime_filter": true,
-  "use_adx_slope_rising": false,
-  "use_partial_exits": true,
-  "use_atr_trailing": true,
-  "use_volatility_sizing": false,
   "n_trials": 500,
-  "n_startup_trials": 20,
-  "timeout_hours": 48.0,
-  "objectives": ["total_r", "sharpe_ratio", "win_rate"],
   "training_start": "2024-01-01",
   "training_end": "2024-09-30",
   "validation_start": "2024-10-01",
@@ -253,74 +243,66 @@ python ftmo_challenge_analyzer.py --multi --trials 100
 }
 ```
 
-**CLI Overrides**:
-- `--multi`: Force NSGA-II (even if config says TPE)
-- `--single`: Force TPE (even if config says NSGA-II)
-- `--adx`: Enable ADX regime filter
-- `--trials N`: Set trial count
-- `--config`: Show current configuration
-- `--status`: Check optimization progress
+---
 
-### Parameter Space (25+ Parameters)
+## Live Bot Features (Dec 2025)
 
+### Daily Close Scanning
+- **Scan Time**: Only at 22:05 UTC (after NY close)
+- **Why**: Ensures complete daily candles, matches backtest exactly
+- **Benefit**: No partial candle analysis, consistent with TPE optimizer
+
+### Spread Monitoring System
 ```python
-# Core Risk Management
-risk_per_trade_pct: 0.2-1.0%       # Position sizing
-max_concurrent_trades: 3-10        # Portfolio limit
+# After daily close scan:
+if spread > MAX_SPREAD[symbol]:
+    save_to_awaiting_spread(signal)  # Check again later
 
-# Confluence Thresholds
-min_confluence_score: 2-6          # Entry requirement (7 pillars)
-min_quality_factors: 1-3           # Quality filter level
-
-# ADX Regime Detection
-adx_trend_threshold: 18-30         # Trend mode trigger
-adx_range_threshold: 12-22         # Range mode trigger
-trend_min_confluence: 3-6          # Required pillars in trend mode
-range_min_confluence: 2-5          # Required pillars in range mode
-
-# RSI Filters (Range Mode)
-rsi_oversold_range: 15-35          # Oversold threshold
-rsi_overbought_range: 65-85        # Overbought threshold
-
-# Volatility Filters
-atr_min_percentile: 30-80          # ATR percentile filter
-atr_volatility_ratio: 0.5-1.5      # Current ATR vs historical
-
-# Position Management
-atr_trail_multiplier: 1.0-3.0      # Trailing stop distance
-trail_activation_r: 1.0-3.0        # When to activate trail
-partial_exit_at_1r: true/false     # Take profit at 1R
-partial_exit_pct: 0.25-0.75        # Percentage to exit
-
-# Seasonal Adjustments
-december_atr_multiplier: 1.0-2.5   # December volatility boost
-summer_risk_multiplier: 0.5-1.0    # Q3 risk reduction
-
-# Asset-Specific
-volatile_asset_boost: 1.0-2.0      # Boost for crypto/indices
-use_fibonacci_zones: true/false    # Fibonacci confluence
-fib_tolerance_pct: 0.5-2.0         # Fib zone width
+# Every 10 minutes:
+for signal in awaiting_spread.json:
+    if spread_improved():
+        execute_market_order(signal)
+    elif expired(12h):
+        remove(signal)
 ```
 
-### Database Schema
+### Session Filter
+- **Active Hours**: 08:00-22:00 UTC (London/NY sessions)
+- **Exception**: Fresh signals with tight spread can execute after daily close
+- **Off-hours Spread Requirement**: 25% tighter than normal max
 
-**SQLite Storage** (`ftmo_optimization.db`):
-- **studies**: Study metadata (name, sampler, directions)
-- **trials**: Trial results (number, state, values, params)
-- **trial_params**: Parameter values per trial
-- **trial_values**: Objective values per trial (multi-obj)
+### 3-Tier Graduated Risk Management
 
-**Resumability**:
+| Tier | Daily DD | Action |
+|------|----------|--------|
+| 1 | ≥2.0% | Reduce risk: 0.6% → 0.4% (33% reduction) |
+| 2 | ≥3.5% | Cancel all pending orders |
+| 3 | ≥4.5% | Emergency close ALL positions |
+
+### Partial Take Profits (Market Orders)
+
+| Level | Profit Target | Close % | Action |
+|-------|---------------|---------|--------|
+| TP1 | 0.8-1R | 45% | Move SL to breakeven + buffer |
+| TP2 | 2R | 30% | Trail remaining position |
+| TP3 | 3-4R | 25% | Close final portion |
+
+### Live Bot Synced with TPE Optimizer
+**CRITICAL**: Both use IDENTICAL quality factors calculation:
 ```python
-storage = optuna.storages.RDBStorage(
-    url="sqlite:///ftmo_optimization.db",
-    heartbeat_interval=60,
-    grace_period=120,
-    failed_trial_callback=RetryFailedTrialCallback()
+# BOTH use this formula (strategy_core.py generate_signals):
+quality_factors = max(1, confluence_score // 3)
+
+# BOTH apply volatile asset boost:
+boosted_confluence, boosted_quality = apply_volatile_asset_boost(
+    symbol, confluence_score, quality_factors, params.volatile_asset_boost
 )
-```
 
-Crashes = no data loss, optimization continues from last completed trial.
+# BOTH use same active threshold:
+min_quality_for_active = max(1, params.min_quality_factors - 1)
+if boosted_confluence >= MIN_CONFLUENCE and boosted_quality >= min_quality_for_active:
+    is_active = True
+```
 
 ---
 
@@ -334,38 +316,7 @@ params/
 ├── optimization_config.json      # Runtime configuration
 ├── current_params.json           # Active parameters (live bot)
 ├── params_loader.py              # Utility functions
-└── history/                      # Version history
-    ├── params_20251228_123045.json
-    ├── params_20251227_145622.json
-    └── ... (timestamped backups)
-```
-
-### `current_params.json` Structure
-
-```json
-{
-  "risk_per_trade_pct": 0.65,
-  "min_confluence_score": 4,
-  "min_quality_factors": 2,
-  "adx_trend_threshold": 24,
-  "adx_range_threshold": 16,
-  "trend_min_confluence": 5,
-  "range_min_confluence": 3,
-  "rsi_oversold_range": 28,
-  "rsi_overbought_range": 72,
-  "atr_min_percentile": 55,
-  "atr_trail_multiplier": 2.25,
-  "trail_activation_r": 1.8,
-  "partial_exit_at_1r": true,
-  "partial_exit_pct": 0.5,
-  "december_atr_multiplier": 1.75,
-  "volatile_asset_boost": 1.4,
-  "use_fibonacci_zones": true,
-  "fib_tolerance_pct": 1.2,
-  "max_concurrent_trades": 6,
-  "atr_volatility_ratio": 1.1,
-  "summer_risk_multiplier": 0.75
-}
+└── history/                      # Version history (timestamped backups)
 ```
 
 ### Loading in Live Bot
@@ -375,25 +326,7 @@ params/
 from params.params_loader import load_strategy_params
 
 params = load_strategy_params()  # Loads current_params.json
-min_conf = params['min_confluence_score']  # Use in strategy logic
-```
-
-### Saving from Optimizer
-
-```python
-# ftmo_challenge_analyzer.py
-from params.params_loader import save_optimized_params
-
-best_params = {
-    'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.2, 1.0),
-    # ... all 25+ parameters
-}
-
-save_optimized_params(
-    params=best_params,
-    metrics={'total_r': 45.2, 'sharpe': 1.85, 'win_rate': 52.3},
-    backup=True  # Saves to history/ folder with timestamp
-)
+min_conf = params.min_confluence_score  # Use in strategy logic
 ```
 
 **CRITICAL**: Parameters are NEVER hardcoded in source files. Always load from JSON.
@@ -402,101 +335,119 @@ save_optimized_params(
 
 ## Risk Management
 
-### FTMO Challenge Rules (Hardcoded Limits)
+### 5ers Challenge Rules (Hardcoded Limits)
 
 **ftmo_config.py**:
 ```python
 FTMO_CONFIG = {
-    "account_size": 200000,
-    "max_daily_loss_pct": 5.0,      # $10,000 max daily loss
-    "max_total_drawdown_pct": 10.0,  # $20,000 max total drawdown
-    "phase_1_target_pct": 10.0,      # $20,000 profit target
-    "phase_2_target_pct": 5.0,       # $10,000 profit target
+    "account_size": 60000,
+    "max_daily_loss_pct": 5.0,      # $3,000 max daily loss
+    "max_total_drawdown_pct": 10.0,  # $6,000 max total drawdown
+    "phase_1_target_pct": 8.0,       # $4,800 profit target (Step 1)
+    "phase_2_target_pct": 5.0,       # $3,000 profit target (Step 2)
     "emergency_stop_pct": 7.0,       # Emergency halt at 7% DD
-    "daily_halt_pct": 4.2            # Halt trading at 4.2% daily loss
+    "daily_halt_pct": 4.5            # Halt trading at 4.5% daily loss
 }
 ```
 
 ### Pre-Trade Risk Checks
 
-**tradr/risk/manager.py**:
 ```python
 class RiskManager:
     def can_trade(self, symbol: str, risk_pct: float) -> Tuple[bool, str]:
-        # Check 1: Daily loss limit
-        if daily_loss_pct > 4.2:
-            return False, "Daily loss limit exceeded"
+        # Check 1: Daily loss limit (graduated)
+        if daily_loss_pct >= 4.5:
+            return False, "Emergency stop - close all positions"
+        if daily_loss_pct >= 3.5:
+            return False, "Cancel pending orders"
+        if daily_loss_pct >= 2.0:
+            risk_pct *= 0.67  # Reduce to 0.4%
         
         # Check 2: Total drawdown
         if total_drawdown_pct > 7.0:
             return False, "Emergency drawdown stop"
         
         # Check 3: Spread validation
-        if spread > 2.0 * avg_spread:
-            return False, "Abnormal spread"
-        
-        # Check 4: Concurrent positions
-        if open_positions >= max_concurrent_trades:
-            return False, "Max positions reached"
+        if spread > MAX_SPREAD[symbol]:
+            return False, "Spread too wide"
         
         return True, "OK"
 ```
 
 ### Position Sizing
 
-**tradr/risk/position_sizing.py**:
 ```python
 def calculate_lot_size(
-    account_size: float,
-    risk_pct: float,
-    sl_pips: float,
-    symbol: str
+    account_size: float,    # $60,000
+    risk_pct: float,        # 0.6%
+    sl_pips: float,         # Stop loss distance
+    symbol: str             # For pip value lookup
 ) -> float:
     """
-    Calculate lot size based on:
-    - Account size ($200K)
-    - Risk per trade (0.2-1.0%)
-    - Stop loss distance (pips)
-    - Symbol-specific pip value
-    
     Example:
-        Account: $200,000
-        Risk: 0.5% = $1,000
+        Account: $60,000
+        Risk: 0.6% = $360
         SL: 50 pips
         EURUSD pip value: $10/pip (standard lot)
         
-        Lot size = $1,000 / (50 pips × $10) = 2.0 lots
+        Lot size = $360 / (50 pips × $10) = 0.72 lots
     """
     risk_amount = account_size * (risk_pct / 100)
     pip_value = get_contract_specs(symbol)['pip_value']
-    
-    lot_size = risk_amount / (sl_pips * pip_value)
-    return round(lot_size, 2)
+    return round(risk_amount / (sl_pips * pip_value), 2)
 ```
 
-### Contract Specifications
+---
 
-**config.py** - Symbol-specific pip values:
+## Multi-Broker Support
+
+### Supported Brokers
+
+| Broker | Account | Purpose | Leverage |
+|--------|---------|---------|----------|
+| Forex.com Demo | $50,000 | Testing before live | 1:100 |
+| 5ers Live | $60,000 | Production trading | 1:100 |
+
+### Configuration
+
+Set in `.env`:
+```env
+BROKER_TYPE=forexcom_demo  # or fiveers_live
+MT5_SERVER=Forex.comGlobal-Demo
+MT5_LOGIN=22936023
+MT5_PASSWORD=xxx
+```
+
+### Symbol Mapping
+
 ```python
-CONTRACT_SPECS = {
-    # Forex (Standard: 0.0001)
-    "EURUSD": {"pip_size": 0.0001, "pip_value": 10.0},
-    "GBPUSD": {"pip_size": 0.0001, "pip_value": 10.0},
-    
-    # JPY Pairs (2 decimal)
-    "USDJPY": {"pip_size": 0.01, "pip_value": 9.17},
-    "EURJPY": {"pip_size": 0.01, "pip_value": 9.17},
-    
-    # Gold (2 decimal)
-    "XAUUSD": {"pip_size": 0.01, "pip_value": 0.01},
-    
-    # Crypto (0 decimal)
-    "BTCUSD": {"pip_size": 1.0, "pip_value": 1.0},
-    
-    # Indices
-    "US500.cash": {"pip_size": 0.01, "pip_value": 0.01}
-}
+from symbol_mapping import get_broker_symbol, get_internal_symbol
+
+# Internal (OANDA format) → Broker-specific
+get_broker_symbol("EUR_USD", "forexcom")   # → "EURUSD"
+get_broker_symbol("XAU_USD", "forexcom")   # → "XAUUSD"
+get_broker_symbol("SPX500_USD", "forexcom") # → "SPX500"
+get_broker_symbol("NAS100_USD", "forexcom") # → "NAS100"
+
+# Broker-specific → Internal
+get_internal_symbol("EURUSD", "forexcom")   # → "EUR_USD"
 ```
+
+### Tradable Symbols (25 total)
+
+**Forex (20)**:
+EUR_USD, GBP_USD, USD_JPY, USD_CHF, AUD_USD, NZD_USD, USD_CAD,
+EUR_GBP, EUR_JPY, GBP_JPY, EUR_CHF, EUR_AUD, EUR_CAD, EUR_NZD,
+GBP_AUD, GBP_CAD, GBP_NZD, AUD_CAD, AUD_NZD, NZD_CAD
+
+**Metals (1)**:
+XAU_USD (Gold)
+
+**Indices (3)**:
+SPX500_USD, NAS100_USD, UK100_GBP
+
+**Crypto (1)**:
+BTC_USD
 
 ---
 
@@ -507,229 +458,64 @@ CONTRACT_SPECS = {
 ```
 ftmo_analysis_output/
 ├── NSGA/                          # Multi-objective optimization runs
-│   ├── optimization.log           # Real-time NSGA-II progress
-│   ├── best_trades_training.csv   # Training period trades
-│   ├── best_trades_validation.csv # Validation period trades
-│   ├── best_trades_final.csv      # Full period trades
-│   ├── monthly_stats.csv          # Monthly breakdown
-│   ├── symbol_performance.csv     # Per-symbol statistics
-│   └── optimization_report.csv    # Final summary report
+│   ├── optimization.log           # Real-time progress
+│   ├── run.log                    # Full console output
+│   ├── best_trades_*.csv          # Trade exports
+│   └── optimization_report.csv    # Final summary
 │
-└── TPE/                           # Single-objective optimization runs
-    └── ... (same structure as NSGA/)
+├── TPE/                           # Single-objective runs
+│   └── ... (same structure)
+│
+└── DIRECTORY_GUIDE.md             # Explains output structure
 ```
 
-### OutputManager Class
+### Live Bot State Files
 
-**tradr/utils/output_manager.py**:
-
-```python
-om = OutputManager(optimization_mode="NSGA")
-
-# Log trial progress
-om.log_trial(
-    trial_number=42,
-    score=85.3,
-    total_r=45.2,
-    sharpe_ratio=1.85,
-    win_rate=52.3,
-    profit_factor=1.92,
-    total_trades=156,
-    profit_usd=45200,
-    val_metrics={'total_r': 38.1, 'win_rate': 49.8}
-)
-
-# Save best trial trades
-om.save_best_trial_trades(
-    training_trades=train_trades,
-    validation_trades=val_trades,
-    final_trades=full_trades
-)
-
-# Generate reports
-om.generate_monthly_stats(trades, "training", risk_pct=0.5)
-om.generate_symbol_performance(trades)
-om.generate_final_report(best_params, train_metrics, val_metrics, final_metrics)
 ```
-
-### Log File Format
-
-**ftmo_analysis_output/NSGA/optimization.log**:
-```
-================================================================================
-FTMO OPTIMIZATION LOG - NSGA
-Started: 2025-12-28 14:30:15
-================================================================================
-
-Trial #1 [2025-12-28 14:31:42]
-  Score: 65.30 | R: +32.5 | Sharpe: 1.456
-  Win Rate: 48.2% | PF: 1.65 | Trades: 143
-  Profit: $32,500.00 | Max DD: 8.45%
-
---------------------------------------------------------------------------------
-🏆 NEW BEST - Trial #12 [2025-12-28 14:45:23]
---------------------------------------------------------------------------------
-  Score: 85.30 | R: +45.2 | Sharpe: 1.852
-  Win Rate: 52.3% | PF: 1.92 | Trades: 156
-  Profit: $45,200.00 | Max DD: 6.12%
-  [Validation] R: +38.1 | WR: 49.8% | $38,100.00
-
-Trial #13 [2025-12-28 14:47:08]
-  Score: 72.10 | R: +38.7 | Sharpe: 1.623
-  ...
+# Working directory on Windows VM
+C:\Users\Administrator\ftmotrial\
+├── pending_setups.json            # Awaiting activation
+├── awaiting_spread.json           # Signals waiting for good spread
+├── partial_exits.json             # TP tracking
+└── logs/
+    └── tradr_live.log             # Trading activity log
 ```
 
 ---
 
 ## Deployment Architecture
 
-### Development Environment (Linux/Replit)
+### Windows VM (Production)
 ```
-Purpose: Optimization, backtesting, development
+OS: Windows Server 2016
+Python: 3.11.7 (C:\Users\Administrator\AppData\Local\Programs\Python\Python311)
+Virtual Environment: C:\Users\Administrator\ftmotrial\venv
+MT5: MetaTrader 5 with broker terminal running
+Scheduler: Task Scheduler (FTMO_Live_Bot task)
+
+Key Commands:
+  cd C:\Users\Administrator\ftmotrial
+  git pull
+  .\venv\Scripts\Activate.ps1
+  python main_live_bot.py
+```
+
+### Task Scheduler Configuration
+- **Task Name**: FTMO_Live_Bot
+- **Trigger**: At startup, then every 4 hours
+- **Action**: Run main_live_bot.py
+- **Settings**: Restart on failure, run on battery
+
+### Development Environment (Linux)
+```
 OS: Ubuntu 24.04 LTS (dev container)
 Python: 3.11+
-Requirements: requirements.txt (no MT5 dependencies)
+Purpose: Optimization, testing, code development
 
-Key Files:
-- ftmo_challenge_analyzer.py
-- strategy_core.py
-- data/ohlcv/*.csv
-- params/current_params.json
-
-Workflow:
-1. Edit strategy code
-2. Run optimization: python ftmo_challenge_analyzer.py --multi --trials 100
-3. Review results: cat ftmo_analysis_output/NSGA/optimization.log
-4. Commit changes: git commit && git push
+Key Commands:
+  python ftmo_challenge_analyzer.py --single --trials 100
+  ./run_optimization.sh --single --trials 100
 ```
-
-### Production Environment (Windows VM)
-```
-Purpose: Live MT5 trading
-OS: Windows 10/11
-Python: 3.11+
-MT5: MetaTrader 5 terminal (FTMO broker)
-Requirements: requirements.txt + MetaTrader5 package
-
-Key Files:
-- main_live_bot.py
-- params/current_params.json (loaded at startup)
-- .env (MT5_SERVER, MT5_LOGIN, MT5_PASSWORD)
-
-Workflow:
-1. Git pull latest changes
-2. Verify params: cat params/current_params.json
-3. Run bot: python main_live_bot.py
-4. Monitor: tail -f logs/tradr_live.log
-```
-
-### Continuous Deployment
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 1: Development (Linux)                                 │
-├─────────────────────────────────────────────────────────────┤
-│ 1. Modify strategy_core.py                                  │
-│ 2. Run optimization (100-200 trials)                        │
-│ 3. Validate results (Sharpe > 1.5, WR > 50%)                │
-│ 4. git commit -m "feat: Add RSI divergence filter"          │
-│ 5. git push origin main                                     │
-└─────────────────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 2: Staging (Optional)                                  │
-├─────────────────────────────────────────────────────────────┤
-│ 1. Run Monte Carlo simulation (1000 runs)                   │
-│ 2. Walk-forward validation (rolling windows)                │
-│ 3. Parameter sensitivity analysis                           │
-│ 4. Verify FTMO compliance (DD < 10%, daily < 5%)            │
-└─────────────────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────────────────┐
-│ STEP 3: Production (Windows VM)                             │
-├─────────────────────────────────────────────────────────────┤
-│ 1. Stop live bot                                            │
-│ 2. git pull origin main                                     │
-│ 3. Verify params/current_params.json updated                │
-│ 4. Restart main_live_bot.py                                 │
-│ 5. Monitor first 24h closely                                │
-└─────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Monitoring & Maintenance
-
-### Real-Time Monitoring
-
-**Optimization Progress**:
-```bash
-# Watch live optimization log
-tail -f ftmo_analysis_output/NSGA/optimization.log
-
-# Check Optuna database status
-python ftmo_challenge_analyzer.py --status
-
-# Monitor system resources
-htop  # CPU/RAM usage
-```
-
-**Live Bot Monitoring**:
-```bash
-# Watch trading log
-tail -f logs/tradr_live.log
-
-# Check MT5 connection
-python -c "from tradr.mt5.client import MT5Client; MT5Client().initialize()"
-
-# Monitor account status
-python scripts/check_account_status.py
-```
-
-### Health Checks
-
-**Pre-Deployment Validation** (`scripts/validate_setup.py`):
-```python
-✓ params/current_params.json exists and valid
-✓ All 25 required parameters present
-✓ Parameter values within valid ranges
-✓ Historical data files present (34 assets × 4 TFs)
-✓ MT5 connection successful (Windows only)
-✓ FTMO risk limits configured correctly
-✓ Contract specs loaded for all tradable assets
-```
-
-### Backup Strategy
-
-1. **Parameter History**: Auto-saved to `params/history/` on each optimization
-2. **Database Backups**: SQLite `.db` file backed up daily
-3. **Trade Logs**: CSV exports stored in `ftmo_analysis_output/`
-4. **Git Repository**: All code + params tracked in version control
-
----
-
-## Performance Benchmarks
-
-### Optimization Speed
-
-| Trials | TPE Time | NSGA-II Time | Speedup |
-|--------|----------|--------------|---------|
-| 50     | 1.2h     | 1.5h         | 0.8x    |
-| 100    | 2.3h     | 2.5h         | 0.92x   |
-| 200    | 4.5h     | 4.8h         | 0.94x   |
-| 500    | 10.5h    | 11.2h        | 0.94x   |
-
-**Hardware**: 4-core CPU, 8GB RAM, SSD storage
-
-### Backtest Coverage
-
-- **Assets**: 34 (forex + metals + indices + crypto)
-- **Timeframes**: 4 (D1, H4, W1, MN)
-- **Data Points**: ~15,000 daily candles per asset
-- **Total Candles**: 34 × 4 × 15,000 = ~2 million candles
-- **Backtest Period**: 3 years (2023-2025)
-- **Training Trades**: ~800-1200 per optimization
-- **Validation Trades**: ~300-500 per optimization
 
 ---
 
@@ -740,68 +526,44 @@ python scripts/check_account_status.py
 **Issue**: "No module named 'MetaTrader5'"  
 **Solution**: Windows only - install via `pip install MetaTrader5`
 
-**Issue**: "Optuna study not found"  
-**Solution**: Delete `ftmo_optimization.db` to start fresh
+**Issue**: "Symbol not found" on MT5  
+**Solution**: Check symbol_mapping.py for correct broker mapping
 
-**Issue**: "Historical data missing for symbol X"  
-**Solution**: Run `python update_csvs.py` to download missing data
+**Issue**: "Spread too wide"  
+**Solution**: Signal saved to awaiting_spread.json, will retry
 
-**Issue**: "MT5 connection failed"  
-**Solution**: Check `.env` file, verify MT5 terminal running, check credentials
+**Issue**: "Daily loss limit exceeded"  
+**Solution**: Bot auto-reduces risk or halts per graduated tiers
 
-**Issue**: "NSGA-II slower than expected"  
-**Solution**: Reduce `n_startup_trials` in `optimization_config.json`
-
-### Debug Mode
+### Debug Commands
 
 ```bash
-# Enable verbose logging
-export TRADR_DEBUG=1
-python ftmo_challenge_analyzer.py --trials 5
+# Check optimization status
+python ftmo_challenge_analyzer.py --status
 
-# Check parameter loading
-python -c "from params.params_loader import load_strategy_params; print(load_strategy_params())"
+# Validate symbol mappings
+python scripts/validate_broker_symbols.py
 
-# Validate OHLCV data
-python scripts/validate_data.py
+# Test MT5 connection (Windows)
+python -c "from tradr.mt5.client import MT5Client; MT5Client().initialize()"
 ```
-
----
-
-## Future Enhancements
-
-### Planned Features
-- [ ] Machine Learning trade filter (Random Forest classifier)
-- [ ] Real-time Telegram notifications
-- [ ] Web dashboard for monitoring (Flask/Streamlit)
-- [ ] Multi-account support (Phase 1 + Phase 2 + Funded)
-- [ ] Cloud deployment (AWS Lambda for optimization)
-- [ ] Automated parameter drift detection
-- [ ] Enhanced regime detection (HMM-based)
-
-### Research Areas
-- [ ] Deep learning for S/R level detection
-- [ ] Reinforcement learning for position sizing
-- [ ] Alternative data sources (sentiment, CoT)
-- [ ] Multi-strategy portfolio optimization
 
 ---
 
 ## References
 
-### External Documentation
-- [Optuna Documentation](https://optuna.readthedocs.io/)
-- [MetaTrader 5 Python API](https://www.mql5.com/en/docs/integration/python_metatrader5)
-- [FTMO Challenge Rules](https://ftmo.com/en/faq/)
-
 ### Internal Documentation
 - [STRATEGY_GUIDE.md](STRATEGY_GUIDE.md) - 7-Pillar Confluence system
 - [OPTIMIZATION_FLOW.md](OPTIMIZATION_FLOW.md) - Optimization process
-- [API_REFERENCE.md](API_REFERENCE.md) - Code API docs
 - [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Setup instructions
+- [CHANGELOG.md](CHANGELOG.md) - Version history
+
+### External Resources
+- [Optuna Documentation](https://optuna.readthedocs.io/)
+- [MetaTrader 5 Python API](https://www.mql5.com/en/docs/integration/python_metatrader5)
+- [5ers Challenge Rules](https://www.the5ers.com/)
 
 ---
 
-**Maintained by**: AI-assisted development team  
-**Auto-update**: Triggered on code commits via `.github/workflows/update-docs.yml`  
-**Manual update**: Run `python scripts/update_docs.py`
+**Maintained by**: TheTradrBot  
+**Last Updated**: 2025-12-31

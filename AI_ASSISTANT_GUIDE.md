@@ -1,20 +1,19 @@
 # AI Assistant Quick Start Guide
 
-**Purpose**: This file helps AI assistants (GitHub Copilot, ChatGPT, Claude, etc.) quickly understand the MT5 FTMO Trading Bot project.
+**Purpose**: This file helps AI assistants (GitHub Copilot, ChatGPT, Claude, etc.) quickly understand the 5ers 60K Trading Bot project.
 
-**Last Updated**: 2025-12-30 (Auto-updated on every commit)
+**Last Updated**: 2025-12-31
 
 ---
 
 ## 🎯 Project Summary in 30 Seconds
 
-**What**: Automated MetaTrader 5 trading bot for FTMO $200K Challenge accounts  
-**Strategy**: 6-Pillar Confluence System with ADX regime detection (Liquidity pillar deprecated)  
-**Optimization**: Optuna (TPE/NSGA-II) with 25+ parameters (TP scaling, filter toggles, ADX regime)  
-**Compliance**: FTMOComplianceTracker monitors daily DD (4.5%), total DD (9%), streak halts  
-**Deployment**: Windows (live bot) + Linux (optimizer)  
-**Recent Results**: 1394 trades, +549R, $549K profit, Sharpe 2.80, WR 27.7% (test run)  
-**Performance**: ~48% win rate, ~40% annual return (target: 60%+ WR, 100%+ return)
+**What**: Automated MetaTrader 5 trading bot for 5ers 60K High Stakes Challenge  
+**Strategy**: 6-Pillar Confluence System with multi-timeframe analysis  
+**Optimization**: Optuna (TPE/NSGA-II) with 25+ parameters  
+**Deployment**: Windows VM (live bot) + Linux (optimizer)  
+**Current Status**: Deployed on Forex.com Demo, waiting for first trades  
+**Performance**: ~48% win rate, +2,766R over 12 years (2014-2025)
 
 ---
 
@@ -24,384 +23,201 @@
 - **`strategy_core.py`** (3000+ lines) - Complete trading strategy implementation
   - `compute_confluence()` - Main entry signal logic (6 pillars)
   - `simulate_trades()` - Backtest engine
-  - `detect_regime()` - ADX-based market classification
+  - `generate_signals()` - Signal generation for optimization
+  - `apply_volatile_asset_boost()` - Boost for XAU, NAS100, GBP_JPY, BTC
 
 ### 2. Optimization Engine
-- **`ftmo_challenge_analyzer.py`** (2700 lines) - Parameter optimization & backtesting
+- **`ftmo_challenge_analyzer.py`** (3900 lines) - Parameter optimization & backtesting
   - Dual-mode: TPE (fast) or NSGA-II (multi-objective)
   - 25+ parameter search space
   - Training/Validation/Full-period backtests
-  - Saves results to `ftmo_analysis_output/NSGA/` or `TPE/`
+  - Saves results to `ftmo_analysis_output/TPE/` or `NSGA/`
 
 ### 3. Live Trading Bot
-- **`main_live_bot.py`** (Windows only) - Production MT5 execution
+- **`main_live_bot.py`** (2000+ lines) - Production MT5 execution
   - Loads params from `params/current_params.json`
-  - Scans 34 assets every 4 hours
-  - FTMO risk management (max 10% DD, 5% daily loss)
+  - Scans at 22:05 UTC (daily close only)
+  - Session filter (08:00-22:00 UTC)
+  - Spread monitoring every 10 min
+  - 3-tier graduated risk management
 
-### 4. Configuration
-- **`params/current_params.json`** - Active strategy parameters (loaded by live bot)
-- **`params/optimization_config.json`** - Optimization settings (DB path, modes, trials)
+### 4. Multi-Broker Support
+- **`broker_config.py`** - Forex.com Demo / 5ers Live configuration
+- **`symbol_mapping.py`** - OANDA ↔ broker symbol conversion
+
+### 5. Configuration
+- **`params/current_params.json`** - Active strategy parameters
+- **`params/optimization_config.json`** - Optimization settings
 - **`config.py`** - Contract specs (pip values for 34 assets)
-- **`ftmo_config.py`** - FTMO challenge rules & limits
+- **`ftmo_config.py`** - 5ers challenge rules & limits
 
 ---
 
 ## 🗂️ Directory Structure
 
 ```
-mt5bot-new/
-├── Core Files (CRITICAL - Never hardcode values)
+ftmotrial/
+├── Core Files
 │   ├── strategy_core.py           # Trading strategy (6 pillars)
 │   ├── ftmo_challenge_analyzer.py # Optimization engine
 │   ├── main_live_bot.py           # Live MT5 bot (Windows)
+│   ├── broker_config.py           # Multi-broker configuration
+│   ├── symbol_mapping.py          # Symbol conversion
 │   ├── config.py                  # Contract specs, symbols
-│   └── ftmo_config.py             # FTMO rules
+│   └── ftmo_config.py             # 5ers rules
 │
 ├── params/ (PARAMETER MANAGEMENT)
 │   ├── current_params.json        # Active params (loaded by bot)
 │   ├── optimization_config.json   # Optimization settings
-│   ├── params_loader.py           # Load/save utilities
-│   └── history/                   # Timestamped backups
+│   └── params_loader.py           # Load/save utilities
 │
 ├── tradr/ (MODULES)
 │   ├── mt5/client.py              # MT5 API wrapper
-│   ├── risk/manager.py            # FTMO compliance checks
-│   └── utils/output_manager.py    # Result file management
+│   └── risk/manager.py            # Risk management
 │
-├── data/ohlcv/ (HISTORICAL DATA)
-│   └── {SYMBOL}_{TF}_2003_2025.csv  # 34 assets × 4 timeframes
+├── data/ (HISTORICAL DATA)
+│   ├── ohlcv/                     # OHLCV CSV files (2003-2025)
+│   └── sr_levels/                 # S/R levels (not integrated)
 │
 ├── ftmo_analysis_output/ (RESULTS)
+│   ├── TPE/                       # Single-objective runs
 │   ├── NSGA/                      # Multi-objective runs
-│   │   ├── optimization.log       # Real-time progress
-│   │   └── best_trades_*.csv      # Trade exports
-│   └── TPE/                       # Single-objective runs
+│   └── VALIDATE/                  # Validation runs
 │
-├── docs/ (AUTO-GENERATED DOCUMENTATION)
-│   ├── ARCHITECTURE.md            # System design (28KB)
-│   ├── STRATEGY_GUIDE.md          # Trading strategy (11KB)
-│   ├── API_REFERENCE.md           # Code API (46KB)
-│   ├── DEPLOYMENT_GUIDE.md        # Setup guide (8KB)
-│   └── CHANGELOG.md               # Version history (2KB)
-│
-└── scripts/ (UTILITIES)
-    ├── update_docs.py             # Auto-generate documentation
-    └── pre-commit-hook.sh         # Auto-update on commit
+└── docs/ (DOCUMENTATION)
 ```
 
 ---
 
 ## 🔑 Key Concepts for AI Understanding
 
-### 1. Parameter Management (CRITICAL)
-**Rule**: NEVER hardcode strategy parameters in source code.
+### 1. Live Bot Features (Dec 31, 2025)
+
+**Daily Close Scanning**:
+- Scan only at 22:05 UTC (after NY close)
+- Ensures complete daily candles
+- Matches backtest exactly
+
+**Spread Monitoring**:
+- Fresh signals saved to `awaiting_spread.json`
+- Every 10 min: check if spread improved
+- Good spread → MARKET ORDER immediately
+
+**Session Filter**:
+- Orders only during London/NY (08:00-22:00 UTC)
+- Exception: Fresh signals with tight spread after daily close
+
+**3-Tier Graduated Risk**:
+| Tier | Daily DD | Action |
+|------|----------|--------|
+| 1 | ≥2.0% | Reduce risk: 0.6% → 0.4% |
+| 2 | ≥3.5% | Cancel all pending orders |
+| 3 | ≥4.5% | Emergency close positions |
+
+### 2. Live Bot Synced with TPE Optimizer
+
+**CRITICAL**: Both use IDENTICAL logic:
+```python
+# Quality factors calculation (BOTH):
+quality_factors = max(1, confluence_score // 3)
+
+# Volatile asset boost (BOTH):
+boosted_confluence, boosted_quality = apply_volatile_asset_boost(
+    symbol, confluence_score, quality_factors, params.volatile_asset_boost
+)
+
+# Active status check (BOTH):
+min_quality_for_active = max(1, params.min_quality_factors - 1)
+if boosted_confluence >= MIN_CONFLUENCE and boosted_quality >= min_quality_for_active:
+    is_active = True
+```
+
+### 3. Parameters - NEVER Hardcode
 
 **Correct**:
 ```python
 from params.params_loader import load_strategy_params
 params = load_strategy_params()
-min_conf = params['min_confluence_score']  # Loaded from JSON
 ```
 
 **Wrong**:
 ```python
-MIN_CONFLUENCE = 4  # ❌ NEVER DO THIS
+MIN_CONFLUENCE = 5  # Don't hardcode!
 ```
 
-**Why**: Optimizer saves parameters to `current_params.json`. Live bot loads from JSON. Hardcoding breaks the optimization → live bot workflow.
-
-### 2. Symbol Format Conversion
-**OANDA Format** (data files, config): `EUR_USD`, `XAU_USD`  
-**FTMO Format** (MT5 execution): `EURUSD`, `XAUUSD`
-
-**Use**:
-```python
-from symbol_mapping import oanda_to_ftmo, ftmo_to_oanda
-```
-
-### 3. Pip Values (Symbol-Specific)
-Different symbols have different pip sizes:
-- Forex standard: `0.0001` (EURUSD, GBPUSD)
-- JPY pairs: `0.01` (USDJPY, EURJPY)
-- Gold: `0.01` (XAUUSD)
-- Crypto: `1.0` (BTCUSD)
-
-**Always use**:
-```python
-from tradr.risk.position_sizing import get_contract_specs
-specs = get_contract_specs(symbol)
-pip_value = specs['pip_value']
-```
-
-### 4. Multi-Timeframe Data (Look-Ahead Bias Prevention)
-When using weekly/monthly candles with daily data, slice HTF data to reference timestamp:
+### 4. Multi-Broker Symbol Mapping
 
 ```python
-from strategy_core import _slice_htf_by_timestamp
-htf_candles = _slice_htf_by_timestamp(weekly_candles, current_daily_dt)
+from symbol_mapping import get_broker_symbol
+
+# Forex.com examples:
+get_broker_symbol("EUR_USD", "forexcom")    # → "EURUSD"
+get_broker_symbol("SPX500_USD", "forexcom") # → "SPX500"
+get_broker_symbol("NAS100_USD", "forexcom") # → "NAS100"
 ```
 
-### 5. Optimization Modes
-**TPE (Single-Objective)**:
+### 5. Historical SR Data
+
+**NOT INTEGRATED**: Both TPE optimizer and live bot pass `historical_sr=None`.
+SR files exist in `data/sr_levels/` but are not used.
+
+### 6. Data Requirements
+
+The strategy uses MAXIMUM:
+- Monthly: 21 candles (MT5 provides 24)
+- Weekly: 21 candles (MT5 provides 104)
+- Daily: 50 candles (MT5 provides 500)
+
+**MT5 data is SUFFICIENT** for all strategy requirements.
+
+---
+
+## 💻 Development Commands
+
+### Run Optimization
 ```bash
-python ftmo_challenge_analyzer.py --single --trials 100
+./run_optimization.sh --single --trials 100  # TPE
+./run_optimization.sh --multi --trials 100   # NSGA-II
+python ftmo_challenge_analyzer.py --status   # Check progress
 ```
-- Faster (~2.5h for 100 trials)
-- Optimizes composite score
-- Output: `ftmo_analysis_output/TPE/`
 
-**NSGA-II (Multi-Objective)** (Recommended):
+### Run Live Bot (Windows VM)
 ```bash
-python ftmo_challenge_analyzer.py --multi --trials 100
-```
-- Optimizes 3 objectives: Total R, Sharpe, Win Rate
-- Finds Pareto frontier (multiple optimal solutions)
-- Better for balancing profit vs risk (FTMO 10% DD limit)
-- Output: `ftmo_analysis_output/NSGA/`
-
----
-
-## 🚀 Common AI Tasks & How to Handle Them
-
-### Task 1: "Add a new indicator/filter to the strategy"
-
-**Steps**:
-1. Modify `strategy_core.py`:
-   - Add parameter to `StrategyParams` dataclass
-   - Implement filter logic in `compute_confluence()`
-   - Add to pillar scoring system
-
-2. Update parameter space in `ftmo_challenge_analyzer.py`:
-   ```python
-   'my_new_param': trial.suggest_float('my_new_param', 0.1, 2.0, step=0.1)
-   ```
-
-3. Run optimization:
-   ```bash
-   python ftmo_challenge_analyzer.py --multi --trials 100
-   ```
-
-4. Documentation auto-updates on commit (no manual editing needed)
-
-### Task 2: "Fix a bug or improve risk management"
-
-**Steps**:
-1. Identify affected module:
-   - Trading logic: `strategy_core.py`
-   - Risk checks: `tradr/risk/manager.py`
-   - Position sizing: `tradr/risk/position_sizing.py`
-   - MT5 connection: `tradr/mt5/client.py`
-
-2. Make changes with proper error handling
-
-3. Test locally:
-   ```python
-   python quick_test_trades.py  # Run small backtest
-   ```
-
-4. Commit with descriptive message:
-   ```bash
-   git commit -m "fix: Add spread validation before trade execution"
-   ```
-
-### Task 3: "Optimize parameters"
-
-**Quick run** (testing):
-```bash
-python ftmo_challenge_analyzer.py --multi --trials 10
+python main_live_bot.py
 ```
 
-**Production run** (overnight):
-```bash
-nohup python ftmo_challenge_analyzer.py --multi --adx --trials 500 > opt.log 2>&1 &
-tail -f ftmo_analysis_output/NSGA/optimization.log
-```
-
-**Check results**:
-```bash
-cat ftmo_analysis_output/NSGA/optimization_report.csv
-cat params/current_params.json
-```
-
-### Task 4: "Deploy to production"
-
-**Development** (Linux):
-1. Optimize parameters
-2. Verify results (`params/current_params.json` updated)
-3. Commit and push
-
-**Production** (Windows VM):
-1. Stop `main_live_bot.py`
-2. `git pull origin main`
-3. Verify `params/current_params.json` updated
-4. Restart `python main_live_bot.py`
-5. Monitor `logs/tradr_live.log`
-
----
-
-## 📊 Understanding the Output
-
-### Optimization Log (`ftmo_analysis_output/NSGA/optimization.log`)
-```
-🏆 NEW BEST - Trial #42 [2025-12-28 14:23:15]
-  Score: 85.30 | R: +45.2 | Sharpe: 1.852
-  Win Rate: 52.3% | PF: 1.92 | Trades: 156
-  Profit: $45,200.00 | Max DD: 6.12%
-  [Validation] R: +38.1 | WR: 49.8% | $38,100.00
-```
-
-**Metrics**:
-- **Score**: Composite optimization score (higher = better)
-- **R**: Total profit in risk units (45.2R = 45.2× average risk)
-- **Sharpe**: Risk-adjusted return (>1.5 = good, >2.0 = excellent)
-- **WR**: Win rate percentage (target: 60%+)
-- **PF**: Profit factor (gross profit / gross loss, target: >2.0)
-- **DD**: Max drawdown (FTMO limit: 10%)
-- **Validation**: OOS performance (prevents overfitting)
-
-### Trade CSV (`best_trades_final.csv`)
-```csv
-trade_num,symbol,direction,entry_date,entry_price,sl,tp,exit_date,exit_price,profit_r,profit_usd
-1,EURUSD,BUY,2023-01-15,1.0850,1.0800,1.1000,2023-01-20,1.0920,1.4,1400.00
-2,GBPUSD,SELL,2023-01-22,1.2300,1.2350,1.2150,2023-01-25,1.2180,2.4,2400.00
-...
+### Update VM After Code Changes
+```cmd
+cd C:\Users\Administrator\ftmotrial
+git pull
+schtasks /End /TN "FTMO_Live_Bot"
+schtasks /Run /TN "FTMO_Live_Bot"
 ```
 
 ---
 
-## 🛠️ Troubleshooting for AI
+## 📁 Persistence Files
 
-### Issue: "Import error: No module named 'MetaTrader5'"
-**Cause**: Running on Linux (MT5 is Windows-only)  
-**Fix**: This is expected. Live bot (`main_live_bot.py`) only runs on Windows. Optimizer runs anywhere.
-
-### Issue: "Parameter not found in current_params.json"
-**Cause**: Added new parameter to code but didn't run optimization  
-**Fix**: Either:
-1. Add default value to `params/current_params.json` manually
-2. Run optimization to generate new params
-
-### Issue: "Optuna study locked"
-**Cause**: Another optimization process is running  
-**Fix**: Check `ps aux | grep ftmo_challenge_analyzer` and kill if needed
-
-### Issue: "Look-ahead bias in backtest"
-**Cause**: Using future data from higher timeframes  
-**Fix**: Always use `_slice_htf_by_timestamp()` when accessing weekly/monthly candles
+| File | Purpose |
+|------|---------|
+| `pending_setups.json` | Pending limit orders |
+| `awaiting_spread.json` | Signals waiting for better spread |
+| `challenge_state.json` | Risk manager state |
+| `trading_days.json` | Profitable days tracking |
 
 ---
 
-## 📚 Documentation Quick Links
+## 🎯 5ers Challenge Rules
 
-**For comprehensive understanding**:
-1. **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System design, data flow, components
-2. **[STRATEGY_GUIDE.md](docs/STRATEGY_GUIDE.md)** - Trading strategy details
-3. **[API_REFERENCE.md](docs/API_REFERENCE.md)** - Function signatures & usage
-4. **[DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Setup & deployment
-5. **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - AI context
-
-**For quick reference**:
-- `README.md` - Project overview & quick start
-- `scripts/README.md` - Utility scripts documentation
-- `docs/CHANGELOG.md` - Recent changes
+| Rule | Limit | Bot Behavior |
+|------|-------|--------------|
+| Max Daily Loss | 5% | Halt at 4.2% |
+| Max Total DD | 10% | Emergency at 7% |
+| Step 1 Target | 8% | ~18 days expected |
+| Step 2 Target | 5% | ~10 days expected |
+| Min Profitable Days | 3 | ~68 trades/month |
+| Risk per Trade | 0.6% | $360 per R (60K) |
 
 ---
 
-## 🤖 Documentation Auto-Update System
-
-**All documentation is auto-generated from source code on every commit.**
-
-### How it works:
-1. **Docstrings** → API_REFERENCE.md (via AST parsing)
-2. **current_params.json** → STRATEGY_GUIDE.md (live parameters)
-3. **Git commits** → CHANGELOG.md (version history)
-4. **File structure** → ARCHITECTURE.md (directory tree)
-
-### Triggers:
-- **Automatic**: GitHub Actions on push to `main`
-- **Local**: Pre-commit hook (if installed)
-- **Manual**: `python scripts/update_docs.py`
-
-### When to update manually:
-- After adding new functions with docstrings
-- After optimizing parameters (updates strategy guide)
-- After major architectural changes
-
-**Command**: `python scripts/update_docs.py && git add docs/ && git commit -m "docs: Update"`
-
----
-
-## ⚡ Quick Commands Reference
-
-```bash
-# OPTIMIZATION
-python ftmo_challenge_analyzer.py --multi --trials 100     # NSGA-II (recommended)
-python ftmo_challenge_analyzer.py --single --trials 100    # TPE (faster)
-python ftmo_challenge_analyzer.py --status                 # Check progress
-python ftmo_challenge_analyzer.py --config                 # Show config
-
-# LIVE TRADING (Windows only)
-python main_live_bot.py                                    # Start bot
-
-# DOCUMENTATION
-python scripts/update_docs.py                              # Update all docs
-python scripts/update_docs.py --file STRATEGY              # Update specific doc
-
-# VALIDATION
-python scripts/validate_setup.py                           # Pre-deployment checks
-
-# MONITORING
-tail -f ftmo_analysis_output/NSGA/optimization.log         # Watch optimization
-tail -f logs/tradr_live.log                                # Watch live bot
-```
-
----
-
-## 🎓 Learning Path for New AI Assistants
-
-**Day 1**: Understand the basics
-- Read this file completely
-- Read `README.md`
-- Read `.github/copilot-instructions.md`
-
-**Day 2**: Understand the strategy
-- Read `docs/STRATEGY_GUIDE.md`
-- Examine `strategy_core.py` - focus on `compute_confluence()`
-- Understand 6-pillar scoring system
-
-**Day 3**: Understand optimization
-- Read `docs/OPTIMIZATION_FLOW.md`
-- Examine `ftmo_challenge_analyzer.py` - focus on objective functions
-- Understand TPE vs NSGA-II
-
-**Day 4**: Understand deployment
-- Read `docs/DEPLOYMENT_GUIDE.md`
-- Understand Windows (live) vs Linux (optimizer) split
-- Learn parameter update workflow
-
-**Day 5**: Practice
-- Make a small change (add a comment to `strategy_core.py`)
-- Run `python scripts/update_docs.py`
-- See how documentation auto-updates
-- Commit and observe GitHub Actions
-
----
-
-## 🔐 Critical Rules (NEVER VIOLATE)
-
-1. **NEVER hardcode parameters** - Always load from `current_params.json`
-2. **NEVER mutate source code during optimization** - Only modify JSON files
-3. **ALWAYS use symbol-specific pip values** - Never assume `0.0001`
-4. **ALWAYS prevent look-ahead bias** - Slice HTF data to reference timestamp
-5. **NEVER skip FTMO risk checks** - Max 10% DD, 5% daily loss are hard limits
-6. **ALWAYS test before production** - Run `quick_test_trades.py` first
-7. **NEVER commit without updating docs** - Run `update_docs.py` or use pre-commit hook
-
----
-
-**Last Updated**: 2025-12-28 13:15:00  
-**Auto-Updated By**: Documentation system (scripts/update_docs.py)  
-**Manual Update**: Run `python scripts/update_docs.py` and commit result
-
-**For human developers**: This file is AI-optimized. For comprehensive docs, see `docs/ARCHITECTURE.md`
+**Last Updated**: 2025-12-31

@@ -5,13 +5,54 @@
 
 ---
 
+## v1.1.0 - Live Bot Enhancements (Dec 31, 2025)
+
+### Live Bot Features
+- ✨ **Daily Close Scanning**: Scan only at 22:05 UTC (after NY close)
+  - Ensures complete daily candles, matches backtest exactly
+  - No more 4-hour interval scanning with partial candles
+  
+- ✨ **Spread Monitoring**: Every 10 min after daily close
+  - Fresh signals saved to `awaiting_spread.json` if spread too wide
+  - When spread improves → Execute with MARKET ORDER immediately
+  - Signals expire after 12 hours
+  
+- ✨ **Session Filter**: Orders only during London/NY (08:00-22:00 UTC)
+  - Exception: Fresh signals with tight spread can execute after daily close
+  - Off-hours spread requirement: 25% tighter than normal max
+  
+- ✨ **3-Tier Graduated Risk Management**:
+  | Tier | Daily DD | Action |
+  |------|----------|--------|
+  | 1 | ≥2.0% | Reduce risk: 0.6% → 0.4% |
+  | 2 | ≥3.5% | Cancel all pending orders |
+  | 3 | ≥4.5% | Emergency close positions |
+
+### Live Bot Sync with TPE Optimizer
+- ✅ **Quality Factors**: Now uses `max(1, confluence_score // 3)` (identical to backtest)
+- ✅ **Volatile Asset Boost**: Applied via `apply_volatile_asset_boost()` for XAU_USD, NAS100_USD, GBP_JPY, BTC_USD
+- ✅ **Active Status Check**: Uses boosted scores with `min_quality_for_active = max(1, min_quality_factors - 1)`
+
+### Multi-Broker Support
+- ✨ **Forex.com Demo** ($50K): For testing before 5ers live
+- ✨ **5ers Live** ($60K): Production trading
+- ✨ **broker_config.py**: New multi-broker configuration
+- ✨ **symbol_mapping.py**: Fixed index symbols (SPX500, NAS100, UK100 for Forex.com)
+
+### Bug Fixes
+- ✅ **Symbol mapping**: Fixed Forex.com indices (was US500 → now SPX500)
+- ✅ **Excluded symbols**: JPY pairs and XAG_USD removed from Forex.com demo (min lot issues)
+- ✅ **Session filter**: Only applies to intraday data, not daily backtests
+
+---
+
 ## v1.0.0 - Production Release (Dec 31, 2025)
 
 ### Highlights
 - Finalized 0.6% risk parameters; synced `best_params.json` and `params/current_params.json`.
-- 12-year robustness validation (2014-2025): +2,766.3R, $3.32M, ~48.6% WR.
+- 12-year robustness validation (2014-2025): +2,766.3R, $995K, ~48.6% WR.
 - FTMO compliance: daily DD <3.8% (limit 5%), total DD <3% (limit 10%).
-- FTMO challenge speed: Step 1 (10%) in 18 dagen; Step 2 (5%) in 10 dagen; total 28 dagen.
+- 5ers challenge speed: Step 1 (8%) in 18 dagen; Step 2 (5%) in 10 dagen; total 28 dagen.
 
 ### Parameters (Dec 31, 2025)
 - Risk 0.6% per trade; min_confluence/score 2; min_quality_factors 3.
@@ -23,229 +64,47 @@
 
 ---
 
-## Recent Changes (Session: Dec 30, 2025 - Part 2)
+## Previous Changes (Dec 30, 2025)
 
 ### New Features
 - **NSGA-II Directory Structure**: Added dedicated output directories for multi-objective optimization
-  - `ftmo_analysis_output/NSGA/` - NSGA-II optimization results (parallel to TPE/)
-  - `ftmo_analysis_output/VALIDATE_NSGA/` - NSGA-II parameter validation (parallel to VALIDATE/)
+  - `ftmo_analysis_output/NSGA/` - NSGA-II optimization results
+  - `ftmo_analysis_output/VALIDATE_NSGA/` - NSGA-II parameter validation
   - Automatic mode detection: `--multi` flag routes to NSGA directories
-  - Complete directory mirroring: history/, README.md, same file structure
-  - Usage: `python ftmo_challenge_analyzer.py --multi --trials 100` → outputs to NSGA/
-  - Validation: `python ftmo_challenge_analyzer.py --validate --multi --start 2020-01-01 --end 2022-12-31` → outputs to VALIDATE_NSGA/
 
 ### Documentation
 - Added `ftmo_analysis_output/NSGA/README.md` - NSGA-II optimization guide
 - Added `ftmo_analysis_output/VALIDATE_NSGA/README.md` - NSGA-II validation guide  
 - Added `ftmo_analysis_output/DIRECTORY_GUIDE.md` - Complete directory structure reference
-- Updated mode selection logic to support 4 output modes: TPE, NSGA, VALIDATE, VALIDATE_NSGA
 
 ---
 
-## Previous Changes (Session: Dec 30, 2025 - Part 1)
-
-### Bug Fixes
-- **CRITICAL**: Fixed validation file organization - eliminated duplicate summary files
-  - `analysis_summary_*.txt` files were being saved to both VALIDATE root AND history subdirectories
-  - Now writes summary files, professional reports, and params ONLY to history/val_YYYY_YYYY_XXX/ directories
-  - Trade CSVs remain in VALIDATE root for quick access (also archived to history)
-  - Added automatic cleanup of old summary files from VALIDATE root on each validation run
-  - Result: Clean VALIDATE directory with full audit trail in history subdirectories
-
-### Rollbacks
-- **Drawdown Controls**: Removed unnecessary DD control implementation (Stap 6)
-  - Analysis showed FTMO DD was only 0.5% over 2017-2019 (not the 17-18% peak-to-trough we initially saw)
-  - Removed: `check_drawdown_controls()`, `calculate_position_size()`, `apply_drawdown_controls()` functions
-  - Removed: `DEFAULT_DRAWDOWN_CONTROLS` constant and `replace` import
-  - Kept: Symbol exclusion feature (`--exclude-symbols` CLI flag) for asset-specific tuning
-  - Simplified codebase while retaining useful features
-
-### Validation Results
-- **Multi-period validation** (9-year robustness test):
-  - 2014-2016: 2,461 trades, +627.23R, 48.7% WR
-  - 2017-2019: 2,607 trades, +631.30R, 48.7% WR
-  - 2020-2022: 2,602 trades, +615.23R, 48.3% WR
-  - **Aggregate**: 7,670 trades, +1,873.76R, 48.6% WR, $2.25M estimated profit
-  - Consistency: 0.19% WR std dev (EXCELLENT stability across different market regimes)
-
----
-
-## Previous Changes (Session: Dec 29, 2025)
+## Previous Changes (Dec 29, 2025)
 
 ### New Features
 - **Validation Mode**: Test existing parameters on different date ranges without running optimization
   ```bash
   python ftmo_challenge_analyzer.py --validate --start 2020-01-01 --end 2022-12-31 --params-file best_params.json
   ```
-  - Splits period into 70% training / 30% validation
-  - Outputs to `ftmo_analysis_output/VALIDATE/history/val_YYYY_YYYY_XXX/`
-  - Uses loaded parameters directly (no optimization)
 
 ### Bug Fixes
 - **CRITICAL**: Fixed parameter saving bug - ALL 30+ Optuna parameters now saved correctly
-  - Previously only 15 parameters were saved (hardcoded subset in `params_to_save`)
-  - Missing parameters: tp1/2/3_r_multiple, tp1/2/3_close_pct, filter toggles, FTMO compliance params
-  - Fixed by copying ALL `self.best_params` with key mapping for compatibility
-- **CRITICAL**: Fixed date handling in validation mode
-  - `load_ohlcv_data()` expected `datetime` objects but received `date` objects
-  - Caused `AttributeError: 'datetime.date' object has no attribute 'tzinfo'`
-  - Fixed by removing `.date()` conversion and using `strftime()` for display
-- **Archive improvements**: Added missing files to history archives:
-  - `professional_backtest_report.txt`
-  - `analysis_summary_*.txt` files
-
-### Validation Results
-- Tested run_006 parameters (+701R on 2023-2024) against 2020-2022 data
-- Results: **+614.96R**, 2602 trades, 48.3% win rate, $737,947 estimated profit
-- Confirms strategy generalizes well across different market periods
+- **CRITICAL**: Fixed date handling in validation mode (datetime vs date objects)
+- **Archive improvements**: Added missing files to history archives
 
 ---
 
-## Previous Changes (Session: Dec 28, 2025)
+## Previous Changes (Dec 28, 2025)
 
 ### New Features
-- **FTMOComplianceTracker**: Implemented FTMO compliance tracking class with:
-  - Daily drawdown halt (4.5% threshold, 5% FTMO limit)
-  - Total drawdown halt (9% threshold, 10% FTMO limit)
-  - Consecutive loss streak halt (disabled: 999 losses)
-  - Metrics-only mode for backtesting (no trade filtering)
-  - Comprehensive compliance reporting
-- **Parameter expansion**: Expanded optimization search space to 25+ parameters:
-  - TP scaling: tp1/2/3_r_multiple (1.0-6.0R) and tp1/2/3_close_pct (0.15-0.40)
-  - Filter toggles: 6 new optimizable filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)
-  - Hard constraints: TP ordering (tp1<tp2<tp3), close-sum ≤85%, ADX threshold ordering
-- **Successful optimization**: 5-trial test run generated 800-1400 trades/trial (was 0 before fix)
-  - Best training: +194R (1127 trades, 43% WR)
-  - Best validation: +327R (498 trades, 33% WR)
-  - Final backtest: +549R (1394 trades, 28% WR, Sharpe 2.80)
+- **FTMOComplianceTracker**: Compliance tracking with daily DD (4.5%), total DD (9%), streak halt
+- **Parameter expansion**: 25+ optimizable parameters (TP scaling, 6 filter toggles, ADX regime)
+- **TP scaling**: tp1/2/3_r_multiple (1.0-6.0R) and tp1/2/3_close_pct (0.15-0.40)
+- **Filter toggles**: 6 new filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)
 
-### Bug Fixes
-- **CRITICAL**: Fixed 0-trade bug caused by aggressive filter toggles and compliance penalties
-  - Filter toggles now hard-coded to False during optimization (baseline establishment)
-  - Compliance penalty check disabled (trades rejected for DD breaches)
-  - Consecutive loss halt set to 999 (effectively disabled)
-  - Compliance tracking changed from filtering to metrics-only mode
-- **CRITICAL**: Fixed `params_loader.py` - removed obsolete `liquidity_sweep_lookback` parameter causing optimizer crashes
-- **CRITICAL**: Fixed metric calculations in `professional_quant_suite.py`:
-  - Win rate: Removed duplicate `* 100` multiplication (was showing 4700% instead of 47%)
-  - Calmar ratio: Fixed unit mismatch - now uses `max_drawdown_pct` instead of USD
-  - Total return: Now returns USD value instead of percentage
-- **CRITICAL**: Fixed quarterly stats display for losing trials - stats now shown even when R < 0
-- **CRITICAL**: Fixed optimization.log showing incorrect R=0.0 for losing trials - now uses `overall_stats['r_total']`
-- Disabled ADX filter completely (`require_adx_filter=False`) - incompatible with current strategy
-
-### Features
-- Removed validation/final backtest runs on every new best trial - now only runs once at end for top 5 trials (massive speedup)
-- All 34 symbols now appear in output CSVs (fixed trade combination bug)
-
-### Configuration Changes
-- ADX regime filter disabled in `optimization_config.json` and all backtest calls
-- Updated `params_loader.py` with complete StrategyParams mapping (60+ parameters)
-
-### Documentation
-- [CURRENT] docs: Add comprehensive baseline performance analysis (BASELINE_ANALYSIS.md) (2025-12-28)
-- [00e8d26] docs: Add AI Assistant Quick Start Guide (2025-12-28)
-
-### Refactoring
-- [2210195] refactor: Remove december_atr_multiplier parameter and legacy logging (2025-12-28)
-- [cdd082f] refactor: Final cleanup - organize codebase structure (2025-12-28)
-- [b4e01f6] refactor: Clean output system with human-readable log (2025-12-28)
-- [6e0ad97] refactor: Unified optimization config system (2025-12-28)
-- [81b0940] refactor: reorganize project structure for better maintainability (2025-12-28)
-
-
----
-
-## Version History
-
-### v3.2 (2025-12-28)
-**Update**: Baseline Performance Analysis
-
-**New Documentation**:
-- ✅ **BASELINE_ANALYSIS.md**: Comprehensive 15-25 page technical analysis
-  - Baseline performance metrics (Trial #0: 25.9% DD, 48.6% WR, +99.88R)
-  - Architecture breakdown (15-flag confluence system, ADX regime detection)
-  - Parameter space mapping (19 current, 30+ hardcoded, 14 disabled filters)
-  - Improvement roadmap (P0-P3 priorities with impact estimates)
-  - Code quality assessment and performance projections
-
-**Key Findings**:
-- ⚠️ CRITICAL: 25.9% max drawdown exceeds FTMO 10% limit
-- ⚠️ HIGH: 12+ trading filters currently disabled
-- ⚠️ HIGH: Q3 seasonality problem (-80R July-September)
-- 🎯 Top 3 priorities: Drawdown protection, filter enablement, Q3 fix
-
----
-
-### v3.1 (2025-12-28)
-**Update**: History Archiving + Trading Filters
-
-**New Features**:
-- ✅ History archiving at END of run (run_001, run_002, etc.)
-- ✅ Holiday filter: blocks trades on Jan 1, Dec 24-25, Good Friday
-- ✅ Opposing position filter: prevents FTMO hedging rule violations
-- ✅ run_optimization.sh helper script for background runs
-- ✅ Sync best_score with Optuna database on resume
-
-**Bug Fixes**:
-- Fixed CSV export to use correct output directory
-- Fixed false "NEW BEST" messages when resuming studies
-
----
-
-### v3.0 (2025-12-28)
-**Major Update**: Unified Optimization Config + Smart NSGA-II Flow
-
-**New Features**:
-- ✅ Unified config system (params/optimization_config.json)
-- ✅ Smart NSGA-II flow with OOS validation
-- ✅ Separate NSGA/TPE output directories
-- ✅ --single and --multi CLI flags
-- ✅ OutputManager with mode-specific logging
-- ✅ Comprehensive documentation auto-update system
-
-**Optimizations**:
-- 25+ parameter search space (was 15)
-- Top-5 Pareto OOS validation (prevents overfitting)
-- Fixed Optuna step divisibility warnings
-- Default config: NSGA-II + ADX regime filtering
-
-**Breaking Changes**:
-- None (backwards compatible)
-
----
-
-### v2.5 (2025-12-26)
-**Update**: Parameter Space Expansion
-
-**Changes**:
-- Expanded parameter ranges (confluence 2-6, risk 0.2-1.0%)
-- Added summer_risk_multiplier (Q3 drawdown protection)
-- Added max_concurrent_trades limit
-
----
-
-### v2.0 (2025-12-20)
-**Major Update**: Regime-Adaptive Trading
-
-**Features**:
-- ADX regime detection (Trend/Range/Transition)
-- Regime-specific confluence requirements
-- RSI filters for range mode
-- Partial exits and ATR trailing stops
-
----
-
-### v1.0 (2024-06-15)
-**Initial Release**: Production-Ready FTMO Bot
-
-**Core Features**:
-- 7-Pillar Confluence System
-- Optuna TPE optimization
-- FTMO risk management
-- MT5 integration (Windows)
-- 34 tradable assets
-
----
-
-**Full commit history**: Run `git log --oneline` in repository root
+### Critical Bug Fixes
+- **0-trade bug**: Fixed aggressive filters/compliance penalties causing 0 trades
+- **params_loader.py**: Removed obsolete `liquidity_sweep_lookback` parameter
+- **Metric calculations**: Fixed win_rate (4700%→47%), Calmar ratio, total_return units
+- **Optimization logs**: Fixed R=0.0 display bug for losing trials
+- **Trade exports**: All 34 symbols now appear in CSV outputs
