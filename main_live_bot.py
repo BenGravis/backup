@@ -188,7 +188,9 @@ class LiveTradingBot:
     
     PENDING_SETUPS_FILE = "pending_setups.json"
     TRADING_DAYS_FILE = "trading_days.json"
+    AWAITING_SPREAD_FILE = "awaiting_spread.json"
     VALIDATE_INTERVAL_MINUTES = 10
+    SPREAD_CHECK_INTERVAL_MINUTES = 10  # Check spread every 10 min after daily close
     MAIN_LOOP_INTERVAL_SECONDS = 10
     
     def __init__(self):
@@ -225,7 +227,12 @@ class LiveTradingBot:
         self.risk_reduction_factor: float = 1.0  # 1.0 = normal, 0.67 = reduced (0.6% -> 0.4%)
         self.last_risk_warning_time: Optional[datetime] = None
         
+        # Signals awaiting better spread (after daily close)
+        self.awaiting_spread: Dict[str, Dict] = {}  # symbol -> setup dict
+        self.last_spread_check_time: Optional[datetime] = None
+        
         self._load_pending_setups()
+        self._load_awaiting_spread()
         self._load_trading_days()
         self._auto_start_challenge()
     
@@ -250,6 +257,42 @@ class LiveTradingBot:
                 json.dump(data, f, indent=2, default=str)
         except Exception as e:
             log.error(f"Error saving pending setups: {e}")
+    
+    def _load_awaiting_spread(self):
+        """Load signals awaiting better spread from file."""
+        try:
+            if Path(self.AWAITING_SPREAD_FILE).exists():
+                with open(self.AWAITING_SPREAD_FILE, 'r') as f:
+                    self.awaiting_spread = json.load(f)
+                # Filter out signals older than 12 hours
+                now = datetime.now(timezone.utc)
+                to_remove = []
+                for symbol, setup in self.awaiting_spread.items():
+                    if 'created_at' in setup:
+                        created_at = setup['created_at']
+                        if isinstance(created_at, str):
+                            try:
+                                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                                age_hours = (now - created_at).total_seconds() / 3600
+                                if age_hours > 12:
+                                    to_remove.append(symbol)
+                            except:
+                                to_remove.append(symbol)
+                for symbol in to_remove:
+                    del self.awaiting_spread[symbol]
+                if self.awaiting_spread:
+                    log.info(f"Loaded {len(self.awaiting_spread)} signals awaiting spread")
+        except Exception as e:
+            log.error(f"Error loading awaiting spread signals: {e}")
+            self.awaiting_spread = {}
+    
+    def _save_awaiting_spread(self):
+        """Save signals awaiting better spread to file."""
+        try:
+            with open(self.AWAITING_SPREAD_FILE, 'w') as f:
+                json.dump(self.awaiting_spread, f, indent=2, default=str)
+        except Exception as e:
+            log.error(f"Error saving awaiting spread signals: {e}")
     
     def _load_trading_days(self):
         """Load trading days from file for FTMO minimum trading days tracking."""
@@ -859,10 +902,15 @@ class LiveTradingBot:
                     if current_spread_pips <= max_spread_off_hours:
                         log.info(f"[{symbol}] Fresh signal + good spread ({current_spread_pips:.1f} pips): executing despite off-hours")
                     else:
-                        log.info(f"[{symbol}] Fresh signal but spread too wide ({current_spread_pips:.1f} > {max_spread_off_hours:.1f} pips): waiting for London")
+                        # Save to awaiting_spread for retry every 10 minutes
+                        log.info(f"[{symbol}] Fresh signal but spread too wide ({current_spread_pips:.1f} > {max_spread_off_hours:.1f} pips): saving for spread monitoring")
+                        self.awaiting_spread[symbol] = setup
+                        self._save_awaiting_spread()
                         return False
                 else:
-                    log.info(f"[{symbol}] Fresh signal but cannot check spread: waiting for London")
+                    log.info(f"[{symbol}] Fresh signal but cannot check spread: saving for spread monitoring")
+                    self.awaiting_spread[symbol] = setup
+                    self._save_awaiting_spread()
                     return False
             else:
                 log.info(f"[{setup['symbol']}] Outside trading hours (08:00-22:00 UTC), waiting for London/NY session")
@@ -1353,6 +1401,93 @@ class LiveTradingBot:
         
         self.last_validate_time = datetime.now(timezone.utc)
     
+    def check_awaiting_spread_signals(self):
+        """
+        Check signals awaiting better spread (after daily close).
+        
+        After daily close, we may have signals that couldn't execute due to wide spreads.
+        This function checks every 10 minutes if spread has improved enough to enter.
+        Uses MARKET ORDERS for immediate execution when spread is good.
+        """
+        if not self.awaiting_spread:
+            return
+        
+        from ftmo_config import get_pip_size
+        
+        now = datetime.now(timezone.utc)
+        log.info(f"Checking {len(self.awaiting_spread)} signals awaiting better spread...")
+        
+        symbols_to_remove = []
+        symbols_executed = []
+        
+        for symbol, setup in list(self.awaiting_spread.items()):
+            try:
+                # Check age - remove if older than 12 hours
+                if 'created_at' in setup:
+                    created_at = setup['created_at']
+                    if isinstance(created_at, str):
+                        try:
+                            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                            age_hours = (now - created_at).total_seconds() / 3600
+                            if age_hours > 12:
+                                log.info(f"[{symbol}] Signal expired (age: {age_hours:.1f}h > 12h)")
+                                symbols_to_remove.append(symbol)
+                                continue
+                        except:
+                            pass
+                
+                broker_symbol = setup.get("broker_symbol", self.symbol_map.get(symbol, symbol))
+                
+                # Get current spread
+                tick = self.mt5.get_tick(broker_symbol)
+                if tick is None:
+                    log.warning(f"[{symbol}] Cannot get tick for spread check")
+                    continue
+                
+                pip_size = get_pip_size(symbol)
+                if pip_size <= 0:
+                    pip_size = 0.0001
+                
+                current_spread_pips = tick.spread / pip_size
+                max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
+                
+                # During off-hours, require 25% tighter spread
+                if not self._is_tradable_session():
+                    max_spread *= 0.75
+                
+                if current_spread_pips <= max_spread:
+                    log.info(f"[{symbol}] Spread OK ({current_spread_pips:.1f} <= {max_spread:.1f} pips) - attempting market order")
+                    
+                    # Force immediate entry with market order
+                    setup['entry_distance_r'] = 0  # Force market order
+                    setup['created_at'] = now.isoformat()  # Refresh timestamp
+                    
+                    if self.place_setup_order(setup):
+                        symbols_executed.append(symbol)
+                        symbols_to_remove.append(symbol)
+                    else:
+                        log.warning(f"[{symbol}] Order placement failed - will retry")
+                else:
+                    log.info(f"[{symbol}] Spread still too wide: {current_spread_pips:.1f} > {max_spread:.1f} pips")
+                
+                time.sleep(0.2)  # Rate limit
+                
+            except Exception as e:
+                log.error(f"[{symbol}] Error checking spread: {e}")
+        
+        # Clean up
+        for symbol in symbols_to_remove:
+            if symbol in self.awaiting_spread:
+                del self.awaiting_spread[symbol]
+        
+        if symbols_to_remove:
+            self._save_awaiting_spread()
+        
+        if symbols_executed:
+            log.info(f"Executed {len(symbols_executed)} signals: {symbols_executed}")
+        
+        self.last_spread_check_time = now
+    
     def monitor_live_pnl(self) -> bool:
         """
         Monitor live P/L and trigger emergency close if needed.
@@ -1786,7 +1921,8 @@ class LiveTradingBot:
         log.info(f"    * Tier 3: 4.5% daily -> Emergency close")
         log.info(f"  - Session Filter: Orders only during London/NY (08:00-22:00 UTC)")
         log.info(f"  - Scanning: Only at 22:05 UTC (after daily close)")
-        log.info(f"  - Fresh Signal Exception: Execute if spread is tight after daily close")
+        log.info(f"  - Spread Monitoring: Every 10 min after daily close")
+        log.info(f"  - Fresh Signals: Execute with market order if spread is tight")
         log.info(f"  - Partial TPs: 45% TP1, 30% TP2, 25% TP3 (Challenge Mode)")
         log.info(f"Server: {MT5_SERVER}")
         log.info(f"Login: {MT5_LOGIN}")
@@ -1864,6 +2000,23 @@ class LiveTradingBot:
                         log.info("=" * 70)
                         self.scan_all_symbols()
                 
+                # SPREAD MONITORING: Every 10 min after daily close (22:00-08:00 UTC)
+                # For signals awaiting better spread, check if we can enter now
+                if self.awaiting_spread and not self._is_tradable_session():
+                    should_check_spread = False
+                    if self.last_spread_check_time is None:
+                        should_check_spread = True
+                    else:
+                        mins_since_check = (now - self.last_spread_check_time).total_seconds() / 60
+                        if mins_since_check >= self.SPREAD_CHECK_INTERVAL_MINUTES:
+                            should_check_spread = True
+                    
+                    if should_check_spread:
+                        log.info("=" * 50)
+                        log.info("SPREAD MONITORING: Checking for improved spreads")
+                        log.info("=" * 50)
+                        self.check_awaiting_spread_signals()
+                
                 if not self.mt5.connected:
                     log.warning("MT5 connection lost, attempting reconnect...")
                     if self.connect():
@@ -1886,6 +2039,7 @@ class LiveTradingBot:
         log.info("Shutting down...")
         
         self._save_pending_setups()
+        self._save_awaiting_spread()
         self.disconnect()
         log.info("Bot stopped")
 
