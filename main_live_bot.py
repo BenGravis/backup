@@ -817,11 +817,33 @@ class LiveTradingBot:
         
         SESSION FILTER: Only place orders during London/NY hours (08:00-22:00 UTC)
         This ensures execution during high liquidity, avoiding Asian session whipsaws.
+        
+        EXCEPTION: Fresh signals (< 2 hours old) can execute immediately after daily close
+        This captures moves that start right at NY close without waiting for London.
         """
-        # Session filter: Only execute during London/NY hours
+        # Session filter with fresh signal exception
+        now = datetime.now(timezone.utc)
+        is_fresh_signal = False
+        
+        # Check if this is a fresh signal (created within last 2 hours)
+        if 'created_at' in setup:
+            created_at = setup['created_at']
+            if isinstance(created_at, str):
+                try:
+                    created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
+                except:
+                    created_at = None
+            if created_at:
+                age_hours = (now - created_at).total_seconds() / 3600
+                is_fresh_signal = age_hours < 2.0
+        
+        # Normal session filter, but allow fresh signals through
         if not self._is_tradable_session():
-            log.info(f"[{setup['symbol']}] Outside trading hours (08:00-22:00 UTC), waiting for London/NY session")
-            return False  # Keep setup pending, try again later
+            if is_fresh_signal:
+                log.info(f"[{setup['symbol']}] Fresh signal exception: executing despite Asian session (signal age < 2h)")
+            else:
+                log.info(f"[{setup['symbol']}] Outside trading hours (08:00-22:00 UTC), waiting for London/NY session")
+                return False  # Keep setup pending, try again later
         
         from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
         
