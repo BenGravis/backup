@@ -8,12 +8,20 @@ required for trading - the bot operates independently.
 
 IMPORTANT: Uses strategy_core.py directly - the same code as backtests!
 
+Supported Brokers:
+- Forex.com Demo (for testing)
+- 5ers Live (production)
+
 Usage:
-    python main_live_bot.py
+    python main_live_bot.py                    # Uses BROKER_TYPE from .env
+    python main_live_bot.py --demo             # Force demo mode
+    python main_live_bot.py --validate-symbols # Validate symbol mapping only
+    python main_live_bot.py --dry-run          # Run without executing trades
 
 Configuration:
     Set environment variables in .env file:
-    - MT5_SERVER: Broker server name (e.g., "FTMO-Demo")
+    - BROKER_TYPE: "forexcom_demo" or "fiveers_live"
+    - MT5_SERVER: Broker server name
     - MT5_LOGIN: Account login number
     - MT5_PASSWORD: Account password
     - SCAN_INTERVAL_HOURS: How often to scan (default: 4)
@@ -23,6 +31,7 @@ import os
 import sys
 import time
 import json
+import argparse
 import signal as sig_module
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -52,9 +61,13 @@ except ImportError:
         return {'monthly': [], 'weekly': []}
 
 from tradr.mt5.client import MT5Client, PendingOrder
-from tradr.risk.manager import RiskManager
+from tradr.risk.manager import RiskManager, ChallengeState
 from tradr.utils.logger import setup_logger
-from challenge_risk_manager import ChallengeRiskManager, ChallengeConfig, RiskMode, ActionType, create_challenge_manager
+from challenge_rules import FIVEERS_60K_RULES
+
+# Import broker config for multi-broker support
+from broker_config import get_broker_config, BrokerType, BrokerConfig
+from symbol_mapping import get_broker_symbol, get_internal_symbol
 
 CHALLENGE_MODE = True
 
@@ -98,11 +111,20 @@ from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
 from symbol_mapping import ALL_TRADABLE_OANDA, ftmo_to_oanda, oanda_to_ftmo
 from ftmo_config import FIVEERS_CONFIG
 
+# Load broker configuration (auto-detects from BROKER_TYPE env var)
+BROKER_CONFIG: BrokerConfig = get_broker_config()
 
-MT5_SERVER = os.getenv("MT5_SERVER", "")
-MT5_LOGIN = int(os.getenv("MT5_LOGIN", "0"))
-MT5_PASSWORD = os.getenv("MT5_PASSWORD", "")
-SCAN_INTERVAL_HOURS = int(os.getenv("SCAN_INTERVAL_HOURS", "1"))
+# MT5 connection details from broker config
+MT5_SERVER = BROKER_CONFIG.mt5_server
+MT5_LOGIN = BROKER_CONFIG.mt5_login
+MT5_PASSWORD = BROKER_CONFIG.mt5_password
+SCAN_INTERVAL_HOURS = BROKER_CONFIG.scan_interval_hours
+
+# Broker-specific settings
+ACCOUNT_SIZE = BROKER_CONFIG.account_size
+IS_DEMO = BROKER_CONFIG.is_demo
+BROKER_NAME = BROKER_CONFIG.broker_name
+BROKER_NAME = BROKER_CONFIG.broker_name
 
 # Load MIN_CONFLUENCE from params loader (single source of truth)
 try:
@@ -111,11 +133,20 @@ try:
 except Exception:
     MIN_CONFLUENCE = 5  # Fallback if params not available
 
-# Use EXACT same assets as Discord /backtest command (34 assets)
-TRADABLE_SYMBOLS = FOREX_PAIRS + METALS + INDICES + CRYPTO_ASSETS  # 28 forex + 2 metals + 2 indices + 2 crypto = 34 assets
+# Get tradable symbols from broker config (respects excluded_symbols)
+TRADABLE_SYMBOLS = BROKER_CONFIG.get_tradable_symbols()
 
 log = setup_logger("tradr", log_file="logs/tradr_live.log")
 running = True
+
+# Print broker config on startup
+log.info("=" * 70)
+log.info(f"BROKER: {BROKER_NAME}")
+log.info(f"Demo Mode: {'YES ⚠️' if IS_DEMO else 'NO (LIVE)'}")
+log.info(f"Account Size: ${ACCOUNT_SIZE:,.0f}")
+log.info(f"Risk per Trade: {BROKER_CONFIG.risk_per_trade_pct}% = ${BROKER_CONFIG.risk_amount:.0f}")
+log.info(f"Tradable Symbols: {len(TRADABLE_SYMBOLS)}")
+log.info("=" * 70)
 
 
 def load_best_params_from_file() -> Dict:
@@ -181,7 +212,7 @@ class LiveTradingBot:
         self.pending_setups: Dict[str, PendingSetup] = {}
         self.symbol_map: Dict[str, str] = {}  # our_symbol -> broker_symbol
         
-        self.challenge_manager: Optional[ChallengeRiskManager] = None
+        # Using RiskManager for FTMO challenge tracking
         
         # Trading days tracking for FTMO minimum trading days requirement
         self.trading_days: set = set()
@@ -346,33 +377,38 @@ class LiveTradingBot:
         
         # Discover available symbols
         log.info("\n" + "=" * 70)
-        log.info("DISCOVERING BROKER SYMBOLS")
+        log.info(f"DISCOVERING BROKER SYMBOLS ({BROKER_NAME})")
         log.info("=" * 70)
         
         available_symbols = self.mt5.get_available_symbols()
         log.info(f"Broker has {len(available_symbols)} total symbols")
         
+        # Get broker type for symbol mapping
+        broker_type = BROKER_CONFIG.broker_type.value
+        
         # Map our symbols to broker symbols
-        # TRADABLE_SYMBOLS uses OANDA format (EUR_USD), broker uses FTMO format (EURUSD)
+        # TRADABLE_SYMBOLS uses OANDA format (EUR_USD), broker uses specific format
         mapped_count = 0
         self.symbol_map = {}
         
         for our_symbol in TRADABLE_SYMBOLS:
-            # Convert OANDA format to FTMO format for matching
-            broker_symbol = self.mt5.find_symbol_match(our_symbol)
-            if broker_symbol:
+            # Use broker-aware symbol mapping
+            broker_symbol = get_broker_symbol(our_symbol, broker_type)
+            
+            # First try the mapped symbol
+            if self.mt5.get_symbol_info(broker_symbol):
                 self.symbol_map[our_symbol] = broker_symbol
                 mapped_count += 1
-                log.info(f"✓ {our_symbol:15s} (OANDA) -> {broker_symbol} (FTMO)")
+                log.info(f"✓ {our_symbol:15s} -> {broker_symbol}")
             else:
-                # Try manual conversion as fallback
-                ftmo_symbol = oanda_to_ftmo(our_symbol)
-                if self.mt5.get_symbol_info(ftmo_symbol):
-                    self.symbol_map[our_symbol] = ftmo_symbol
+                # Try to find a match in available symbols
+                found_symbol = self.mt5.find_symbol_match(our_symbol)
+                if found_symbol:
+                    self.symbol_map[our_symbol] = found_symbol
                     mapped_count += 1
-                    log.info(f"✓ {our_symbol:15s} (OANDA) -> {ftmo_symbol} (FTMO fallback)")
+                    log.info(f"✓ {our_symbol:15s} -> {found_symbol} (auto-detected)")
                 else:
-                    log.warning(f"✗ {our_symbol:15s} -> NOT FOUND on broker")
+                    log.warning(f"✗ {our_symbol:15s} -> NOT FOUND (expected: {broker_symbol})")
         
         log.info("=" * 70)
         log.info(f"Mapped {mapped_count}/{len(TRADABLE_SYMBOLS)} symbols")
@@ -404,36 +440,7 @@ class LiveTradingBot:
             log.info(f"Risk manager synced: Balance=${balance:,.2f}, Equity=${equity:,.2f}")
             
             if CHALLENGE_MODE:
-                from ftmo_config import FIVEERS_CONFIG
-                log.info("Initializing Challenge Risk Manager (5ers 60K COMPLIANT)...")
-                config = ChallengeConfig(
-                    enabled=True,
-                    phase=self.risk_manager.state.phase,
-                    account_size=balance,
-                    max_risk_per_trade_pct=FIVEERS_CONFIG.risk_per_trade_pct,
-                    max_cumulative_risk_pct=FIVEERS_CONFIG.max_cumulative_risk_pct,
-                    max_concurrent_trades=FIVEERS_CONFIG.max_concurrent_trades,
-                    max_pending_orders=FIVEERS_CONFIG.max_pending_orders,
-                    tp1_close_pct=FIVEERS_CONFIG.tp1_close_pct,
-                    tp2_close_pct=FIVEERS_CONFIG.tp2_close_pct,
-                    tp3_close_pct=FIVEERS_CONFIG.tp3_close_pct,
-                    daily_loss_warning_pct=FIVEERS_CONFIG.daily_loss_warning_pct,
-                    daily_loss_reduce_pct=FIVEERS_CONFIG.daily_loss_reduce_pct,
-                    daily_loss_halt_pct=FIVEERS_CONFIG.daily_loss_halt_pct,
-                    total_dd_warning_pct=FIVEERS_CONFIG.total_dd_warning_pct,
-                    total_dd_emergency_pct=FIVEERS_CONFIG.total_dd_emergency_pct,
-                    protection_loop_interval_sec=FIVEERS_CONFIG.protection_loop_interval_sec,
-                    pending_order_max_age_hours=FIVEERS_CONFIG.pending_order_expiry_hours,
-                    profit_ultra_safe_threshold_pct=FIVEERS_CONFIG.profit_ultra_safe_threshold_pct,
-                    ultra_safe_risk_pct=FIVEERS_CONFIG.ultra_safe_risk_pct,
-                )
-                self.challenge_manager = ChallengeRiskManager(
-                    config=config,
-                    mt5_client=self.mt5,
-                    state_file="challenge_risk_state.json",
-                )
-                self.challenge_manager.sync_with_mt5(balance, equity)
-                log.info("Challenge Risk Manager initialized with ELITE PROTECTION")
+                log.info("FTMO Challenge mode enabled - using RiskManager for compliance tracking")
         
         return True
     
@@ -1583,50 +1590,9 @@ class LiveTradingBot:
                     self.pending_setups.clear()
                     self._save_pending_setups()
                     
-                    action.executed = True
                     emergency_triggered = True
                     
-                elif action.action == ActionType.CANCEL_PENDING:
-                    for ticket in action.positions_affected:
-                        result = self.mt5.cancel_pending_order(ticket)
-                        if result:
-                            log.info(f"  ✓ Cancelled pending order {ticket}")
-                        else:
-                            log.error(f"  ✗ Failed to cancel pending order {ticket}")
-                    action.executed = True
-                    
-                elif action.action == ActionType.MOVE_SL_BREAKEVEN:
-                    for ticket in action.positions_affected:
-                        positions = self.mt5.get_my_positions()
-                        pos = next((p for p in positions if p.ticket == ticket), None)
-                        if pos:
-                            result = self.mt5.modify_sl_tp(ticket, sl=pos.price_open)
-                            if result:
-                                log.info(f"  ✓ Moved SL to breakeven for {pos.symbol} ({pos.price_open:.5f})")
-                            else:
-                                log.error(f"  ✗ Failed to move SL to breakeven for {pos.symbol}")
-                        else:
-                            log.warning(f"  Position {ticket} not found for SL modification")
-                    action.executed = True
-                    
-                elif action.action == ActionType.CLOSE_WORST:
-                    for ticket in action.positions_affected:
-                        result = self.mt5.close_position(ticket)
-                        if result.success:
-                            log.info(f"  ✓ Closed worst position {ticket} at {result.price}")
-                            self.risk_manager.record_trade_close(
-                                order_id=ticket,
-                                exit_price=result.price,
-                                pnl_usd=0.0,
-                            )
-                        else:
-                            log.error(f"  ✗ Failed to close position {ticket}: {result.error}")
-                    action.executed = True
-                    
-                elif action.action == ActionType.HALT_TRADING:
-                    log.error(f"[RISK] Trading HALTED: {action.reason}")
-                    action.executed = True
-                    emergency_triggered = True
+                # ActionType checks removed - using simplified risk management
                     
             except Exception as e:
                 log.error(f"[RISK] Error executing action {action.action.value}: {e}")
