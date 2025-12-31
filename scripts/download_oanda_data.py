@@ -21,9 +21,9 @@ from typing import List, Optional
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-# OANDA API Configuration
-OANDA_API_KEY = "48da3137d90ce1577246bba01d01ca6e-7e871d8125149032e5fb94236bf558b1"
-OANDA_ACCOUNT_ID = "101-001-37742399-001"
+# OANDA API Configuration (read from environment / .env)
+OANDA_API_KEY = os.getenv("OANDA_API_KEY", "")
+OANDA_ACCOUNT_ID = os.getenv("OANDA_ACCOUNT_ID", "")
 OANDA_API_URL = "https://api-fxpractice.oanda.com"
 
 # Missing symbols to download - 40 forex pairs we don't have yet

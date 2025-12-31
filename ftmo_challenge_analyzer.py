@@ -81,11 +81,17 @@ def save_best_params_persistent(best_params: Dict) -> None:
     except Exception as e:
         print(f"[!] Error saving best_params.json: {e}")
 
-OPTUNA_DB_PATH = "sqlite:///regime_adaptive_v2_clean.db"
+DEFAULT_OPTUNA_DB_PATH = "sqlite:///regime_adaptive_v2_clean.db"
+DEFAULT_STUDY_NAME = "regime_adaptive_v2_clean"
+
+OPTUNA_DB_PATH = DEFAULT_OPTUNA_DB_PATH
 
 _DATA_CACHE: Dict[str, List[Dict]] = {}
-OPTUNA_STUDY_NAME = "regime_adaptive_v2_clean"
+OPTUNA_STUDY_NAME = DEFAULT_STUDY_NAME
 PROGRESS_LOG_FILE = "ftmo_optimization_progress.txt"
+
+# GLOBAL TIMEFRAME CONFIG (set by main() based on CLI mode)
+GLOBAL_TF_CONFIG: Optional[Dict] = None
 
 # FIXED PERIODS FOR CONSISTENT BACKTESTING
 # These dates are locked to ensure reproducible results and proper train/validation splits
@@ -133,6 +139,154 @@ TRAINING_QUARTERS = {
 ACCOUNT_SIZE = 200000.0
 
 DEFAULT_EXCLUDED_ASSETS: List[str] = []
+
+# TIMEFRAME CONFIGURATION
+# Allows switching between D1 and H4 entry timeframes for comparison
+TIMEFRAME_CONFIG = {
+    'TPE': {
+        'entry_tf': 'D1',           # Primary execution timeframe (Daily)
+        'confirmation_tf': 'H4',     # Lower TF for confirmation
+        'bias_tf': 'W1',             # Higher TF for trend bias
+        'sr_tf': 'MN',               # Major S/R levels timeframe
+        'output_folder': 'TPE',
+        'atr_multiplier': 1.0        # Baseline ATR scaling
+    },
+    'TPE_H4': {
+        'entry_tf': 'H4',           # Primary execution timeframe (4-Hour)
+        'confirmation_tf': 'H4',     # H1 data not available; reuse H4 for confirmation
+        'bias_tf': 'D1',             # Higher TF for trend bias (D1 becomes bias)
+        'sr_tf': 'W1',               # Major S/R levels (W1 becomes S/R)
+        'output_folder': 'TPE_H4',
+        'atr_multiplier': 0.4        # H4 ATR is ~40% of D1 ATR
+    },
+    'NSGA': {
+        'entry_tf': 'D1',
+        'confirmation_tf': 'H4',
+        'bias_tf': 'W1',
+        'sr_tf': 'MN',
+        'output_folder': 'NSGA',
+        'atr_multiplier': 1.0
+    },
+    'NSGA_H4': {
+        'entry_tf': 'H4',
+        'confirmation_tf': 'H1',
+        'bias_tf': 'D1',
+        'sr_tf': 'W1',
+        'output_folder': 'NSGA_H4',
+        'atr_multiplier': 0.4
+    },
+    'VALIDATE': {
+        'entry_tf': 'D1',
+        'confirmation_tf': 'H4',
+        'bias_tf': 'W1',
+        'sr_tf': 'MN',
+        'output_folder': 'VALIDATE',
+        'atr_multiplier': 1.0
+    },
+    'VALIDATE_NSGA': {
+        'entry_tf': 'D1',
+        'confirmation_tf': 'H4',
+        'bias_tf': 'W1',
+        'sr_tf': 'MN',
+        'output_folder': 'VALIDATE_NSGA',
+        'atr_multiplier': 1.0
+    }
+}
+
+# Warm-start anchor params (run_006) and tight search space around them
+RUN_006_PARAMS = {
+    'risk_per_trade_pct': 0.6,
+    'min_confluence_score': 3,
+    'min_quality_factors': 2,
+    'adx_trend_threshold': 18,
+    'adx_range_threshold': 12,
+    'trend_min_confluence': 5,
+    'range_min_confluence': 3,
+    'atr_min_percentile': 50,
+    'atr_trail_multiplier': 1.8,
+    'atr_vol_ratio_range': 0.8,
+    'trail_activation_r': 1.0,
+    'tp1_r_multiple': 1.75,
+    'tp2_r_multiple': 3.0,
+    'tp3_r_multiple': 5.5,
+    'tp1_close_pct': 0.35,
+    'tp2_close_pct': 0.20,
+    'tp3_close_pct': 0.25,
+    'partial_exit_at_1r': True,
+    'partial_exit_pct': 0.80,
+    'december_atr_multiplier': 1.5,
+    'volatile_asset_boost': 1.3,
+    'daily_loss_halt_pct': 3.8,
+    'max_total_dd_warning': 7.5,
+    'consecutive_loss_halt': 9,
+    'use_htf_filter': False,
+    'use_structure_filter': False,
+    'use_confirmation_filter': False,
+    'use_fib_filter': False,
+    'use_displacement_filter': False,
+    'use_candle_rejection': False,
+}
+
+WARM_START_SEARCH_SPACE = {
+    'risk_per_trade_pct': (0.5, 0.8, 0.05),
+    'min_confluence_score': (2, 4, 1),
+    'min_quality_factors': (1, 3, 1),
+    'adx_trend_threshold': (15.0, 22.0, 1.0),
+    'adx_range_threshold': (10.0, 15.0, 1.0),
+    'trend_min_confluence': (4, 6, 1),
+    'range_min_confluence': (2, 4, 1),
+    'atr_min_percentile': (40.0, 60.0, 2.0),
+    'atr_trail_multiplier': (1.5, 2.2, 0.1),
+    'atr_vol_ratio_range': (0.6, 1.0, 0.05),
+    'trail_activation_r': (0.8, 1.2, 0.05),
+    'tp1_r_multiple': (1.5, 2.0, 0.1),
+    'tp2_r_multiple': (2.5, 3.5, 0.1),
+    'tp3_r_multiple': (4.5, 6.5, 0.1),
+    'tp1_close_pct': (0.30, 0.40, 0.01),
+    'tp2_close_pct': (0.15, 0.25, 0.01),
+    'tp3_close_pct': (0.20, 0.30, 0.01),
+    'partial_exit_at_1r': [True],
+    'partial_exit_pct': (0.70, 0.90, 0.02),
+    'december_atr_multiplier': (1.3, 1.7, 0.05),
+    'volatile_asset_boost': (1.1, 1.5, 0.05),
+    'daily_loss_halt_pct': (3.5, 4.0, 0.1),
+    'max_total_dd_warning': (7.0, 8.0, 0.1),
+    'consecutive_loss_halt': (7, 11, 1),
+    'use_htf_filter': [False],
+    'use_structure_filter': [False],
+    'use_confirmation_filter': [False],
+    'use_fib_filter': [False],
+    'use_displacement_filter': [False],
+    'use_candle_rejection': [False],
+}
+
+def get_timeframe_config(mode: str) -> Dict:
+    """
+    Get timeframe configuration for a specific optimization mode.
+    
+    Args:
+        mode: Optimization mode (TPE, TPE_H4, NSGA, NSGA_H4, VALIDATE, etc.)
+    
+    Returns:
+        Dict with entry_tf, confirmation_tf, bias_tf, sr_tf, output_folder, atr_multiplier
+    """
+    if mode not in TIMEFRAME_CONFIG:
+        print(f"[!] Unknown mode '{mode}', defaulting to TPE")
+        return TIMEFRAME_CONFIG['TPE']
+    return TIMEFRAME_CONFIG[mode]
+
+
+def set_optuna_storage(mode: str) -> None:
+    """Configure Optuna storage DB and study name per mode to avoid cross-contamination."""
+    global OPTUNA_DB_PATH, OPTUNA_STUDY_NAME, PROGRESS_LOG_FILE
+    if mode in {"TPE_H4", "NSGA_H4"}:
+        db_file = "regime_adaptive_v2_h4.db"
+    else:
+        db_file = "regime_adaptive_v2_clean.db"
+
+    OPTUNA_DB_PATH = f"sqlite:///{db_file}"
+    OPTUNA_STUDY_NAME = Path(db_file).stem
+    PROGRESS_LOG_FILE = f"ftmo_optimization_progress_{mode.lower()}.txt"
 
 
 def calculate_adx(candles: List[Dict], period: int = 14) -> float:
@@ -851,6 +1005,7 @@ def get_all_trading_assets() -> List[str]:
 def run_full_period_backtest(
     start_date: datetime,
     end_date: datetime,
+    tf_config: Optional[Dict] = None,  # NEW: Timeframe configuration
     min_confluence: int = 3,
     min_quality_factors: int = 1,
     risk_per_trade_pct: float = 0.5,
@@ -936,21 +1091,32 @@ def run_full_period_backtest(
     all_trades: List[Trade] = []
     seen_trades = set()
     
+    # Get timeframe configuration (defaults to D1/H4/W1/MN if not specified)
+    if tf_config is None:
+        tf_config = TIMEFRAME_CONFIG['TPE']
+    
+    entry_tf = tf_config['entry_tf']
+    confirmation_tf = tf_config['confirmation_tf']
+    bias_tf = tf_config['bias_tf']
+    sr_tf = tf_config['sr_tf']
+    atr_multiplier = tf_config['atr_multiplier']
+    
     total_assets = len(assets)
     for idx, symbol in enumerate(assets):
         if idx % 10 == 0:
             print(f"  Processing asset {idx+1}/{total_assets}: {symbol}...", end="\r", flush=True)
         try:
-            d1_candles = load_ohlcv_data(symbol, "D1", start_date - timedelta(days=100), end_date)
-            h4_candles = load_ohlcv_data(symbol, "H4", start_date - timedelta(days=50), end_date)
-            w1_candles = load_ohlcv_data(symbol, "W1", start_date - timedelta(days=365), end_date)
-            mn_candles = load_ohlcv_data(symbol, "MN", start_date - timedelta(days=730), end_date)
+            # Load data based on timeframe configuration
+            entry_candles = load_ohlcv_data(symbol, entry_tf, start_date - timedelta(days=100), end_date)
+            confirmation_candles = load_ohlcv_data(symbol, confirmation_tf, start_date - timedelta(days=50), end_date)
+            bias_candles = load_ohlcv_data(symbol, bias_tf, start_date - timedelta(days=365), end_date)
+            sr_candles = load_ohlcv_data(symbol, sr_tf, start_date - timedelta(days=730), end_date)
             
-            if not d1_candles or len(d1_candles) < 30:
+            if not entry_candles or len(entry_candles) < 30:
                 continue
             
             regime_info = detect_regime(
-                daily_candles=d1_candles,
+                daily_candles=entry_candles,
                 adx_trend_threshold=adx_trend_threshold,
                 adx_range_threshold=adx_range_threshold,
                 use_adx_slope_rising=use_adx_slope_rising,
@@ -1000,12 +1166,12 @@ def run_full_period_backtest(
             )
             
             trades = simulate_trades(
-                candles=d1_candles,
+                candles=entry_candles,
                 symbol=symbol,
                 params=params,
-                h4_candles=h4_candles,
-                weekly_candles=w1_candles,
-                monthly_candles=mn_candles,
+                h4_candles=confirmation_candles,
+                weekly_candles=bias_candles,
+                monthly_candles=sr_candles,
                 include_transaction_costs=True,
             )
             
@@ -1016,10 +1182,10 @@ def run_full_period_backtest(
                     confluence = trade.confluence_score
                     
                     is_valid, range_details = validate_range_mode_entry(
-                        daily_candles=d1_candles,
-                        h4_candles=h4_candles,
-                        weekly_candles=w1_candles,
-                        monthly_candles=mn_candles,
+                        daily_candles=entry_candles,
+                        h4_candles=confirmation_candles,
+                        weekly_candles=bias_candles,
+                        monthly_candles=sr_candles,
                         price=entry_price,
                         direction=direction,
                         confluence_score=confluence,
@@ -1314,9 +1480,11 @@ class OptunaOptimizer:
     Uses persistent SQLite storage for resumability.
     """
     
-    def __init__(self):
+    def __init__(self, tf_config: Optional[Dict] = None, use_warm_start: bool = False):
         self.best_params: Dict = {}
         self.best_score: float = -float('inf')
+        self.tf_config = tf_config if tf_config else TIMEFRAME_CONFIG['TPE']
+        self.use_warm_start = use_warm_start
     
     def _objective(self, trial) -> float:
         """
@@ -1334,66 +1502,96 @@ class OptunaOptimizer:
         # ============================================================================
         # COMPLETE PARAMETER SPACE including TP system, filter toggles, FTMO compliance
         # Goal: Generate 200+ trades in training period + meaningful validation trades
-        params = {
-            # === CORE RISK & CONFLUENCE PARAMETERS ===
-            'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.3, 0.8, step=0.05),
-            'min_confluence_score': trial.suggest_int('min_confluence_score', 2, 4),  # ULTRA-LOOSE: 2-4
-            'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 2),    # LOOSEN: 1-2
-            
-            # === ADX REGIME PARAMETERS ===
-            'adx_trend_threshold': trial.suggest_float('adx_trend_threshold', 15.0, 24.0, step=1.0),
-            'adx_range_threshold': trial.suggest_float('adx_range_threshold', 10.0, 18.0, step=1.0),
-            'trend_min_confluence': trial.suggest_int('trend_min_confluence', 3, 6),
-            'range_min_confluence': trial.suggest_int('range_min_confluence', 2, 5),
-            
-            # === ATR & TRAIL PARAMETERS ===
-            'atr_trail_multiplier': trial.suggest_float('atr_trail_multiplier', 1.2, 3.5, step=0.2),
-            'atr_vol_ratio_range': trial.suggest_float('atr_vol_ratio_range', 0.5, 1.0, step=0.05),
-            'atr_min_percentile': trial.suggest_float('atr_min_percentile', 30.0, 70.0, step=5.0),
-            'trail_activation_r': trial.suggest_float('trail_activation_r', 1.0, 3.0, step=0.2),
-            
-            # === PARTIAL EXIT PARAMETERS ===
-            'partial_exit_at_1r': trial.suggest_categorical('partial_exit_at_1r', [True, False]),
-            'partial_exit_pct': trial.suggest_float('partial_exit_pct', 0.3, 0.8, step=0.05),
-            
-            # === SEASONAL PARAMETERS ===
-            'december_atr_multiplier': trial.suggest_float('december_atr_multiplier', 1.0, 2.0, step=0.1),
-            'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', 1.0, 2.0, step=0.1),
-            
-            # ============================================================================
-            # NEW: TAKE PROFIT R-MULTIPLES (must maintain TP1 < TP2 < TP3)
-            # ============================================================================
-            'tp1_r_multiple': trial.suggest_float('tp1_r_multiple', 1.0, 2.0, step=0.25),
-            'tp2_r_multiple': trial.suggest_float('tp2_r_multiple', 2.0, 4.0, step=0.5),
-            'tp3_r_multiple': trial.suggest_float('tp3_r_multiple', 3.5, 6.0, step=0.5),
-            
-            # ============================================================================
-            # NEW: TAKE PROFIT CLOSE PERCENTAGES (sum should be <= 0.85)
-            # ============================================================================
-            'tp1_close_pct': trial.suggest_float('tp1_close_pct', 0.15, 0.40, step=0.05),
-            'tp2_close_pct': trial.suggest_float('tp2_close_pct', 0.10, 0.30, step=0.05),
-            'tp3_close_pct': trial.suggest_float('tp3_close_pct', 0.10, 0.25, step=0.05),
-            
-            # ============================================================================
-            # NEW: FILTER TOGGLES (all disabled by default for baseline)
-            # ============================================================================
-            # Bundle A: Core Entry Filters
-            'use_htf_filter': trial.suggest_categorical('use_htf_filter', [False]),  # DISABLED: baseline
-            'use_structure_filter': trial.suggest_categorical('use_structure_filter', [False]),  # DISABLED
-            'use_confirmation_filter': trial.suggest_categorical('use_confirmation_filter', [False]),  # DISABLED
-            
-            # Bundle B: Precision Entry Filters
-            'use_fib_filter': trial.suggest_categorical('use_fib_filter', [False]),  # DISABLED: baseline
-            'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', [False]),  # DISABLED
-            'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', [False]),  # DISABLED
-            
-            # ============================================================================
-            # NEW: FTMO COMPLIANCE PARAMETERS
-            # ============================================================================
-            'daily_loss_halt_pct': trial.suggest_float('daily_loss_halt_pct', 3.5, 4.5, step=0.1),
-            'max_total_dd_warning': trial.suggest_float('max_total_dd_warning', 7.0, 9.0, step=0.5),
-            'consecutive_loss_halt': trial.suggest_int('consecutive_loss_halt', 5, 999),  # 999 = disabled
-        }
+        if self.use_warm_start:
+            # Tight search space centered on run_006
+            rp_low, rp_high, rp_step = WARM_START_SEARCH_SPACE['risk_per_trade_pct']
+            mcs_low, mcs_high, mcs_step = WARM_START_SEARCH_SPACE['min_confluence_score']
+            mqf_low, mqf_high, mqf_step = WARM_START_SEARCH_SPACE['min_quality_factors']
+            adx_trend_low, adx_trend_high, adx_trend_step = WARM_START_SEARCH_SPACE['adx_trend_threshold']
+            adx_range_low, adx_range_high, adx_range_step = WARM_START_SEARCH_SPACE['adx_range_threshold']
+            tmc_low, tmc_high, tmc_step = WARM_START_SEARCH_SPACE['trend_min_confluence']
+            rmc_low, rmc_high, rmc_step = WARM_START_SEARCH_SPACE['range_min_confluence']
+            atrmp_low, atrmp_high, atrmp_step = WARM_START_SEARCH_SPACE['atr_min_percentile']
+            atrtm_low, atrtm_high, atrtm_step = WARM_START_SEARCH_SPACE['atr_trail_multiplier']
+            atrvr_low, atrvr_high, atrvr_step = WARM_START_SEARCH_SPACE['atr_vol_ratio_range']
+            tar_low, tar_high, tar_step = WARM_START_SEARCH_SPACE['trail_activation_r']
+            tp1_low, tp1_high, tp1_step = WARM_START_SEARCH_SPACE['tp1_r_multiple']
+            tp2_low, tp2_high, tp2_step = WARM_START_SEARCH_SPACE['tp2_r_multiple']
+            tp3_low, tp3_high, tp3_step = WARM_START_SEARCH_SPACE['tp3_r_multiple']
+            tp1c_low, tp1c_high, tp1c_step = WARM_START_SEARCH_SPACE['tp1_close_pct']
+            tp2c_low, tp2c_high, tp2c_step = WARM_START_SEARCH_SPACE['tp2_close_pct']
+            tp3c_low, tp3c_high, tp3c_step = WARM_START_SEARCH_SPACE['tp3_close_pct']
+            pexit_low, pexit_high, pexit_step = WARM_START_SEARCH_SPACE['partial_exit_pct']
+            decatr_low, decatr_high, decatr_step = WARM_START_SEARCH_SPACE['december_atr_multiplier']
+            vab_low, vab_high, vab_step = WARM_START_SEARCH_SPACE['volatile_asset_boost']
+            dlh_low, dlh_high, dlh_step = WARM_START_SEARCH_SPACE['daily_loss_halt_pct']
+            ddw_low, ddw_high, ddw_step = WARM_START_SEARCH_SPACE['max_total_dd_warning']
+            clh_low, clh_high, clh_step = WARM_START_SEARCH_SPACE['consecutive_loss_halt']
+            params = {
+                'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', rp_low, rp_high, step=rp_step),
+                'min_confluence_score': trial.suggest_int('min_confluence_score', mcs_low, mcs_high, step=mcs_step),
+                'min_quality_factors': trial.suggest_int('min_quality_factors', mqf_low, mqf_high, step=mqf_step),
+                'adx_trend_threshold': trial.suggest_float('adx_trend_threshold', adx_trend_low, adx_trend_high, step=adx_trend_step),
+                'adx_range_threshold': trial.suggest_float('adx_range_threshold', adx_range_low, adx_range_high, step=adx_range_step),
+                'trend_min_confluence': trial.suggest_int('trend_min_confluence', tmc_low, tmc_high, step=tmc_step),
+                'range_min_confluence': trial.suggest_int('range_min_confluence', rmc_low, rmc_high, step=rmc_step),
+                'atr_trail_multiplier': trial.suggest_float('atr_trail_multiplier', atrtm_low, atrtm_high, step=atrtm_step),
+                'atr_vol_ratio_range': trial.suggest_float('atr_vol_ratio_range', atrvr_low, atrvr_high, step=atrvr_step),
+                'atr_min_percentile': trial.suggest_float('atr_min_percentile', atrmp_low, atrmp_high, step=atrmp_step),
+                'trail_activation_r': trial.suggest_float('trail_activation_r', tar_low, tar_high, step=tar_step),
+                'partial_exit_at_1r': trial.suggest_categorical('partial_exit_at_1r', WARM_START_SEARCH_SPACE['partial_exit_at_1r']),
+                'partial_exit_pct': trial.suggest_float('partial_exit_pct', pexit_low, pexit_high, step=pexit_step),
+                'december_atr_multiplier': trial.suggest_float('december_atr_multiplier', decatr_low, decatr_high, step=decatr_step),
+                'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', vab_low, vab_high, step=vab_step),
+                'tp1_r_multiple': trial.suggest_float('tp1_r_multiple', tp1_low, tp1_high, step=tp1_step),
+                'tp2_r_multiple': trial.suggest_float('tp2_r_multiple', tp2_low, tp2_high, step=tp2_step),
+                'tp3_r_multiple': trial.suggest_float('tp3_r_multiple', tp3_low, tp3_high, step=tp3_step),
+                'tp1_close_pct': trial.suggest_float('tp1_close_pct', tp1c_low, tp1c_high, step=tp1c_step),
+                'tp2_close_pct': trial.suggest_float('tp2_close_pct', tp2c_low, tp2c_high, step=tp2c_step),
+                'tp3_close_pct': trial.suggest_float('tp3_close_pct', tp3c_low, tp3c_high, step=tp3c_step),
+                'use_htf_filter': trial.suggest_categorical('use_htf_filter', WARM_START_SEARCH_SPACE['use_htf_filter']),
+                'use_structure_filter': trial.suggest_categorical('use_structure_filter', WARM_START_SEARCH_SPACE['use_structure_filter']),
+                'use_confirmation_filter': trial.suggest_categorical('use_confirmation_filter', WARM_START_SEARCH_SPACE['use_confirmation_filter']),
+                'use_fib_filter': trial.suggest_categorical('use_fib_filter', WARM_START_SEARCH_SPACE['use_fib_filter']),
+                'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', WARM_START_SEARCH_SPACE['use_displacement_filter']),
+                'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', WARM_START_SEARCH_SPACE['use_candle_rejection']),
+                'daily_loss_halt_pct': trial.suggest_float('daily_loss_halt_pct', dlh_low, dlh_high, step=dlh_step),
+                'max_total_dd_warning': trial.suggest_float('max_total_dd_warning', ddw_low, ddw_high, step=ddw_step),
+                'consecutive_loss_halt': trial.suggest_int('consecutive_loss_halt', clh_low, clh_high, step=clh_step),
+            }
+        else:
+            params = {
+                'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.3, 0.8, step=0.05),
+                'min_confluence_score': trial.suggest_int('min_confluence_score', 2, 4),
+                'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 2),
+                'adx_trend_threshold': trial.suggest_float('adx_trend_threshold', 15.0, 24.0, step=1.0),
+                'adx_range_threshold': trial.suggest_float('adx_range_threshold', 10.0, 18.0, step=1.0),
+                'trend_min_confluence': trial.suggest_int('trend_min_confluence', 3, 6),
+                'range_min_confluence': trial.suggest_int('range_min_confluence', 2, 5),
+                'atr_trail_multiplier': trial.suggest_float('atr_trail_multiplier', 1.2, 3.5, step=0.2),
+                'atr_vol_ratio_range': trial.suggest_float('atr_vol_ratio_range', 0.5, 1.0, step=0.05),
+                'atr_min_percentile': trial.suggest_float('atr_min_percentile', 30.0, 70.0, step=5.0),
+                'trail_activation_r': trial.suggest_float('trail_activation_r', 1.0, 3.0, step=0.2),
+                'partial_exit_at_1r': trial.suggest_categorical('partial_exit_at_1r', [True, False]),
+                'partial_exit_pct': trial.suggest_float('partial_exit_pct', 0.3, 0.8, step=0.05),
+                'december_atr_multiplier': trial.suggest_float('december_atr_multiplier', 1.0, 2.0, step=0.1),
+                'volatile_asset_boost': trial.suggest_float('volatile_asset_boost', 1.0, 2.0, step=0.1),
+                'tp1_r_multiple': trial.suggest_float('tp1_r_multiple', 1.0, 2.0, step=0.25),
+                'tp2_r_multiple': trial.suggest_float('tp2_r_multiple', 2.0, 4.0, step=0.5),
+                'tp3_r_multiple': trial.suggest_float('tp3_r_multiple', 3.5, 6.0, step=0.5),
+                'tp1_close_pct': trial.suggest_float('tp1_close_pct', 0.15, 0.40, step=0.05),
+                'tp2_close_pct': trial.suggest_float('tp2_close_pct', 0.10, 0.30, step=0.05),
+                'tp3_close_pct': trial.suggest_float('tp3_close_pct', 0.10, 0.25, step=0.05),
+                'use_htf_filter': trial.suggest_categorical('use_htf_filter', [False]),
+                'use_structure_filter': trial.suggest_categorical('use_structure_filter', [False]),
+                'use_confirmation_filter': trial.suggest_categorical('use_confirmation_filter', [False]),
+                'use_fib_filter': trial.suggest_categorical('use_fib_filter', [False]),
+                'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', [False]),
+                'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', [False]),
+                'daily_loss_halt_pct': trial.suggest_float('daily_loss_halt_pct', 3.5, 4.5, step=0.1),
+                'max_total_dd_warning': trial.suggest_float('max_total_dd_warning', 7.0, 9.0, step=0.5),
+                'consecutive_loss_halt': trial.suggest_int('consecutive_loss_halt', 5, 999),
+            }
         
         # ============================================================================
         # VALIDATION CONSTRAINTS: Reject invalid parameter combinations
@@ -1779,12 +1977,16 @@ class OptunaOptimizer:
         print(f"Storage: {OPTUNA_DB_PATH} (resumable)")
         print(f"{'='*60}")
         
+        sampler = optuna.samplers.TPESampler(
+            seed=42,
+            n_startup_trials=1 if self.use_warm_start else 5,
+        )
         study = optuna.create_study(
             direction='maximize',
             study_name=OPTUNA_STUDY_NAME,
             storage=OPTUNA_DB_PATH,
             load_if_exists=True,
-            sampler=optuna.samplers.TPESampler(seed=42),
+            sampler=sampler,
             pruner=MedianPruner()
         )
         
@@ -1801,6 +2003,11 @@ class OptunaOptimizer:
             except (ValueError, AttributeError) as e:
                 print(f"No valid completed trials yet: {e}")
         
+        # Warm-start: enqueue run_006 parameters as the first trial when requested
+        if self.use_warm_start:
+            print("Warm-start enabled: enqueueing run_006 baseline parameters as Trial #0")
+            study.enqueue_trial(RUN_006_PARAMS)
+
         # Store best value before optimization starts for comparison
         best_value_before_run = previous_best_value
         
@@ -2221,6 +2428,7 @@ def finalize_incomplete_run(optimization_mode: str = "TPE", top_n: int = 5):
     training_trades = run_full_period_backtest(
         start_date=TRAINING_START,
         end_date=TRAINING_END,
+        tf_config=self.tf_config,
         min_confluence=best_params.get('min_confluence_score', 3),
         min_quality_factors=best_params.get('min_quality_factors', 2),
         risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
@@ -2687,6 +2895,7 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
     training_trades = run_full_period_backtest(
         start_date=TRAINING_START,
         end_date=TRAINING_END,
+        tf_config=GLOBAL_TF_CONFIG,
         min_confluence=params['min_confluence_score'],
         min_quality_factors=params['min_quality_factors'],
         risk_per_trade_pct=risk_pct,
@@ -2986,6 +3195,7 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
     training_trades = run_full_period_backtest(
         start_date=val_start,
         end_date=training_end_date,
+        tf_config=GLOBAL_TF_CONFIG,
         min_confluence=min_confluence,
         min_quality_factors=min_quality,
         risk_per_trade_pct=risk_pct,
@@ -3235,16 +3445,23 @@ def main():
     Validation: Most recent 3 months (out-of-sample)
 
     Usage:
-      # Optimization mode (normal)
-      python ftmo_challenge_analyzer.py              # Run/resume optimization (5 trials)
-      python ftmo_challenge_analyzer.py --status     # Check progress without running
-      python ftmo_challenge_analyzer.py --trials 100 # Run 100 trials
-      python ftmo_challenge_analyzer.py --multi      # Use NSGA-II multi-objective optimization
+    # Optimization mode (normal)
+    python ftmo_challenge_analyzer.py              # Run/resume optimization (5 trials)
+    python ftmo_challenge_analyzer.py --status     # Check progress without running
+    python ftmo_challenge_analyzer.py --trials 100 # Run 100 trials
+    python ftmo_challenge_analyzer.py --multi      # Use NSGA-II multi-objective optimization
+      
+    # Timeframe modes (NEW)
+    python ftmo_challenge_analyzer.py --mode TPE      # D1 entries (default)
+    python ftmo_challenge_analyzer.py --mode TPE_H4   # H4 entries (4-hour timeframe)
+    python ftmo_challenge_analyzer.py --mode NSGA     # D1 multi-objective
+    python ftmo_challenge_analyzer.py --mode NSGA_H4  # H4 multi-objective
 
       # Validation mode (test existing params on different periods)
       python ftmo_challenge_analyzer.py --validate --start 2020-01-01 --end 2022-12-31
       python ftmo_challenge_analyzer.py --validate --start 2018-01-01 --end 2019-12-31 --params-file best_params.json
     """
+    global OPTUNA_DB_PATH, OPTUNA_STUDY_NAME, PROGRESS_LOG_FILE
     parser = argparse.ArgumentParser(
         description="FTMO Professional Optimization System - Resumable with ADX Filter"
     )
@@ -3268,6 +3485,18 @@ def main():
         "--single",
         action="store_true",
         help="Use TPE single-objective optimization (default mode)"
+    )
+    parser.add_argument(
+        "--mode",
+        type=str,
+        choices=['TPE', 'TPE_H4', 'NSGA', 'NSGA_H4'],
+        default=None,
+        help="Optimization mode: TPE (D1 entries), TPE_H4 (H4 entries), NSGA (D1 multi-obj), NSGA_H4 (H4 multi-obj)"
+    )
+    parser.add_argument(
+        "--warm-start",
+        action="store_true",
+        help="Warm-start TPE with run_006 baseline and tightened search space (enqueues run_006 as first trial)"
     )
     # === VALIDATION MODE (New) ===
     parser.add_argument(
@@ -3342,12 +3571,37 @@ def main():
         return
 
     n_trials = args.trials
-    use_multi_objective = args.multi
+    
+    # Determine optimization mode (supports new --mode flag)
+    if args.mode:
+        optimization_mode = args.mode
+        use_multi_objective = 'NSGA' in optimization_mode
+    else:
+        # Legacy support: --multi / --single flags
+        use_multi_objective = args.multi
+        optimization_mode = "NSGA" if use_multi_objective else "TPE"
+
+    # Configure Optuna storage per mode to avoid mixing trials
+    set_optuna_storage(optimization_mode)
     
     # Initialize OutputManager for structured logging
-    optimization_mode = "NSGA" if use_multi_objective else "TPE"
     set_output_manager(optimization_mode=optimization_mode)
     output_mgr = get_output_manager()
+    
+    # Get timeframe configuration for this mode
+    tf_config = get_timeframe_config(optimization_mode)
+    
+    # Set global TF config for use by objective functions
+    global GLOBAL_TF_CONFIG
+    GLOBAL_TF_CONFIG = tf_config
+    
+    print(f"\n⏱️  TIMEFRAME CONFIGURATION: {optimization_mode}")
+    print(f"   Entry TF:        {tf_config['entry_tf']} (primary execution)")
+    print(f"   Confirmation TF: {tf_config['confirmation_tf']}")
+    print(f"   Bias TF:         {tf_config['bias_tf']}")
+    print(f"   S/R TF:          {tf_config['sr_tf']}")
+    print(f"   ATR Multiplier:  {tf_config['atr_multiplier']:.2f}x")
+    print(f"   Output Folder:   ftmo_analysis_output/{tf_config['output_folder']}/\n")
     
     print(f"\n{'='*80}")
     print("FTMO PROFESSIONAL OPTIMIZATION SYSTEM - REGIME-ADAPTIVE V2")
@@ -3377,12 +3631,20 @@ def main():
     # ============================================================================
     # MULTI-OBJECTIVE OR SINGLE-OBJECTIVE OPTIMIZATION
     # ============================================================================
+    warm_start_enabled = bool(args.warm_start and not use_multi_objective)
+    if warm_start_enabled:
+        OPTUNA_DB_PATH = "sqlite:///regime_adaptive_v2_clean_warm.db"
+        OPTUNA_STUDY_NAME = "regime_adaptive_v2_clean_warm"
+        PROGRESS_LOG_FILE = "ftmo_optimization_progress_tpe_warm.txt"
+
     if use_multi_objective:
+        if args.warm_start:
+            print("[warm-start] Ignored: warm-start only applies to TPE (single-objective) mode")
         results = run_multi_objective_optimization(n_trials=n_trials)
         study = results.get('study')
         best_params = results.get('best_params', {})
     else:
-        optimizer = OptunaOptimizer()
+        optimizer = OptunaOptimizer(tf_config=tf_config, use_warm_start=warm_start_enabled)
         results = optimizer.run_optimization(n_trials=n_trials)
         study = results.get('study')
         best_params = results.get('best_params', optimizer.best_params)

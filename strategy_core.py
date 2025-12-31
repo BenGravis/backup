@@ -39,6 +39,38 @@ def _get_candle_datetime(candle: Dict) -> Optional[datetime]:
         return None
 
 
+def get_atr_scaling_factor(entry_tf: str) -> float:
+    """
+    Get ATR scaling factor for different entry timeframes.
+    
+    When using H4 or H1 entries instead of D1, ATR values are proportionally
+    smaller. This function provides the multiplier to normalize ATR across
+    timeframes for consistent SL/TP sizing.
+    
+    Args:
+        entry_tf: Entry timeframe ('D1', 'H4', 'H1', etc.)
+    
+    Returns:
+        float: Scaling factor (1.0 for D1, 0.4 for H4, 0.2 for H1)
+    
+    Example:
+        >>> atr_d1 = 100 pips
+        >>> atr_h4 = 40 pips (40% of D1)
+        >>> get_atr_scaling_factor('H4')  # Returns 0.4
+        >>> sl = atr_h4 * 2.0  # Same logic, scaled result
+    """
+    scaling_map = {
+        'D1': 1.0,      # Baseline (daily)
+        'H4': 0.4,      # 4-hour is ~40% of daily
+        'H1': 0.2,      # 1-hour is ~20% of daily
+        'M15': 0.1,     # 15-min is ~10% of daily
+        'W1': 2.5,      # Weekly is ~2.5x daily
+        'MN': 10.0      # Monthly is ~10x daily
+    }
+    
+    return scaling_map.get(entry_tf, 1.0)
+
+
 def _slice_htf_by_timestamp(
     htf_candles: Optional[List[Dict]],
     reference_dt: datetime
