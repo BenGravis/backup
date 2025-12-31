@@ -113,6 +113,15 @@ def load_strategy_params():
         use_structural_framework=data.get("use_structural_framework", False),
         use_displacement_filter=data.get("use_displacement_filter", False),
         use_candle_rejection=data.get("use_candle_rejection", False),
+        # Session filter & graduated risk
+        use_session_filter=data.get("use_session_filter", True),
+        session_start_utc=data.get("session_start_utc", 8),
+        session_end_utc=data.get("session_end_utc", 22),
+        use_graduated_risk=data.get("use_graduated_risk", True),
+        tier1_dd_pct=data.get("tier1_dd_pct", 2.0),
+        tier1_risk_factor=data.get("tier1_risk_factor", 0.67),
+        tier2_dd_pct=data.get("tier2_dd_pct", 3.5),
+        tier3_dd_pct=data.get("tier3_dd_pct", 4.5),
     )
 
 

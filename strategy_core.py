@@ -233,6 +233,23 @@ class StrategyParams:
     candle_pattern_strictness: str = 'moderate'  # Options: 'strict', 'moderate', 'loose'
     atr_vol_ratio_range: float = 0.8  # For Range Mode low-vol filter (0.6-0.9)
     
+    # ============================================================================
+    # SESSION FILTER & GRADUATED RISK MANAGEMENT
+    # These control trading hours and position sizing during drawdowns
+    # ============================================================================
+    
+    # Session Filter: Only trade during London/NY hours
+    use_session_filter: bool = True  # True = skip Asian session (22:00-08:00 UTC)
+    session_start_utc: int = 8  # London open
+    session_end_utc: int = 22  # NY close
+    
+    # Graduated Risk Management (3-tier system)
+    use_graduated_risk: bool = True  # Enable/disable graduated risk management
+    tier1_dd_pct: float = 2.0  # Tier 1: Reduce risk at this daily DD%
+    tier1_risk_factor: float = 0.67  # Risk multiplier (0.6% -> 0.4%)
+    tier2_dd_pct: float = 3.5  # Tier 2: Cancel pending at this daily DD%
+    tier3_dd_pct: float = 4.5  # Tier 3: Emergency close at this daily DD%
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert parameters to dictionary."""
         return {
@@ -298,6 +315,15 @@ class StrategyParams:
             "fib_zone_type": self.fib_zone_type,
             "candle_pattern_strictness": self.candle_pattern_strictness,
             "atr_vol_ratio_range": self.atr_vol_ratio_range,
+            # SESSION FILTER & GRADUATED RISK MANAGEMENT
+            "use_session_filter": self.use_session_filter,
+            "session_start_utc": self.session_start_utc,
+            "session_end_utc": self.session_end_utc,
+            "use_graduated_risk": self.use_graduated_risk,
+            "tier1_dd_pct": self.tier1_dd_pct,
+            "tier1_risk_factor": self.tier1_risk_factor,
+            "tier2_dd_pct": self.tier2_dd_pct,
+            "tier3_dd_pct": self.tier3_dd_pct,
         }
     
     @classmethod
@@ -379,6 +405,24 @@ class Trade:
             "exit_reason": self.exit_reason,
             "confluence_score": self.confluence_score,
         }
+
+
+def _is_tradable_session(dt: datetime, params: StrategyParams) -> bool:
+    """
+    Check if timestamp is during tradable session (London/NY hours).
+    
+    Args:
+        dt: Datetime to check (should be UTC)
+        params: Strategy parameters with session settings
+    
+    Returns:
+        True if during tradable session, False if in Asian session (skip)
+    """
+    if not params.use_session_filter:
+        return True  # Filter disabled, all hours tradable
+    
+    hour_utc = dt.hour
+    return params.session_start_utc <= hour_utc < params.session_end_utc
 
 
 def _atr(candles: List[Dict], period: int = 14) -> float:
@@ -2755,6 +2799,12 @@ def simulate_trades(
                 if bar_idx > pending["wait_until_bar"]:
                     entered_signal_ids.add(sig_id)
                     continue
+                
+                # Session filter: Skip entries during Asian session (22:00-08:00 UTC)
+                if params.use_session_filter:
+                    entry_dt = _get_candle_datetime(c)
+                    if entry_dt and not _is_tradable_session(entry_dt, params):
+                        continue  # Skip this bar, but don't expire the signal
                 
                 theoretical_entry = sig.entry
                 direction = sig.direction

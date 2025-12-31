@@ -5,9 +5,17 @@ Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accoun
 - **Live Bot** (`main_live_bot.py`): Runs on Windows VM with MT5 installed
 - **Optimizer** (`ftmo_challenge_analyzer.py`): Runs anywhere (Replit/local) - no MT5 required
 
+### Multi-Broker Support (NEW)
+The bot now supports multiple brokers for testing and production:
+- **Forex.com Demo** ($50K): For testing before 5ers live
+- **5ers Live** ($60K): Production trading
+
+Set `BROKER_TYPE=forexcom_demo` or `BROKER_TYPE=fiveers_live` in `.env`
+
 ## Architecture & Data Flow
 
 ```
+broker_config.py                 ← Multi-broker configuration (Forex.com, 5ers)
 params/optimization_config.json  ← Optimization mode settings (multi-obj, ADX, etc.)
 params/current_params.json       ← Optimized strategy parameters
          ↑                            ↓
@@ -21,15 +29,27 @@ data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
 | File | Purpose |
 |------|---------|
 | `strategy_core.py` | Trading strategy logic - 7 Confluence Pillars, regime detection |
+| `broker_config.py` | Multi-broker configuration (Forex.com, 5ers) |
 | `params/params_loader.py` | Load/save optimized parameters from JSON |
 | `params/optimization_config.py` | Unified optimization config (DB path, mode toggles) |
 | `config.py` | Account settings, CONTRACT_SPECS (pip values), tradable symbols |
 | `ftmo_config.py` | 5ers challenge rules, risk limits, TP/SL settings |
-| `symbol_mapping.py` | OANDA ↔ 5ers symbol conversion (`EUR_USD` → `EURUSD`) |
+| `symbol_mapping.py` | Multi-broker symbol conversion (`EUR_USD` → broker-specific) |
 | `tradr/mt5/client.py` | MT5 API wrapper (Windows only) |
 | `tradr/risk/manager.py` | 5ers drawdown tracking, pre-trade risk checks |
 
 ## Critical Conventions
+
+### Multi-Broker Symbol Mapping (Dec 31, 2025)
+Symbol mapping is now broker-aware:
+```python
+from symbol_mapping import get_broker_symbol, get_internal_symbol
+
+# Convert internal -> broker
+broker_sym = get_broker_symbol("EUR_USD", "forexcom")  # -> "EURUSD"
+broker_sym = get_broker_symbol("SPX500_USD", "fiveers")  # -> "US500.cash"
+broker_sym = get_broker_symbol("SPX500_USD", "forexcom")  # -> "US500"
+```
 
 ### Recent Bug Fixes (Dec 28, 2025)
 **IMPORTANT**: The following bugs were recently fixed - avoid reintroducing:

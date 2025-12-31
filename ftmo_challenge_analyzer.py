@@ -1057,6 +1057,17 @@ def run_full_period_backtest(
     daily_loss_halt_pct: float = 4.0,
     max_total_dd_warning: float = 8.0,
     consecutive_loss_halt: int = 999,  # 999 = disabled
+    # ============================================================================
+    # NEW: SESSION FILTER & GRADUATED RISK MANAGEMENT
+    # ============================================================================
+    use_session_filter: bool = True,  # Only trade during London/NY (08:00-22:00 UTC)
+    session_start_utc: int = 8,
+    session_end_utc: int = 22,
+    use_graduated_risk: bool = True,  # 3-tier graduated risk management
+    tier1_dd_pct: float = 2.0,  # Reduce risk at 2% daily DD
+    tier1_risk_factor: float = 0.67,  # Risk multiplier (0.6% -> 0.4%)
+    tier2_dd_pct: float = 3.5,  # Cancel pending at 3.5% daily DD
+    tier3_dd_pct: float = 4.5,  # Emergency close at 4.5% daily DD
 ) -> List[Trade]:
     """
     Run backtest for a given period with Regime-Adaptive V2 filtering.
@@ -1163,6 +1174,15 @@ def run_full_period_backtest(
                 atr_trail_multiplier=atr_trail_multiplier,
                 partial_exit_at_1r=partial_exit_at_1r,
                 partial_exit_pct=partial_exit_pct,
+                # NEW: Session filter & graduated risk
+                use_session_filter=use_session_filter,
+                session_start_utc=session_start_utc,
+                session_end_utc=session_end_utc,
+                use_graduated_risk=use_graduated_risk,
+                tier1_dd_pct=tier1_dd_pct,
+                tier1_risk_factor=tier1_risk_factor,
+                tier2_dd_pct=tier2_dd_pct,
+                tier3_dd_pct=tier3_dd_pct,
             )
             
             trades = simulate_trades(
