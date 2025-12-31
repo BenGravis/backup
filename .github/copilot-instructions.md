@@ -1,7 +1,7 @@
-# MT5 FTMO Trading Bot - AI Agent Instructions
+# 5ers 60K High Stakes Trading Bot - AI Agent Instructions
 
 ## Project Overview
-Automated MetaTrader 5 trading bot for FTMO 200K Challenge accounts. Two-environment architecture:
+Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accounts. Two-environment architecture:
 - **Live Bot** (`main_live_bot.py`): Runs on Windows VM with MT5 installed
 - **Optimizer** (`ftmo_challenge_analyzer.py`): Runs anywhere (Replit/local) - no MT5 required
 
@@ -24,17 +24,17 @@ data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
 | `params/params_loader.py` | Load/save optimized parameters from JSON |
 | `params/optimization_config.py` | Unified optimization config (DB path, mode toggles) |
 | `config.py` | Account settings, CONTRACT_SPECS (pip values), tradable symbols |
-| `ftmo_config.py` | FTMO challenge rules, risk limits, TP/SL settings |
-| `symbol_mapping.py` | OANDA ↔ FTMO symbol conversion (`EUR_USD` → `EURUSD`) |
+| `ftmo_config.py` | 5ers challenge rules, risk limits, TP/SL settings |
+| `symbol_mapping.py` | OANDA ↔ 5ers symbol conversion (`EUR_USD` → `EURUSD`) |
 | `tradr/mt5/client.py` | MT5 API wrapper (Windows only) |
-| `tradr/risk/manager.py` | FTMO drawdown tracking, pre-trade risk checks |
+| `tradr/risk/manager.py` | 5ers drawdown tracking, pre-trade risk checks |
 
 ## Critical Conventions
 
 ### Recent Bug Fixes (Dec 28, 2025)
 **IMPORTANT**: The following bugs were recently fixed - avoid reintroducing:
 
-1. **FTMOComplianceTracker**: Implemented compliance tracking class with daily DD (4.5%), total DD (9%), streak halt (999)
+1. **ComplianceTracker**: Implemented compliance tracking class with daily DD (4.5%), total DD (9%), streak halt (999)
    - Metrics-only mode for backtesting (no trade filtering)
    - Returns (trades, compliance_report) tuple from run_full_period_backtest
    - Hard constraints: TP ordering (tp1<tp2<tp3), close-sum ≤85%, ADX threshold ordering
@@ -134,11 +134,12 @@ tail -f ftmo_analysis_output/TPE/optimization.log  # Monitor TPE progress
 tail -f ftmo_analysis_output/NSGA/optimization.log # Monitor NSGA-II progress
 ```
 
-## FTMO Challenge Rules (hardcoded limits)
+## 5ers Challenge Rules (hardcoded limits)
 - Max daily loss: **5%** (halt at 4.2%)
 - Max total drawdown: **10%** (emergency at 7%)
-- Phase 1 target: **10%**, Phase 2: **5%**
-- Risk per trade: typically 0.3-1.0% (from params)
+- Step 1 target: **8%**, Step 2: **5%**
+- Min profitable days: **3**
+- Risk per trade: 0.6% = $360 per R (on 60K account)
 
 ## File Locations
 - Historical data: `data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv`

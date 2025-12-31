@@ -1,6 +1,6 @@
-"""
-FTMO 200K Configuration - Ultra-Conservative Settings
-Trading parameters optimized for FTMO 200K challenge with maximum safety
+"""5ers 60K High Stakes Configuration - Ultra-Conservative Settings
+
+Trading parameters optimized for 5ers 60K High Stakes challenge with maximum safety
 """
 
 from dataclasses import dataclass, field
@@ -8,19 +8,19 @@ from typing import List, Tuple, Dict
 
 
 @dataclass
-class FTMO200KConfig:
-    """FTMO 200K Challenge Configuration - Ultra-Conservative Approach"""
+class Fiveers60KConfig:
+    """5ers 60K High Stakes Challenge Configuration - Ultra-Conservative Approach"""
 
     # === ACCOUNT SETTINGS ===
-    account_size: float = 200000.0  # FTMO 200K challenge account size
+    account_size: float = 60000.0  # 5ers 60K High Stakes challenge account size
     account_currency: str = "USD"
 
-    # === FTMO RULES ===
-    max_daily_loss_pct: float = 5.0  # Maximum daily loss (5% of starting balance)
-    max_total_drawdown_pct: float = 10.0  # Maximum total drawdown (10%)
-    phase1_target_pct: float = 10.0  # Phase 1 profit target (10%)
-    phase2_target_pct: float = 5.0  # Phase 2 profit target (5%)
-    min_trading_days: int = 4  # Minimum 4 trading days required
+    # === 5ERS RULES ===
+    max_daily_loss_pct: float = 5.0  # Maximum daily loss (5% = $3,000)
+    max_total_drawdown_pct: float = 10.0  # Maximum total drawdown (10% = $6,000)
+    phase1_target_pct: float = 8.0  # Phase 1 profit target (8% = $4,800)
+    phase2_target_pct: float = 5.0  # Phase 2 profit target (5% = $3,000)
+    min_profitable_days: int = 3  # Minimum 3 profitable trading days required
 
     # === SAFETY BUFFERS (Ultra-Conservative) ===
     daily_loss_warning_pct: float = 2.5  # Warning at 2.5% daily loss
@@ -30,7 +30,7 @@ class FTMO200KConfig:
     total_dd_emergency_pct: float = 7.0  # Emergency mode at 7% total DD
 
     # === POSITION SIZING (Match /backtest command) ===
-    risk_per_trade_pct: float = 1.0  # OPTIMIZED: Increased from 0.5% to 1.0% for challenge completion (1% = $2000 per trade on 200K)
+    risk_per_trade_pct: float = 0.6  # 0.6% risk per trade ($360 per R on 60K account)
     max_risk_aggressive_pct: float = 1.5  # Aggressive mode: 1.5%
     max_risk_normal_pct: float = 0.75  # Normal mode: 0.75%
     max_risk_conservative_pct: float = 0.5  # Conservative mode: 0.5%
@@ -177,11 +177,11 @@ class FTMO200KConfig:
     def __post_init__(self):
         """Validate configuration parameters"""
         if self.risk_per_trade_pct > 1.5:  # Allow optimizer some room
-            raise ValueError("Risk per trade cannot exceed 1.5% for FTMO 200K")
+            raise ValueError("Risk per trade cannot exceed 1.5% for 5ers 60K")
         if self.max_daily_loss_pct > 5.0:
-            raise ValueError("Max daily loss cannot exceed 5% for FTMO")
+            raise ValueError("Max daily loss cannot exceed 5% for 5ers")
         if self.max_total_drawdown_pct > 10.0:
-            raise ValueError("Max total drawdown cannot exceed 10% for FTMO")
+            raise ValueError("Max total drawdown cannot exceed 10% for 5ers")
         if self.max_concurrent_trades > 10:
             raise ValueError("Max concurrent trades should not exceed 10 for safety")
 
@@ -452,10 +452,12 @@ class FTMO200KConfig:
 
 
 # Global configuration instance
-FTMO_CONFIG = FTMO200KConfig()
+FIVEERS_CONFIG = Fiveers60KConfig()
 
-# Backwards compatibility alias
-FTMO10KConfig = FTMO200KConfig
+# Backwards compatibility aliases
+FTMO_CONFIG = FIVEERS_CONFIG
+FTMO200KConfig = Fiveers60KConfig
+FTMO10KConfig = Fiveers60KConfig
 
 
 # Pip sizes for different asset classes

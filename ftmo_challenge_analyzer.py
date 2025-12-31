@@ -136,7 +136,7 @@ TRAINING_QUARTERS = {
     "2024_Q3": (datetime(2024, 7, 1), datetime(2024, 9, 30)),
 }
 
-ACCOUNT_SIZE = 200000.0
+ACCOUNT_SIZE = 60000.0  # 5ers 60K High Stakes
 
 DEFAULT_EXCLUDED_ASSETS: List[str] = []
 
@@ -390,14 +390,14 @@ def check_adx_filter(candles: List[Dict], min_adx: float = 25.0) -> Tuple[bool, 
 
 @dataclass
 class FTMOComplianceTracker:
-    """Track FTMO compliance during backtest simulation."""
+    """Track 5ers/FTMO compliance during backtest simulation."""
 
-    account_size: float = 200000.0
-    starting_balance: float = 200000.0
-    current_balance: float = 200000.0
-    highest_balance: float = 200000.0
-    lowest_balance: float = 200000.0
-    day_start_balance: float = 200000.0
+    account_size: float = 60000.0
+    starting_balance: float = 60000.0
+    current_balance: float = 60000.0
+    highest_balance: float = 60000.0
+    lowest_balance: float = 60000.0
+    day_start_balance: float = 60000.0
     current_day: Optional[date] = None
 
     trades_skipped_daily: int = 0
@@ -406,7 +406,7 @@ class FTMOComplianceTracker:
     consecutive_losses: int = 0
     halted_reason: Optional[str] = None
 
-    # FTMO Limits
+    # 5ers Limits (same as FTMO)
     daily_loss_halt_pct: float = 4.5
     total_dd_halt_pct: float = 9.0
     consecutive_loss_halt: int = 999
@@ -846,10 +846,10 @@ def run_monte_carlo_analysis(trades: List[Any], num_simulations: int = 1000) -> 
     return results
 
 
-def simulate_ftmo_challenge(trades: List[Any], start_month: str = "2024-01", risk_pct: float = 0.5) -> Dict:
-    """Simulate an FTMO challenge starting from a specific month."""
+def simulate_ftmo_challenge(trades: List[Any], start_month: str = "2024-01", risk_pct: float = 0.6) -> Dict:
+    """Simulate a 5ers/FTMO challenge starting from a specific month."""
 
-    account_size = 200000.0
+    account_size = 60000.0  # 5ers 60K High Stakes
     balance = account_size
     lowest_balance = account_size
     highest_balance = account_size
@@ -2696,10 +2696,10 @@ def generate_summary_txt(
             lines.append(f"  {k}: {v}")
     
     # Calculate account size and risk per trade for USD conversion
-    account_size = 200000.0  # FTMO 200K account
-    # risk_per_trade_pct is stored as 0.5 meaning 0.5%, so divide by 100
-    risk_per_trade_pct = best_params.get('risk_per_trade_pct', 0.5)
-    risk_per_trade_decimal = risk_per_trade_pct / 100  # 0.5% -> 0.005
+    account_size = 60000.0  # 5ers 60K High Stakes account
+    # risk_per_trade_pct is stored as 0.6 meaning 0.6%, so divide by 100
+    risk_per_trade_pct = best_params.get('risk_per_trade_pct', 0.6)
+    risk_per_trade_decimal = risk_per_trade_pct / 100  # 0.6% -> 0.006
     
     training_profit_usd = training_stats['total_r'] * risk_per_trade_decimal * account_size
     validation_profit_usd = validation_stats['total_r'] * risk_per_trade_decimal * account_size
@@ -3319,7 +3319,7 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
             total_r = sum(getattr(t, 'rr', 0) for t in trades)
             wins = sum(1 for t in trades if getattr(t, 'rr', 0) > 0)
             win_rate = (wins / len(trades) * 100) if trades else 0
-            profit_usd = total_r * (risk_pct / 100) * 200000
+            profit_usd = total_r * (risk_pct / 100) * 60000  # 5ers 60K
             print(f"\n{period_name_str} ({start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}):")
             print(f"   Trades: {len(trades)}")
             print(f"   Total R: {total_r:+.2f}")

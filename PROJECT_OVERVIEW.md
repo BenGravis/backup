@@ -1,4 +1,4 @@
-# PROJECT OVERVIEW - FTMO 200K Trading Bot
+# PROJECT OVERVIEW - 5ers 60K High Stakes Trading Bot
 
 **START HERE** - This is the first file to read to understand the entire project.
 
@@ -6,11 +6,14 @@
 
 ## 1. Project Summary
 
-This is an automated **MetaTrader 5 Trading Bot** designed specifically for **FTMO 200K Challenge accounts**, paired with a **Walk-Forward Optimization System**.
+This is an automated **MetaTrader 5 Trading Bot** designed specifically for **5ers 60K High Stakes Challenge accounts**, paired with a **Walk-Forward Optimization System**.
 
-- **Account Size**: $200,000 USD
+- **Account Size**: $60,000 USD
+- **Step 1 Target**: 8% ($4,800)
+- **Step 2 Target**: 5% ($3,000)
+- **Min Profitable Days**: 3
 - **Platform**: MetaTrader 5 (MT5)
-- **Strategy**: 6 Confluence Pillars (multi-timeframe analysis, Liquidity pillar deprecated)
+- **Strategy**: 6 Confluence Pillars (multi-timeframe analysis)
 - **Optimization**: Parameter optimization saves to JSON config (no source code mutation)
 
 ### Post-Fix Status: All Critical Issues Resolved
@@ -192,18 +195,18 @@ Each trade setup is scored 0-6 based on how many pillars align:
 | File | Purpose |
 |------|---------|
 | `config.py` | General configuration and asset lists |
-| `challenge_rules.py` | FTMO challenge rule definitions |
-| `symbol_mapping.py` | Symbol format conversion (OANDA ↔ FTMO/MT5) |
+| `challenge_rules.py` | 5ers challenge rule definitions |
+| `symbol_mapping.py` | Symbol format conversion (OANDA ↔ 5ers/MT5) |
 
 ---
 
 ## 6. Position Sizing (FIXED)
 
 ### Account Parameters
-- **Account Size**: $200,000 USD
-- **Risk Per Trade**: 0.5-1.0% ($1,000-$2,000 per trade)
-- **Max Daily Loss**: 5% ($10,000)
-- **Max Total Drawdown**: 10% ($20,000)
+- **Account Size**: $60,000 USD
+- **Risk Per Trade**: 0.6% ($360 per trade)
+- **Max Daily Loss**: 5% ($3,000)
+- **Max Total Drawdown**: 10% ($6,000)
 
 ### Lot Size Calculation (Symbol-Specific Pip Values)
 

@@ -1,4 +1,4 @@
-# MT5 FTMO Trading Bot - Project Status Report
+# 5ers 60K High Stakes Trading Bot - Project Status Report
 **Date**: 2025-12-31  
 **Status**: ✅ **PRODUCTION READY** - Validated across 12 years (2014-2025)
 
@@ -6,20 +6,21 @@
 
 ## 📊 Executive Summary
 
-The mt5bot-new project is a **professional-grade automated trading system** for FTMO 200K Challenge accounts. Full 12-year validation (2014-2025) confirms production readiness with **~48.6% win rate** and strict FTMO compliance.
+The mt5bot-new project is a **professional-grade automated trading system** for **5ers 60K High Stakes** Challenge accounts. Full 12-year validation (2014-2025) confirms production readiness with **~48.6% win rate** and strict compliance.
 
 ### ✅ Achievements (Dec 31, 2025)
-- **12-year robustness**: +2,766.3R, $3,319,550, ~48.6% WR across 4 periods
-  - 2014-2016: +672.7R, $807,219, 48.7% WR
-  - 2017-2019: +679.2R, $815,002, 48.7% WR
-  - 2020-2022: +662.4R, $794,919, 48.3% WR
-  - 2023-2025: +752.0R, $902,410, 48.8% WR
-- **FTMO speed**: Step 1 (10%) in 18 dagen; Step 2 (5%) in 10 dagen; total 28 dagen
-- **FTMO compliance**: Daily DD <3.8% (limit 5%); Total DD <3% (limit 10%); risk 0.6% per trade
+- **12-year robustness**: +2,766.3R total, ~48.6% WR across 4 periods
+  - 2014-2016: +672.7R, $242,166 (60K), 48.7% WR
+  - 2017-2019: +679.2R, $244,500 (60K), 48.7% WR
+  - 2020-2022: +662.4R, $238,476 (60K), 48.3% WR
+  - 2023-2025: +752.0R, $270,720 (60K), 48.8% WR
+- **5ers speed**: Step 1 (8% = $4,800) in ~18 dagen; Step 2 (5% = $3,000) in ~10 dagen; total ~28 dagen
+- **Compliance**: Daily DD <3.8% (limit 5%); Total DD <3% (limit 10%); risk 0.6% = $360/trade
+- **5ers requirement**: 3 min profitable days (strategy generates ~68 trades/month = easy compliance)
 - **Params locked**: `best_params.json` and `params/current_params.json` synced (0.6% risk, TP ladder 1.7/2.6/5.4R, partials 70% at 1R)
 
 ### ✅ Previous Fixes (Dec 28-29, 2025)
-- **FTMOComplianceTracker**: Implemented FTMO compliance tracking with daily DD (4.5%), total DD (9%), and streak halt metrics
+- **ComplianceTracker**: Implemented compliance tracking with daily DD (4.5%), total DD (9%), and streak halt metrics
 - **Parameter expansion**: Expanded search space from 17→25+ parameters (TP multiples, close percentages, 6 filter toggles)
 - **Filter toggles**: Added 6 optimizable filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)
 - **TP scaling**: Added tp1/2/3_r_multiple and tp1/2/3_close_pct parameters for dynamic profit taking

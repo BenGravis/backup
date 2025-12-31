@@ -1,6 +1,6 @@
-# MT5 FTMO Trading Bot
+# 5ers 60K High Stakes Trading Bot
 
-Automated MetaTrader 5 trading bot for FTMO 200K Challenge accounts. Uses a 6-Pillar Confluence system with multi-timeframe analysis (Liquidity pillar deprecated). Validated on 12 years (2014-2025) and production-ready.
+Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accounts. Uses a 6-Pillar Confluence system with multi-timeframe analysis. Validated on 12 years (2014-2025) and production-ready.
 
 ## Quick Start
 
@@ -30,23 +30,24 @@ python main_live_bot.py
 ## Final Results (Dec 31, 2025)
 
 ### 12-Year Robustness (2014-2025)
-| Period | Total R | Profit | Win Rate |
-|--------|---------|--------|----------|
-| 2014-2016 | +672.7R | $807,219 | 48.7% |
-| 2017-2019 | +679.2R | $815,002 | 48.7% |
-| 2020-2022 | +662.4R | $794,919 | 48.3% |
-| 2023-2025 | +752.0R | $902,410 | 48.8% |
-| **Total** | **+2,766.3R** | **$3,319,550** | **~48.6%** |
+| Period | Total R | Profit (60K) | Win Rate |
+|--------|---------|--------------|----------|
+| 2014-2016 | +672.7R | $242,166 | 48.7% |
+| 2017-2019 | +679.2R | $244,500 | 48.7% |
+| 2020-2022 | +662.4R | $238,476 | 48.3% |
+| 2023-2025 | +752.0R | $270,720 | 48.8% |
+| **Total** | **+2,766.3R** | **$995,862** | **~48.6%** |
 
-### FTMO Challenge Speed (200K account)
-- Step 1 (10% target): 18 dagen
-- Step 2 (5% target): 10 dagen
-- **Totaal**: 28 dagen
+### 5ers Challenge Speed (60K account)
+- Step 1 (8% target = $4,800): ~18 dagen
+- Step 2 (5% target = $3,000): ~10 dagen
+- **Totaal**: ~28 dagen
 
-### FTMO Compliance
+### Compliance Metrics
 - Max daily DD <3.8% (limit 5%)
 - Max total DD <3% (limit 10%)
-- Risk per trade: 0.6%
+- Risk per trade: 0.6% = $360 per R
+- Min profitable days: 3 (5ers requirement)
 
 ## Recent Updates (Dec 29, 2025)
 

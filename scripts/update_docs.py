@@ -538,8 +538,8 @@ trades = run_full_period_backtest(
 ```python
 from tradr.risk.manager import RiskManager
 
-rm = RiskManager(account_size=200000)
-can_trade, reason = rm.can_trade(symbol="EURUSD", risk_pct=0.5)
+rm = RiskManager(account_size=60000)
+can_trade, reason = rm.can_trade(symbol="EURUSD", risk_pct=0.6)
 ```
 
 ---

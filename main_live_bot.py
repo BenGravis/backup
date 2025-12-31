@@ -96,7 +96,7 @@ class PendingSetup:
 from config import SIGNAL_MODE, MIN_CONFLUENCE_STANDARD, MIN_CONFLUENCE_AGGRESSIVE
 from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
 from symbol_mapping import ALL_TRADABLE_OANDA, ftmo_to_oanda, oanda_to_ftmo
-from ftmo_config import FTMO_CONFIG
+from ftmo_config import FIVEERS_CONFIG
 
 
 MT5_SERVER = os.getenv("MT5_SERVER", "")
@@ -263,19 +263,19 @@ class LiveTradingBot:
         Record today as a trading day when a trade is executed.
         Called after successful order placement/fill.
         """
-        from ftmo_config import FTMO_CONFIG
+        from ftmo_config import FIVEERS_CONFIG
         today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if today not in self.trading_days:
             self.trading_days.add(today)
             self._save_trading_days()
-            log.info(f"Recorded trading day: {today} (Total: {len(self.trading_days)}/{FTMO_CONFIG.min_trading_days} required)")
+            log.info(f"Recorded trading day: {today} (Total: {len(self.trading_days)}/{FIVEERS_CONFIG.min_trading_days} required)")
     
     def check_trading_days_warning(self) -> bool:
         """
         Check if we're at risk of not meeting minimum trading days requirement.
         Returns True if warning should be shown (not enough days traded relative to time remaining).
         """
-        from ftmo_config import FTMO_CONFIG
+        from ftmo_config import FIVEERS_CONFIG
         
         if self.challenge_end_date is None:
             return False
@@ -283,13 +283,13 @@ class LiveTradingBot:
         now = datetime.now(timezone.utc)
         days_remaining = (self.challenge_end_date - now).days
         trading_days_count = len(self.trading_days)
-        days_needed = FTMO_CONFIG.min_trading_days - trading_days_count
+        days_needed = FIVEERS_CONFIG.min_trading_days - trading_days_count
         
         if days_needed <= 0:
             return False
         
         if days_remaining <= days_needed + 2:
-            log.warning(f"TRADING DAYS WARNING: {trading_days_count}/{FTMO_CONFIG.min_trading_days} days traded, "
+            log.warning(f"TRADING DAYS WARNING: {trading_days_count}/{FIVEERS_CONFIG.min_trading_days} days traded, "
                        f"{days_remaining} days remaining in challenge. Need {days_needed} more trading days!")
             return True
         
@@ -297,17 +297,17 @@ class LiveTradingBot:
     
     def get_trading_days_status(self) -> Dict:
         """Get current trading days status for reporting."""
-        from ftmo_config import FTMO_CONFIG
+        from ftmo_config import FIVEERS_CONFIG
         
         trading_days_count = len(self.trading_days)
-        days_needed = max(0, FTMO_CONFIG.min_trading_days - trading_days_count)
+        days_needed = max(0, FIVEERS_CONFIG.min_trading_days - trading_days_count)
         
         status = {
             "trading_days_count": trading_days_count,
-            "min_required": FTMO_CONFIG.min_trading_days,
+            "min_required": FIVEERS_CONFIG.min_trading_days,
             "days_needed": days_needed,
             "trading_days": sorted(list(self.trading_days)),
-            "requirement_met": trading_days_count >= FTMO_CONFIG.min_trading_days,
+            "requirement_met": trading_days_count >= FIVEERS_CONFIG.min_trading_days,
         }
         
         if self.challenge_end_date:
@@ -404,28 +404,28 @@ class LiveTradingBot:
             log.info(f"Risk manager synced: Balance=${balance:,.2f}, Equity=${equity:,.2f}")
             
             if CHALLENGE_MODE:
-                from ftmo_config import FTMO_CONFIG
-                log.info("Initializing Challenge Risk Manager (FTMO 200K COMPLIANT)...")
+                from ftmo_config import FIVEERS_CONFIG
+                log.info("Initializing Challenge Risk Manager (5ers 60K COMPLIANT)...")
                 config = ChallengeConfig(
                     enabled=True,
                     phase=self.risk_manager.state.phase,
                     account_size=balance,
-                    max_risk_per_trade_pct=FTMO_CONFIG.risk_per_trade_pct,
-                    max_cumulative_risk_pct=FTMO_CONFIG.max_cumulative_risk_pct,
-                    max_concurrent_trades=FTMO_CONFIG.max_concurrent_trades,
-                    max_pending_orders=FTMO_CONFIG.max_pending_orders,
-                    tp1_close_pct=FTMO_CONFIG.tp1_close_pct,
-                    tp2_close_pct=FTMO_CONFIG.tp2_close_pct,
-                    tp3_close_pct=FTMO_CONFIG.tp3_close_pct,
-                    daily_loss_warning_pct=FTMO_CONFIG.daily_loss_warning_pct,
-                    daily_loss_reduce_pct=FTMO_CONFIG.daily_loss_reduce_pct,
-                    daily_loss_halt_pct=FTMO_CONFIG.daily_loss_halt_pct,
-                    total_dd_warning_pct=FTMO_CONFIG.total_dd_warning_pct,
-                    total_dd_emergency_pct=FTMO_CONFIG.total_dd_emergency_pct,
-                    protection_loop_interval_sec=FTMO_CONFIG.protection_loop_interval_sec,
-                    pending_order_max_age_hours=FTMO_CONFIG.pending_order_expiry_hours,
-                    profit_ultra_safe_threshold_pct=FTMO_CONFIG.profit_ultra_safe_threshold_pct,
-                    ultra_safe_risk_pct=FTMO_CONFIG.ultra_safe_risk_pct,
+                    max_risk_per_trade_pct=FIVEERS_CONFIG.risk_per_trade_pct,
+                    max_cumulative_risk_pct=FIVEERS_CONFIG.max_cumulative_risk_pct,
+                    max_concurrent_trades=FIVEERS_CONFIG.max_concurrent_trades,
+                    max_pending_orders=FIVEERS_CONFIG.max_pending_orders,
+                    tp1_close_pct=FIVEERS_CONFIG.tp1_close_pct,
+                    tp2_close_pct=FIVEERS_CONFIG.tp2_close_pct,
+                    tp3_close_pct=FIVEERS_CONFIG.tp3_close_pct,
+                    daily_loss_warning_pct=FIVEERS_CONFIG.daily_loss_warning_pct,
+                    daily_loss_reduce_pct=FIVEERS_CONFIG.daily_loss_reduce_pct,
+                    daily_loss_halt_pct=FIVEERS_CONFIG.daily_loss_halt_pct,
+                    total_dd_warning_pct=FIVEERS_CONFIG.total_dd_warning_pct,
+                    total_dd_emergency_pct=FIVEERS_CONFIG.total_dd_emergency_pct,
+                    protection_loop_interval_sec=FIVEERS_CONFIG.protection_loop_interval_sec,
+                    pending_order_max_age_hours=FIVEERS_CONFIG.pending_order_expiry_hours,
+                    profit_ultra_safe_threshold_pct=FIVEERS_CONFIG.profit_ultra_safe_threshold_pct,
+                    ultra_safe_risk_pct=FIVEERS_CONFIG.ultra_safe_risk_pct,
                 )
                 self.challenge_manager = ChallengeRiskManager(
                     config=config,
@@ -520,7 +520,7 @@ class LiveTradingBot:
         
         Returns trade setup dict if signal is active AND tradeable, None otherwise.
         """
-        from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
+        from ftmo_config import FIVEERS_CONFIG, get_pip_size, get_sl_limits
         
         if symbol not in self.symbol_map:
             log.debug(f"[{symbol}] Not available on this broker, skipping")
@@ -589,7 +589,7 @@ class LiveTradingBot:
         
         # BUGFIX: Removed has_rr gate - it was preventing all trades from being active
         # If confluence and quality are sufficient, R:R is implicitly validated
-        if confluence_score >= MIN_CONFLUENCE and quality_factors >= FTMO_CONFIG.min_quality_factors:
+        if confluence_score >= MIN_CONFLUENCE and quality_factors >= FIVEERS_CONFIG.min_quality_factors:
             status = "active"
         elif confluence_score >= MIN_CONFLUENCE:
             status = "watching"
@@ -625,8 +625,8 @@ class LiveTradingBot:
         entry_distance = abs(current_price - entry)
         entry_distance_r = entry_distance / risk
         
-        if entry_distance_r > FTMO_CONFIG.max_entry_distance_r:
-            log.info(f"[{symbol}] Entry too far: {entry:.5f} is {entry_distance_r:.2f}R from current {current_price:.5f} (max: {FTMO_CONFIG.max_entry_distance_r}R)")
+        if entry_distance_r > FIVEERS_CONFIG.max_entry_distance_r:
+            log.info(f"[{symbol}] Entry too far: {entry:.5f} is {entry_distance_r:.2f}R from current {current_price:.5f} (max: {FIVEERS_CONFIG.max_entry_distance_r}R)")
             return None
         
         log.info(f"[{symbol}] Entry proximity OK: {entry_distance_r:.2f}R from current price")
@@ -652,29 +652,29 @@ class LiveTradingBot:
         if atr > 0:
             sl_atr_ratio = abs(entry - sl) / atr
             
-            if sl_atr_ratio < FTMO_CONFIG.min_sl_atr_ratio:
-                log.info(f"[{symbol}] SL too tight in ATR terms: {sl_atr_ratio:.2f} ATR (min: {FTMO_CONFIG.min_sl_atr_ratio})")
+            if sl_atr_ratio < FIVEERS_CONFIG.min_sl_atr_ratio:
+                log.info(f"[{symbol}] SL too tight in ATR terms: {sl_atr_ratio:.2f} ATR (min: {FIVEERS_CONFIG.min_sl_atr_ratio})")
                 if direction == "bullish":
-                    sl = entry - (atr * FTMO_CONFIG.min_sl_atr_ratio)
+                    sl = entry - (atr * FIVEERS_CONFIG.min_sl_atr_ratio)
                 else:
-                    sl = entry + (atr * FTMO_CONFIG.min_sl_atr_ratio)
+                    sl = entry + (atr * FIVEERS_CONFIG.min_sl_atr_ratio)
                 risk = abs(entry - sl)
-                log.info(f"[{symbol}] SL adjusted to {FTMO_CONFIG.min_sl_atr_ratio} ATR: {sl:.5f}")
+                log.info(f"[{symbol}] SL adjusted to {FIVEERS_CONFIG.min_sl_atr_ratio} ATR: {sl:.5f}")
             
         # Calculate TPs using EXACT same R multiples as backtest (including TP4 and TP5)
         risk = abs(entry - sl)
         if direction == "bullish":
-            tp1 = entry + (risk * FTMO_CONFIG.tp1_r_multiple)
-            tp2 = entry + (risk * FTMO_CONFIG.tp2_r_multiple)
-            tp3 = entry + (risk * FTMO_CONFIG.tp3_r_multiple)
-            tp4 = entry + (risk * FTMO_CONFIG.tp4_r_multiple)
-            tp5 = entry + (risk * FTMO_CONFIG.tp5_r_multiple)
+            tp1 = entry + (risk * FIVEERS_CONFIG.tp1_r_multiple)
+            tp2 = entry + (risk * FIVEERS_CONFIG.tp2_r_multiple)
+            tp3 = entry + (risk * FIVEERS_CONFIG.tp3_r_multiple)
+            tp4 = entry + (risk * FIVEERS_CONFIG.tp4_r_multiple)
+            tp5 = entry + (risk * FIVEERS_CONFIG.tp5_r_multiple)
         else:
-            tp1 = entry - (risk * FTMO_CONFIG.tp1_r_multiple)
-            tp2 = entry - (risk * FTMO_CONFIG.tp2_r_multiple)
-            tp3 = entry - (risk * FTMO_CONFIG.tp3_r_multiple)
-            tp4 = entry - (risk * FTMO_CONFIG.tp4_r_multiple)
-            tp5 = entry - (risk * FTMO_CONFIG.tp5_r_multiple)
+            tp1 = entry - (risk * FIVEERS_CONFIG.tp1_r_multiple)
+            tp2 = entry - (risk * FIVEERS_CONFIG.tp2_r_multiple)
+            tp3 = entry - (risk * FIVEERS_CONFIG.tp3_r_multiple)
+            tp4 = entry - (risk * FIVEERS_CONFIG.tp4_r_multiple)
+            tp5 = entry - (risk * FIVEERS_CONFIG.tp5_r_multiple)
         
         if direction == "bullish":
             if current_price <= sl:
@@ -691,11 +691,11 @@ class LiveTradingBot:
         log.info(f"  Current Price: {current_price:.5f}")
         log.info(f"  Entry: {entry:.5f} ({entry_distance_r:.2f}R away)")
         log.info(f"  SL: {sl:.5f} ({sl_pips:.1f} pips)")
-        log.info(f"  TP1: {tp1:.5f} ({FTMO_CONFIG.tp1_r_multiple}R)")
-        log.info(f"  TP2: {tp2:.5f} ({FTMO_CONFIG.tp2_r_multiple}R)")
-        log.info(f"  TP3: {tp3:.5f} ({FTMO_CONFIG.tp3_r_multiple}R)")
-        log.info(f"  TP4: {tp4:.5f} ({FTMO_CONFIG.tp4_r_multiple}R)")
-        log.info(f"  TP5: {tp5:.5f} ({FTMO_CONFIG.tp5_r_multiple}R)")
+        log.info(f"  TP1: {tp1:.5f} ({FIVEERS_CONFIG.tp1_r_multiple}R)")
+        log.info(f"  TP2: {tp2:.5f} ({FIVEERS_CONFIG.tp2_r_multiple}R)")
+        log.info(f"  TP3: {tp3:.5f} ({FIVEERS_CONFIG.tp3_r_multiple}R)")
+        log.info(f"  TP4: {tp4:.5f} ({FIVEERS_CONFIG.tp4_r_multiple}R)")
+        log.info(f"  TP5: {tp5:.5f} ({FIVEERS_CONFIG.tp5_r_multiple}R)")
         
         return {
             "symbol": symbol,
@@ -792,11 +792,11 @@ class LiveTradingBot:
         """
         Place order for a validated setup.
         
-        FTMO 200K OPTIMIZED:
+        5ERS 60K OPTIMIZED:
         - Uses market order when price is at entry (like backtest instant fill)
         - Uses pending order when price is near but not at entry
         - Validates all risk limits before placing
-        - Calculates proper lot size for 200K account
+        - Calculates proper lot size for 60K account
         """
         from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
         
@@ -815,7 +815,7 @@ class LiveTradingBot:
         quality_factors = setup["quality_factors"]
         entry_distance_r = setup.get("entry_distance_r", 0)
         
-        if FTMO_CONFIG.min_spread_check:
+        if FIVEERS_CONFIG.min_spread_check:
             tick = self.mt5.get_tick(broker_symbol)
             if tick is not None:
                 pip_size = get_pip_size(symbol)
@@ -825,8 +825,8 @@ class LiveTradingBot:
                 
                 current_spread_pips = tick.spread / pip_size
                 
-                if not FTMO_CONFIG.is_spread_acceptable(symbol, current_spread_pips):
-                    max_spread = FTMO_CONFIG.get_max_spread_pips(symbol)
+                if not FIVEERS_CONFIG.is_spread_acceptable(symbol, current_spread_pips):
+                    max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
                     log.warning(f"[{symbol}] Spread too wide: {current_spread_pips:.1f} pips > {max_spread:.1f} pips max - skipping trade")
                     return False
                 
@@ -848,42 +848,42 @@ class LiveTradingBot:
             total_dd_pct = snapshot.total_drawdown_pct
             profit_pct = (snapshot.equity - self.challenge_manager.initial_balance) / self.challenge_manager.initial_balance * 100
             
-            if daily_loss_pct >= FTMO_CONFIG.daily_loss_halt_pct:
-                log.warning(f"[{symbol}] Trading halted: daily loss {daily_loss_pct:.1f}% >= {FTMO_CONFIG.daily_loss_halt_pct}%")
+            if daily_loss_pct >= FIVEERS_CONFIG.daily_loss_halt_pct:
+                log.warning(f"[{symbol}] Trading halted: daily loss {daily_loss_pct:.1f}% >= {FIVEERS_CONFIG.daily_loss_halt_pct}%")
                 return False
             
-            if total_dd_pct >= FTMO_CONFIG.total_dd_emergency_pct:
-                log.warning(f"[{symbol}] Trading halted: total DD {total_dd_pct:.1f}% >= {FTMO_CONFIG.total_dd_emergency_pct}%")
+            if total_dd_pct >= FIVEERS_CONFIG.total_dd_emergency_pct:
+                log.warning(f"[{symbol}] Trading halted: total DD {total_dd_pct:.1f}% >= {FIVEERS_CONFIG.total_dd_emergency_pct}%")
                 return False
             
-            max_trades = FTMO_CONFIG.get_max_trades(profit_pct)
+            max_trades = FIVEERS_CONFIG.get_max_trades(profit_pct)
             pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
             total_exposure = snapshot.open_positions + pending_count
             
-            if snapshot.open_positions >= max_trades and entry_distance_r <= FTMO_CONFIG.immediate_entry_r:
+            if snapshot.open_positions >= max_trades and entry_distance_r <= FIVEERS_CONFIG.immediate_entry_r:
                 log.info(f"[{symbol}] Max filled positions reached: {snapshot.open_positions}/{max_trades} - cannot place market order")
                 return False
             
-            if total_exposure >= FTMO_CONFIG.max_pending_orders:
+            if total_exposure >= FIVEERS_CONFIG.max_pending_orders:
                 replaced = self._try_replace_worst_pending(
                     new_symbol=symbol,
                     new_confluence=setup.get("confluence_score", 0),
                     new_entry_distance_r=entry_distance_r,
                 )
                 if not replaced:
-                    log.info(f"[{symbol}] Max total exposure reached: {total_exposure}/{FTMO_CONFIG.max_pending_orders} (positions: {snapshot.open_positions}, pending: {pending_count})")
+                    log.info(f"[{symbol}] Max total exposure reached: {total_exposure}/{FIVEERS_CONFIG.max_pending_orders} (positions: {snapshot.open_positions}, pending: {pending_count})")
                     return False
                 pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
             
-            if snapshot.total_risk_pct >= FTMO_CONFIG.max_cumulative_risk_pct:
-                log.info(f"[{symbol}] Max cumulative risk reached: {snapshot.total_risk_pct:.1f}%/{FTMO_CONFIG.max_cumulative_risk_pct}%")
+            if snapshot.total_risk_pct >= FIVEERS_CONFIG.max_cumulative_risk_pct:
+                log.info(f"[{symbol}] Max cumulative risk reached: {snapshot.total_risk_pct:.1f}%/{FIVEERS_CONFIG.max_cumulative_risk_pct}%")
                 return False
             
             win_streak = getattr(self.risk_manager.state, 'win_streak', 0) if hasattr(self.risk_manager, 'state') else 0
             loss_streak = getattr(self.risk_manager.state, 'loss_streak', 0) if hasattr(self.risk_manager, 'state') else 0
             
-            if FTMO_CONFIG.use_dynamic_lot_sizing:
-                risk_pct = FTMO_CONFIG.get_dynamic_risk_pct(
+            if FIVEERS_CONFIG.use_dynamic_lot_sizing:
+                risk_pct = FIVEERS_CONFIG.get_dynamic_risk_pct(
                     confluence_score=confluence,
                     win_streak=win_streak,
                     loss_streak=loss_streak,
@@ -893,7 +893,7 @@ class LiveTradingBot:
                 )
                 log.info(f"[{symbol}] Dynamic risk: {risk_pct:.3f}% (confluence: {confluence}/7, win_streak: {win_streak}, loss_streak: {loss_streak})")
             else:
-                risk_pct = FTMO_CONFIG.get_risk_pct(daily_loss_pct, total_dd_pct)
+                risk_pct = FIVEERS_CONFIG.get_risk_pct(daily_loss_pct, total_dd_pct)
             
             if risk_pct <= 0:
                 log.warning(f"[{symbol}] Risk percentage is 0 - trading halted")
@@ -938,8 +938,8 @@ class LiveTradingBot:
             simulated_risk = snapshot.total_risk_usd + risk_usd
             simulated_risk_pct = (simulated_risk / snapshot.balance) * 100
             
-            if simulated_risk_pct > FTMO_CONFIG.max_cumulative_risk_pct:
-                available_risk = (FTMO_CONFIG.max_cumulative_risk_pct / 100 * snapshot.balance) - snapshot.total_risk_usd
+            if simulated_risk_pct > FIVEERS_CONFIG.max_cumulative_risk_pct:
+                available_risk = (FIVEERS_CONFIG.max_cumulative_risk_pct / 100 * snapshot.balance) - snapshot.total_risk_usd
                 if available_risk <= 0:
                     log.warning(f"[{symbol}] No risk budget available")
                     return False
@@ -952,8 +952,8 @@ class LiveTradingBot:
             simulated_daily_loss = abs(snapshot.daily_pnl) + risk_usd if snapshot.daily_pnl < 0 else risk_usd
             simulated_daily_loss_pct = (simulated_daily_loss / self.challenge_manager.day_start_balance) * 100
             
-            if simulated_daily_loss_pct >= FTMO_CONFIG.max_daily_loss_pct:
-                log.warning(f"[{symbol}] Would breach daily loss: simulated {simulated_daily_loss_pct:.1f}% >= {FTMO_CONFIG.max_daily_loss_pct}%")
+            if simulated_daily_loss_pct >= FIVEERS_CONFIG.max_daily_loss_pct:
+                log.warning(f"[{symbol}] Would breach daily loss: simulated {simulated_daily_loss_pct:.1f}% >= {FIVEERS_CONFIG.max_daily_loss_pct}%")
                 return False
             
         else:
@@ -970,7 +970,7 @@ class LiveTradingBot:
             
             lot_size = risk_check.adjusted_lot
         
-        if entry_distance_r <= FTMO_CONFIG.immediate_entry_r:
+        if entry_distance_r <= FIVEERS_CONFIG.immediate_entry_r:
             order_type = "MARKET"
             log.info(f"[{symbol}] Price at entry ({entry_distance_r:.2f}R) - using MARKET ORDER")
             
@@ -1030,7 +1030,7 @@ class LiveTradingBot:
             log.info(f"  TP1: {tp1:.5f}")
             log.info(f"  TP5: {tp5:.5f}" if tp5 else "  TP5: N/A")
             log.info(f"  Lot Size: {lot_size}")
-            log.info(f"  Expiration: {FTMO_CONFIG.pending_order_expiry_hours} hours")
+            log.info(f"  Expiration: {FIVEERS_CONFIG.pending_order_expiry_hours} hours")
             
             result = self.mt5.place_pending_order(
                 symbol=broker_symbol,
@@ -1039,7 +1039,7 @@ class LiveTradingBot:
                 entry_price=entry,
                 sl=sl,
                 tp=0,  # No auto-TP - bot manages partial closes at TP1/TP2/TP3 manually
-                expiration_hours=int(FTMO_CONFIG.pending_order_expiry_hours),
+                expiration_hours=int(FIVEERS_CONFIG.pending_order_expiry_hours),
             )
             
             if not result.success:
@@ -1124,7 +1124,7 @@ class LiveTradingBot:
         
         setups_to_remove = []
         now = datetime.now(timezone.utc)
-        expiry_hours = FTMO_CONFIG.pending_order_expiry_hours
+        expiry_hours = FIVEERS_CONFIG.pending_order_expiry_hours
         
         for symbol, setup in self.pending_setups.items():
             if setup.status != "pending":
@@ -1467,9 +1467,9 @@ class LiveTradingBot:
                 tp1_vol, tp2_vol, tp3_vol = self.challenge_manager.get_partial_close_volumes(original_volume)
             else:
                 # Match backtest: 45% TP1, 30% TP2, 25% TP3
-                tp1_vol = round(original_volume * FTMO_CONFIG.tp1_close_pct, 2)
-                tp2_vol = round(original_volume * FTMO_CONFIG.tp2_close_pct, 2)
-                tp3_vol = round(original_volume * FTMO_CONFIG.tp3_close_pct, 2)
+                tp1_vol = round(original_volume * FIVEERS_CONFIG.tp1_close_pct, 2)
+                tp2_vol = round(original_volume * FIVEERS_CONFIG.tp2_close_pct, 2)
+                tp3_vol = round(original_volume * FIVEERS_CONFIG.tp3_close_pct, 2)
             
             tp1_vol = max(0.01, tp1_vol)
             tp2_vol = max(0.01, tp2_vol)
@@ -1723,7 +1723,7 @@ class LiveTradingBot:
         log.info(f"Using SAME strategy as backtests (strategy_core.py)")
         log.info(f"FTMO Risk Limits:")
         log.info(f"  - Max single trade risk: 0.75% (Challenge Mode)")
-        log.info(f"  - Max cumulative risk: {FTMO_CONFIG.max_cumulative_risk_pct}%")
+        log.info(f"  - Max cumulative risk: {FIVEERS_CONFIG.max_cumulative_risk_pct}%")
         log.info(f"  - Emergency close at: 4.5% daily loss / 8% drawdown")
         log.info(f"  - Partial TPs: 45% TP1, 30% TP2, 25% TP3 (Challenge Mode)")
         log.info(f"Server: {MT5_SERVER}")

@@ -379,8 +379,8 @@ class OutputManager:
         training_trades: List[Any],
         validation_trades: List[Any],
         final_trades: List[Any],
-        risk_pct: float = 0.5,
-        account_size: float = 200000.0,
+        risk_pct: float = 0.6,
+        account_size: float = 60000.0,
     ):
         """
         Save all trades from best trial to separate CSV files.
@@ -479,8 +479,8 @@ class OutputManager:
         self,
         trades: List[Any],
         period_name: str,
-        risk_pct: float = 0.5,
-        account_size: float = 200000.0,
+        risk_pct: float = 0.6,
+        account_size: float = 60000.0,
     ):
         """
         Generate monthly statistics breakdown.
@@ -563,8 +563,8 @@ class OutputManager:
     def generate_symbol_performance(
         self,
         trades: List[Any],
-        risk_pct: float = 0.5,
-        account_size: float = 200000.0,
+        risk_pct: float = 0.6,
+        account_size: float = 60000.0,
     ):
         """
         Generate symbol performance breakdown.
