@@ -1,7 +1,25 @@
 # Changelog
 
-**Last Updated**: 2025-12-30
+**Last Updated**: 2025-12-31
 **Auto-generated**: From git commits
+
+---
+
+## v1.0.0 - Production Release (Dec 31, 2025)
+
+### Highlights
+- Finalized 0.6% risk parameters; synced `best_params.json` and `params/current_params.json`.
+- 12-year robustness validation (2014-2025): +2,766.3R, $3.32M, ~48.6% WR.
+- FTMO compliance: daily DD <3.8% (limit 5%), total DD <3% (limit 10%).
+- FTMO challenge speed: Step 1 (10%) in 18 dagen; Step 2 (5%) in 10 dagen; total 28 dagen.
+
+### Parameters (Dec 31, 2025)
+- Risk 0.6% per trade; min_confluence/score 2; min_quality_factors 3.
+- ADX trend/range: 22 / 11; trend_min_confluence 6; range_min_confluence 2.
+- ATR/trail: trail_activation_r 0.8; atr_trail_multiplier 1.6; atr_min_percentile 42; atr_volatility_ratio 0.95.
+- TP ladder: 1.7R / 2.6R / 5.4R with closes 38% / 16% / 30%; partial_exit_at_1r true; partial_exit_pct 0.7.
+- DD guards: daily_loss_halt_pct 3.8; max_total_dd_warning 7.9; consecutive_loss_halt 10.
+- Filters baseline: HTF/structure/confirmation/fib/displacement/candle_rejection disabled.
 
 ---
 

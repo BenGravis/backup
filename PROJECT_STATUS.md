@@ -1,26 +1,22 @@
 # MT5 FTMO Trading Bot - Project Status Report
-**Date**: 2025-12-30  
-**Status**: ✅ **PRODUCTION READY** - Validated across 9 years, file organization optimized
+**Date**: 2025-12-31  
+**Status**: ✅ **PRODUCTION READY** - Validated across 12 years (2014-2025)
 
 ---
 
 ## 📊 Executive Summary
 
-The mt5bot-new project is a **professional-grade automated trading system** for FTMO 200K Challenge accounts. Multi-period validation (2014-2022) confirms exceptional robustness with **consistent ~48.6% win rate** across vastly different market regimes.
+The mt5bot-new project is a **professional-grade automated trading system** for FTMO 200K Challenge accounts. Full 12-year validation (2014-2025) confirms production readiness with **~48.6% win rate** and strict FTMO compliance.
 
-### ✅ Recent Achievements (Dec 30, 2025)
-- **Multi-period validation**: 9-year robustness test complete (2014-2022)
-  - Aggregate: 7,670 trades, +1,873.76R, 48.6% WR, $2.25M estimated profit
-  - Consistency: 0.19% WR std dev (exceptional stability)
-  - Per period: 2,461-2,607 trades each, all >48% WR
-- **File organization fix**: Eliminated duplicate validation summary files
-  - Summary/report files now write ONLY to history/val_YYYY_YYYY_XXX/ directories
-  - VALIDATE root stays clean (only trade CSVs + latest shared stats)
-  - Auto-cleanup of old summaries on each validation run
-- **Symbol exclusion**: CLI flag `--exclude-symbols` for asset-specific tuning (e.g., CAD_CHF)
-- **Drawdown analysis**: FTMO DD only 0.5% over 2017-2019 (peak-to-trough was 17-18% but irrelevant)
-  - Removed unnecessary DD controls (Stap 6) to simplify codebase
-- **Validation mode**: Fully functional for testing params on different periods without optimization
+### ✅ Achievements (Dec 31, 2025)
+- **12-year robustness**: +2,766.3R, $3,319,550, ~48.6% WR across 4 periods
+  - 2014-2016: +672.7R, $807,219, 48.7% WR
+  - 2017-2019: +679.2R, $815,002, 48.7% WR
+  - 2020-2022: +662.4R, $794,919, 48.3% WR
+  - 2023-2025: +752.0R, $902,410, 48.8% WR
+- **FTMO speed**: Step 1 (10%) in 18 dagen; Step 2 (5%) in 10 dagen; total 28 dagen
+- **FTMO compliance**: Daily DD <3.8% (limit 5%); Total DD <3% (limit 10%); risk 0.6% per trade
+- **Params locked**: `best_params.json` and `params/current_params.json` synced (0.6% risk, TP ladder 1.7/2.6/5.4R, partials 70% at 1R)
 
 ### ✅ Previous Fixes (Dec 28-29, 2025)
 - **FTMOComplianceTracker**: Implemented FTMO compliance tracking with daily DD (4.5%), total DD (9%), and streak halt metrics

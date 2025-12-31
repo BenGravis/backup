@@ -201,30 +201,42 @@ lot_size = risk_amount / (sl_pips * pip_value)
 
 ## Current Parameters
 
-**Active Configuration** (from `params/current_params.json`):
+**Active Configuration** (from `params/current_params.json`, Dec 31, 2025):
 
 ```json
 {
-  "min_confluence": 2,
-  "min_quality_factors": 1,
-  "risk_per_trade_pct": 0.3,
-  "atr_min_percentile": 55.0,
-  "trail_activation_r": 1.0,
-  "volatile_asset_boost": 1.1,
-  "adx_trend_threshold": 22.0,
-  "adx_range_threshold": 14.0,
-  "trend_min_confluence": 4,
-  "range_min_confluence": 4,
-  "rsi_oversold_range": 25.0,
-  "rsi_overbought_range": 75.0,
-  "atr_volatility_ratio": 0.7,
-  "atr_trail_multiplier": 2.2,
-  "partial_exit_at_1r": false,
-  "use_adx_slope_rising": false,
-  "partial_exit_pct": 0.35,
-  "generated_at": "2025-12-27T09:30:42.450029Z",
-  "generated_by": "ftmo_challenge_analyzer.py",
-  "version": "1.0.0"
+    "risk_per_trade_pct": 0.6,
+    "min_confluence": 2,
+    "min_confluence_score": 2,
+    "min_quality_factors": 3,
+    "adx_trend_threshold": 22.0,
+    "adx_range_threshold": 11.0,
+    "trend_min_confluence": 6,
+    "range_min_confluence": 2,
+    "atr_trail_multiplier": 1.6,
+    "atr_volatility_ratio": 0.95,
+    "atr_vol_ratio_range": 0.95,
+    "atr_min_percentile": 42.0,
+    "trail_activation_r": 0.8,
+    "partial_exit_at_1r": true,
+    "partial_exit_pct": 0.7,
+    "december_atr_multiplier": 1.65,
+    "volatile_asset_boost": 1.35,
+    "tp1_r_multiple": 1.7,
+    "tp2_r_multiple": 2.6,
+    "tp3_r_multiple": 5.4,
+    "tp1_close_pct": 0.38,
+    "tp2_close_pct": 0.16,
+    "tp3_close_pct": 0.3,
+    "use_htf_filter": false,
+    "use_structure_filter": false,
+    "use_confirmation_filter": false,
+    "use_fib_filter": false,
+    "use_displacement_filter": false,
+    "use_candle_rejection": false,
+    "daily_loss_halt_pct": 3.8,
+    "max_total_dd_warning": 7.9,
+    "consecutive_loss_halt": 10
 }
 ```
 
