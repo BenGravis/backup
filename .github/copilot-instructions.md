@@ -5,7 +5,7 @@ Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accoun
 - **Live Bot** (`main_live_bot.py`): Runs on Windows VM with MT5 installed
 - **Optimizer** (`ftmo_challenge_analyzer.py`): Runs anywhere (Replit/local) - no MT5 required
 
-### Multi-Broker Support
+### Multi-Broker Support (NEW)
 The bot now supports multiple brokers for testing and production:
 - **Forex.com Demo** ($50K): For testing before 5ers live
 - **5ers Live** ($60K): Production trading
@@ -38,67 +38,48 @@ data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
 | `tradr/mt5/client.py` | MT5 API wrapper (Windows only) |
 | `tradr/risk/manager.py` | 5ers drawdown tracking, pre-trade risk checks |
 
-## Live Bot Features (Dec 31, 2025)
-
-### Daily Close Scanning
-- **Scan Time**: Only at 22:05 UTC (after NY close)
-- **Why**: Ensures complete daily candles, matches backtest exactly
-- **Benefit**: No partial candle analysis, consistent with TPE optimizer
-
-### Entry Filter: Spread Quality Only (No Session Filter)
-- **Only check**: Is spread acceptable? (no session hours filter)
-- **If spread OK** → Execute immediately with market order
-- **If spread wide** → Save to `awaiting_spread.json`
-- **Every 10 min**: Check if spread improved for pending signals
-- **Signal expiry**: 12 hours after creation
-
-### Graduated Risk Management (3-Tier)
-| Tier | Daily DD | Action |
-|------|----------|--------|
-| 1 | ≥2.0% | Reduce risk: 0.6% → 0.4% |
-| 2 | ≥3.5% | Cancel all pending orders |
-| 3 | ≥4.5% | Emergency close positions |
-
-### Partial Take Profits (Market Orders)
-- **TP1**: Close 45% at 0.8-1R, move SL to BE+buffer
-- **TP2**: Close 30% at 2R
-- **TP3**: Close 25% at 3-4R
-- All closes use `TRADE_ACTION_DEAL` (market order)
-- Checked every 30 seconds
-
 ## Critical Conventions
 
-### Live Bot Synced with TPE Optimizer (Dec 31, 2025)
-**Quality factors calculation now IDENTICAL:**
-```python
-# BOTH use this formula (strategy_core.py generate_signals):
-quality_factors = max(1, confluence_score // 3)
-
-# BOTH apply volatile asset boost:
-boosted_confluence, boosted_quality = apply_volatile_asset_boost(
-    symbol, confluence_score, quality_factors, params.volatile_asset_boost
-)
-
-# BOTH use same active threshold:
-min_quality_for_active = max(1, params.min_quality_factors - 1)
-if boosted_confluence >= MIN_CONFLUENCE and boosted_quality >= min_quality_for_active:
-    is_active = True
-```
-
-### Multi-Broker Symbol Mapping
-Symbol mapping is broker-aware:
+### Multi-Broker Symbol Mapping (Dec 31, 2025)
+Symbol mapping is now broker-aware:
 ```python
 from symbol_mapping import get_broker_symbol, get_internal_symbol
 
 # Convert internal -> broker
 broker_sym = get_broker_symbol("EUR_USD", "forexcom")  # -> "EURUSD"
 broker_sym = get_broker_symbol("SPX500_USD", "fiveers")  # -> "US500.cash"
-broker_sym = get_broker_symbol("SPX500_USD", "forexcom")  # -> "SPX500"
+broker_sym = get_broker_symbol("SPX500_USD", "forexcom")  # -> "US500"
 ```
+
+### Recent Bug Fixes (Dec 28, 2025)
+**IMPORTANT**: The following bugs were recently fixed - avoid reintroducing:
+
+1. **ComplianceTracker**: Implemented compliance tracking class with daily DD (4.5%), total DD (9%), streak halt (999)
+   - Metrics-only mode for backtesting (no trade filtering)
+   - Returns (trades, compliance_report) tuple from run_full_period_backtest
+   - Hard constraints: TP ordering (tp1<tp2<tp3), close-sum ≤85%, ADX threshold ordering
+2. **Parameter expansion**: Expanded search space from 17→25+ parameters:
+   - TP scaling: tp1/2/3_r_multiple (1.0-6.0R) and tp1/2/3_close_pct (0.15-0.40)
+   - Filter toggles: 6 new filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)
+   - All filter toggles HARD-CODED to False during optimization (baseline establishment)
+3. **0-trade bug fix**: Initial implementation filtered all trades due to:
+   - Aggressive filter toggles set to True
+   - Compliance penalty rejecting trials with DD breaches
+   - Streak halt (7) filtering 889/897 trades
+   - FIX: Filters disabled, compliance penalty removed, streak halt set to 999
+4. **params_loader.py**: Removed `liquidity_sweep_lookback` parameter (doesn't exist in StrategyParams)
+5. **professional_quant_suite.py**:
+   - Win rate: Remove duplicate `* 100` (already percentage)
+   - Calmar ratio: Use `max_drawdown_pct` not `max_drawdown` (USD)
+   - Total return: Return USD value, not percentage
+6. **ftmo_challenge_analyzer.py**:
+   - Quarterly stats must be calculated BEFORE early return for losing trials
+   - Use `overall_stats['r_total']` not `user_attrs.get('total_r')` for logging
+   - ADX filter disabled: `require_adx_filter=False` everywhere
 
 ### Symbol Format
 - **Config/data files**: OANDA format with underscores (`EUR_USD`, `XAU_USD`)
-- **MT5 execution**: Broker-specific format (`EURUSD`, `XAUUSD`, `SPX500`)
+- **MT5 execution**: FTMO format (`EURUSD`, `XAUUSD`, `US500.cash`)
 - Always use `symbol_mapping.py` for conversions
 
 ### Parameters - NEVER Hardcode
@@ -111,18 +92,19 @@ params = load_strategy_params()
 MIN_CONFLUENCE = 5  # Don't do this
 ```
 
-### Historical SR Data
-- **TPE optimizer**: Does NOT use historical_sr (passes `None`)
-- **Live bot**: Does NOT use historical_sr (fallback to empty dict)
-- **Both are IDENTICAL** - no sync issue here
-- SR files exist in `data/sr_levels/` but are not integrated
+### Pip Values - Symbol-Specific
+Different instruments have different pip sizes. Always use `get_contract_specs()`:
+- Standard forex: `0.0001` (4 decimal)
+- JPY pairs: `0.01` (2 decimal)
+- Gold (XAUUSD): `0.01`
+- Crypto (BTCUSD): `1.0`
 
-### Data Requirements
-The strategy uses MAXIMUM:
-- Monthly: 21 candles (MT5 provides 24)
-- Weekly: 21 candles (MT5 provides 104)
-- Daily: 50 candles (MT5 provides 500)
-- **MT5 data is SUFFICIENT for all strategy requirements**
+### Multi-Timeframe Data
+Prevent look-ahead bias by slicing HTF data to reference timestamp:
+```python
+# strategy_core.py pattern - always use _slice_htf_by_timestamp()
+htf_candles = _slice_htf_by_timestamp(weekly_candles, current_daily_dt)
+```
 
 ## Development Commands
 
@@ -145,11 +127,31 @@ python ftmo_challenge_analyzer.py --multi     # Use NSGA-II multi-objective
 python ftmo_challenge_analyzer.py --single    # Use TPE single-objective
 python ftmo_challenge_analyzer.py --adx       # Enable ADX regime filtering
 ```
+Uses Optuna with SQLite storage (`ftmo_optimization.db`) for crash-resistant optimization.
+Configuration loaded from `params/optimization_config.json`.
+
+**Output Structure:**
+- NSGA-II runs: `ftmo_analysis_output/NSGA/` (run.log + optimization.log + CSVs)
+- TPE runs: `ftmo_analysis_output/TPE/` (run.log + optimization.log + CSVs)
+- `run.log`: Complete console output (all debug info, asset processing)
+- `optimization.log`: Trial results only (clean, structured)
+- Each mode has its own optimization.log and CSV files
 
 ### Run Live Bot (Windows VM only)
 ```bash
 # Requires .env with MT5_SERVER, MT5_LOGIN, MT5_PASSWORD
 python main_live_bot.py
+```
+
+### Background Optimization
+```bash
+# Recommended: Use helper script
+./run_optimization.sh --single --trials 100  # Auto-logs to ftmo_analysis_output/TPE/run.log
+
+# Manual nohup
+nohup python ftmo_challenge_analyzer.py > ftmo_analysis_output/TPE/run.log 2>&1 &
+tail -f ftmo_analysis_output/TPE/optimization.log  # Monitor TPE progress
+tail -f ftmo_analysis_output/NSGA/optimization.log # Monitor NSGA-II progress
 ```
 
 ## 5ers Challenge Rules (hardcoded limits)
@@ -161,13 +163,12 @@ python main_live_bot.py
 
 ## File Locations
 - Historical data: `data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv`
-- SR levels (unused): `data/sr_levels/{SYMBOL}_{TF}_sr.json`
 - Optimized params: `params/current_params.json`
 - Backtest output: `ftmo_analysis_output/`
 - Logs: `logs/tradr_live.log`
-- Pending setups: `pending_setups.json`
-- Awaiting spread: `awaiting_spread.json`
-- Documentation: `docs/`
+- Documentation: `docs/` (system guide, strategy analysis, compliance tracking)
+- Utility scripts: `scripts/` (optimization monitoring, debug tools)
+- New docs: `docs/COMPLIANCE_TRACKING_IMPLEMENTATION.md` (FTMOComplianceTracker guide)
 
 ## Testing Strategy Changes
 1. Modify `strategy_core.py` (contains `compute_confluence()`, `simulate_trades()`)

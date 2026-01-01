@@ -42,7 +42,7 @@ ALL_FOREX_PAIRS_OANDA: List[str] = [
 
 ALL_METALS_OANDA: List[str] = ["XAU_USD", "XAG_USD"]
 ALL_CRYPTO_OANDA: List[str] = ["BTC_USD", "ETH_USD"]
-ALL_INDICES_OANDA: List[str] = ["SPX500_USD", "NAS100_USD", "UK100_USD"]
+ALL_INDICES_OANDA: List[str] = ["SPX500_USD", "NAS100_USD"]
 
 ALL_TRADABLE_OANDA: List[str] = (
     ALL_FOREX_PAIRS_OANDA + ALL_METALS_OANDA + ALL_CRYPTO_OANDA + ALL_INDICES_OANDA
@@ -102,12 +102,9 @@ OANDA_TO_FIVEERS: Dict[str, str] = {
     "BTC_USD": "BTCUSD",
     "ETH_USD": "ETHUSD",
     
-    # ============ INDICES (3) ============
-    # NOTE: Using Forex.com format for now (SPX500, NAS100, UK100)
-    # 5ers uses: US500.cash, US100.cash
-    "SPX500_USD": "SPX500",
-    "NAS100_USD": "NAS100", 
-    "UK100_USD": "UK100",
+    # ============ INDICES (2) ============
+    "SPX500_USD": "US500.cash",
+    "NAS100_USD": "US100.cash",
 }
 
 
@@ -168,11 +165,10 @@ OANDA_TO_FOREXCOM: Dict[str, str] = {
     "BTC_USD": "BTCUSD",
     "ETH_USD": "ETHUSD",
     
-    # ============ INDICES (3) ============
-    # Forex.com uses: SPX500, NAS100, UK100 (verified Dec 31, 2025)
-    "SPX500_USD": "SPX500",
-    "NAS100_USD": "NAS100",
-    "UK100_USD": "UK100",
+    # ============ INDICES (2) ============
+    # Forex.com variations: US500, SPX500, USA500 - verify!
+    "SPX500_USD": "US500",
+    "NAS100_USD": "USTEC",  # or NAS100, US100, USTEC100
 }
 
 

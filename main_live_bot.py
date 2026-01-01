@@ -61,9 +61,9 @@ except ImportError:
         return {'monthly': [], 'weekly': []}
 
 from tradr.mt5.client import MT5Client, PendingOrder
-from tradr.risk.manager import RiskManager, ChallengeState
+from tradr.risk.manager import RiskManager
 from tradr.utils.logger import setup_logger
-from challenge_rules import FIVEERS_60K_RULES
+from challenge_risk_manager import ChallengeRiskManager, ChallengeConfig, RiskMode, ActionType, create_challenge_manager
 
 # Import broker config for multi-broker support
 from broker_config import get_broker_config, BrokerType, BrokerConfig
@@ -188,9 +188,7 @@ class LiveTradingBot:
     
     PENDING_SETUPS_FILE = "pending_setups.json"
     TRADING_DAYS_FILE = "trading_days.json"
-    AWAITING_SPREAD_FILE = "awaiting_spread.json"
     VALIDATE_INTERVAL_MINUTES = 10
-    SPREAD_CHECK_INTERVAL_MINUTES = 10  # Check spread every 10 min after daily close
     MAIN_LOOP_INTERVAL_SECONDS = 10
     
     def __init__(self):
@@ -201,13 +199,11 @@ class LiveTradingBot:
         )
         self.risk_manager = RiskManager(state_file="challenge_state.json")
         
-        # Load optimized params from params/current_params.json
-        from params.params_loader import load_strategy_params
-        try:
-            self.params = load_strategy_params()
-            log.info("✓ Loaded optimized parameters from params/current_params.json")
-        except Exception as e:
-            log.warning(f"Could not load params, using defaults: {e}")
+        # Load best params from optimizer (if available), otherwise use defaults
+        best_params_dict = load_best_params_from_file()
+        if best_params_dict:
+            self.params = StrategyParams(**best_params_dict)
+        else:
             self.params = StrategyParams()
         
         self.last_scan_time: Optional[datetime] = None
@@ -216,23 +212,14 @@ class LiveTradingBot:
         self.pending_setups: Dict[str, PendingSetup] = {}
         self.symbol_map: Dict[str, str] = {}  # our_symbol -> broker_symbol
         
-        # Using RiskManager for FTMO challenge tracking
+        self.challenge_manager: Optional[ChallengeRiskManager] = None
         
         # Trading days tracking for FTMO minimum trading days requirement
         self.trading_days: set = set()
         self.challenge_start_date: Optional[datetime] = None
         self.challenge_end_date: Optional[datetime] = None
         
-        # Graduated risk management
-        self.risk_reduction_factor: float = 1.0  # 1.0 = normal, 0.67 = reduced (0.6% -> 0.4%)
-        self.last_risk_warning_time: Optional[datetime] = None
-        
-        # Signals awaiting better spread (after daily close)
-        self.awaiting_spread: Dict[str, Dict] = {}  # symbol -> setup dict
-        self.last_spread_check_time: Optional[datetime] = None
-        
         self._load_pending_setups()
-        self._load_awaiting_spread()
         self._load_trading_days()
         self._auto_start_challenge()
     
@@ -257,54 +244,6 @@ class LiveTradingBot:
                 json.dump(data, f, indent=2, default=str)
         except Exception as e:
             log.error(f"Error saving pending setups: {e}")
-    
-    def _load_awaiting_spread(self):
-        """Load signals awaiting better spread from file."""
-        try:
-            if Path(self.AWAITING_SPREAD_FILE).exists():
-                with open(self.AWAITING_SPREAD_FILE, 'r') as f:
-                    self.awaiting_spread = json.load(f)
-                # Filter out signals older than 12 hours
-                now = datetime.now(timezone.utc)
-                to_remove = []
-                for symbol, setup in self.awaiting_spread.items():
-                    if 'created_at' in setup:
-                        created_at = setup['created_at']
-                        if isinstance(created_at, str):
-                            try:
-                                created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                                age_hours = (now - created_at).total_seconds() / 3600
-                                if age_hours > 12:
-                                    to_remove.append(symbol)
-                            except:
-                                to_remove.append(symbol)
-                for symbol in to_remove:
-                    del self.awaiting_spread[symbol]
-                if self.awaiting_spread:
-                    log.info(f"Loaded {len(self.awaiting_spread)} signals awaiting spread")
-        except Exception as e:
-            log.error(f"Error loading awaiting spread signals: {e}")
-            self.awaiting_spread = {}
-    
-    def _save_awaiting_spread(self):
-        """Save signals awaiting better spread to file."""
-        try:
-            with open(self.AWAITING_SPREAD_FILE, 'w') as f:
-                json.dump(self.awaiting_spread, f, indent=2, default=str)
-        except Exception as e:
-            log.error(f"Error saving awaiting spread signals: {e}")
-    
-    def _is_tradable_session(self) -> bool:
-        """
-        Check if current time is within tradable session hours.
-        Only allow orders during London/NY hours (08:00-22:00 UTC).
-        """
-        now = datetime.now(timezone.utc)
-        current_hour = now.hour
-        
-        # London opens 08:00 UTC, NY closes 22:00 UTC
-        # Only trade during active market hours
-        return 8 <= current_hour < 22
     
     def _load_trading_days(self):
         """Load trading days from file for FTMO minimum trading days tracking."""
@@ -501,7 +440,36 @@ class LiveTradingBot:
             log.info(f"Risk manager synced: Balance=${balance:,.2f}, Equity=${equity:,.2f}")
             
             if CHALLENGE_MODE:
-                log.info("FTMO Challenge mode enabled - using RiskManager for compliance tracking")
+                from ftmo_config import FIVEERS_CONFIG
+                log.info("Initializing Challenge Risk Manager (5ers 60K COMPLIANT)...")
+                config = ChallengeConfig(
+                    enabled=True,
+                    phase=self.risk_manager.state.phase,
+                    account_size=balance,
+                    max_risk_per_trade_pct=FIVEERS_CONFIG.risk_per_trade_pct,
+                    max_cumulative_risk_pct=FIVEERS_CONFIG.max_cumulative_risk_pct,
+                    max_concurrent_trades=FIVEERS_CONFIG.max_concurrent_trades,
+                    max_pending_orders=FIVEERS_CONFIG.max_pending_orders,
+                    tp1_close_pct=FIVEERS_CONFIG.tp1_close_pct,
+                    tp2_close_pct=FIVEERS_CONFIG.tp2_close_pct,
+                    tp3_close_pct=FIVEERS_CONFIG.tp3_close_pct,
+                    daily_loss_warning_pct=FIVEERS_CONFIG.daily_loss_warning_pct,
+                    daily_loss_reduce_pct=FIVEERS_CONFIG.daily_loss_reduce_pct,
+                    daily_loss_halt_pct=FIVEERS_CONFIG.daily_loss_halt_pct,
+                    total_dd_warning_pct=FIVEERS_CONFIG.total_dd_warning_pct,
+                    total_dd_emergency_pct=FIVEERS_CONFIG.total_dd_emergency_pct,
+                    protection_loop_interval_sec=FIVEERS_CONFIG.protection_loop_interval_sec,
+                    pending_order_max_age_hours=FIVEERS_CONFIG.pending_order_expiry_hours,
+                    profit_ultra_safe_threshold_pct=FIVEERS_CONFIG.profit_ultra_safe_threshold_pct,
+                    ultra_safe_risk_pct=FIVEERS_CONFIG.ultra_safe_risk_pct,
+                )
+                self.challenge_manager = ChallengeRiskManager(
+                    config=config,
+                    mt5_client=self.mt5,
+                    state_file="challenge_risk_state.json",
+                )
+                self.challenge_manager.sync_with_mt5(balance, equity)
+                log.info("Challenge Risk Manager initialized with ELITE PROTECTION")
         
         return True
     
@@ -588,10 +556,6 @@ class LiveTradingBot:
         
         Returns trade setup dict if signal is active AND tradeable, None otherwise.
         """
-        # NOTE: Session filter moved to place_setup_order() instead of scanning
-        # This allows scanning 24/7 but only executes during London/NY hours
-        # Benefit: We capture all signals, won't miss setups that form at daily close
-        
         from ftmo_config import FIVEERS_CONFIG, get_pip_size, get_sl_limits
         
         if symbol not in self.symbol_map:
@@ -650,30 +614,25 @@ class LiveTradingBot:
         
         has_confirmation = flags.get("confirmation", False)
         has_rr = flags.get("rr", False)
+        has_location = flags.get("location", False)
+        has_fib = flags.get("fib", False)
+        has_liquidity = flags.get("liquidity", False)
+        has_structure = flags.get("structure", False)
+        has_htf_bias = flags.get("htf_bias", False)
         
-        # SYNC WITH TPE OPTIMIZER (strategy_core.py generate_signals)
-        # Quality is based on confluence score itself, not individual pillars
-        quality_factors = max(1, confluence_score // 3)  # At least 1 quality factor for any decent confluence
+        # EXACT same quality factor calculation as backtest_live_bot.py
+        quality_factors = sum([has_location, has_fib, has_liquidity, has_structure, has_htf_bias])
         
-        # Apply volatile asset boost for high-volatility instruments
-        from strategy_core import apply_volatile_asset_boost
-        boosted_confluence, boosted_quality = apply_volatile_asset_boost(
-            symbol,
-            confluence_score,
-            quality_factors,
-            self.params.volatile_asset_boost
-        )
-        
-        # Use boosted scores for threshold comparison (same as TPE optimizer)
-        min_quality_for_active = max(1, self.params.min_quality_factors - 1)
-        if boosted_confluence >= MIN_CONFLUENCE and boosted_quality >= min_quality_for_active:
+        # BUGFIX: Removed has_rr gate - it was preventing all trades from being active
+        # If confluence and quality are sufficient, R:R is implicitly validated
+        if confluence_score >= MIN_CONFLUENCE and quality_factors >= FIVEERS_CONFIG.min_quality_factors:
             status = "active"
-        elif boosted_confluence >= MIN_CONFLUENCE - 1:
+        elif confluence_score >= MIN_CONFLUENCE:
             status = "watching"
         else:
             status = "scan_only"
         
-        log.info(f"[{symbol}] {direction.upper()} | Conf: {confluence_score}/7 (boosted: {boosted_confluence}) | Quality: {quality_factors} | Status: {status}")
+        log.info(f"[{symbol}] {direction.upper()} | Conf: {confluence_score}/7 | Quality: {quality_factors} | Status: {status}")
         
         for pillar, is_met in flags.items():
             marker = "✓" if is_met else "✗"
@@ -874,47 +833,11 @@ class LiveTradingBot:
         - Uses pending order when price is near but not at entry
         - Validates all risk limits before placing
         - Calculates proper lot size for 60K account
-        
-        DAILY CLOSE STRATEGY (no session filter needed):
-        - All signals come from daily close scan (22:05 UTC)
-        - Check spread quality only
-        - If spread is good → execute immediately with market order
-        - If spread is wide → save to awaiting_spread.json for retry every 10 min
-        - Signals expire after 12 hours
         """
         from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
         
         symbol = setup["symbol"]
         broker_symbol = setup.get("broker_symbol", self.symbol_map.get(symbol, symbol))
-        now = datetime.now(timezone.utc)
-        
-        # Check spread quality - this is the ONLY filter for entry timing
-        tick = self.mt5.get_tick(broker_symbol)
-        if tick is not None:
-            pip_size = get_pip_size(symbol)
-            if pip_size <= 0:
-                pip_size = 0.0001
-            current_spread_pips = tick.spread / pip_size
-            max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
-            
-            if current_spread_pips <= max_spread:
-                log.info(f"[{symbol}] ✓ Spread OK ({current_spread_pips:.1f} <= {max_spread:.1f} pips): executing")
-            else:
-                # Spread too wide - save for retry every 10 minutes
-                log.info(f"[{symbol}] Spread too wide ({current_spread_pips:.1f} > {max_spread:.1f} pips): saving for spread monitoring")
-                if 'created_at' not in setup:
-                    setup['created_at'] = now.isoformat()  # Mark creation time for expiry
-                self.awaiting_spread[symbol] = setup
-                self._save_awaiting_spread()
-                return False
-        else:
-            log.info(f"[{symbol}] Cannot get spread: saving for spread monitoring")
-            if 'created_at' not in setup:
-                setup['created_at'] = now.isoformat()
-            self.awaiting_spread[symbol] = setup
-            self._save_awaiting_spread()
-            return False
-        
         direction = setup["direction"]
         current_price = setup.get("current_price", 0)
         entry = setup["entry"]
@@ -951,16 +874,15 @@ class LiveTradingBot:
                 log.info(f"[{symbol}] Already have pending setup at {existing.entry_price:.5f}, skipping")
                 return False
         
-        if CHALLENGE_MODE:
-            # Get account info from MT5
-            info = self.mt5.get_account_info()
-            if info is None:
-                log.error(f"[{symbol}] Cannot get account info")
+        if CHALLENGE_MODE and self.challenge_manager:
+            snapshot = self.challenge_manager.get_account_snapshot()
+            if snapshot is None:
+                log.error(f"[{symbol}] Cannot get account snapshot")
                 return False
             
-            daily_loss_pct = abs(self.risk_manager.state.day_pnl_pct) if self.risk_manager.state.day_pnl_pct < 0 else 0
-            total_dd_pct = abs(self.risk_manager.state.current_drawdown_pct)
-            profit_pct = (info.equity - self.risk_manager.state.initial_balance) / self.risk_manager.state.initial_balance * 100
+            daily_loss_pct = abs(snapshot.daily_pnl_pct) if snapshot.daily_pnl_pct < 0 else 0
+            total_dd_pct = snapshot.total_drawdown_pct
+            profit_pct = (snapshot.equity - self.challenge_manager.initial_balance) / self.challenge_manager.initial_balance * 100
             
             if daily_loss_pct >= FIVEERS_CONFIG.daily_loss_halt_pct:
                 log.warning(f"[{symbol}] Trading halted: daily loss {daily_loss_pct:.1f}% >= {FIVEERS_CONFIG.daily_loss_halt_pct}%")
@@ -1064,7 +986,7 @@ class LiveTradingBot:
                 log.info(f"[{symbol}] Lot reduced to {lot_size} to stay within cumulative risk limit")
             
             simulated_daily_loss = abs(snapshot.daily_pnl) + risk_usd if snapshot.daily_pnl < 0 else risk_usd
-            simulated_daily_loss_pct = (simulated_daily_loss / self.risk_manager.state.day_start_balance) * 100
+            simulated_daily_loss_pct = (simulated_daily_loss / self.challenge_manager.day_start_balance) * 100
             
             if simulated_daily_loss_pct >= FIVEERS_CONFIG.max_daily_loss_pct:
                 log.warning(f"[{symbol}] Would breach daily loss: simulated {simulated_daily_loss_pct:.1f}% >= {FIVEERS_CONFIG.max_daily_loss_pct}%")
@@ -1082,12 +1004,7 @@ class LiveTradingBot:
                 log.warning(f"[{symbol}] Trade blocked by risk manager: {risk_check.reason}")
                 return False
             
-            # Apply risk reduction factor if in drawdown
-            lot_size = risk_check.adjusted_lot * self.risk_reduction_factor
-            lot_size = max(0.01, round(lot_size, 2))  # Ensure minimum lot and round
-            
-            if self.risk_reduction_factor < 1.0:
-                log.info(f"[{symbol}] Risk reduction active: {risk_check.adjusted_lot:.2f} -> {lot_size:.2f} lots")
+            lot_size = risk_check.adjusted_lot
         
         if entry_distance_r <= FIVEERS_CONFIG.immediate_entry_r:
             order_type = "MARKET"
@@ -1362,23 +1279,17 @@ class LiveTradingBot:
         )
         
         confluence_score = sum(1 for v in flags.values() if v)
+        has_rr = flags.get("rr", False)
+        quality_factors = sum([
+            flags.get("location", False),
+            flags.get("fib", False),
+            flags.get("liquidity", False),
+            flags.get("structure", False),
+            flags.get("htf_bias", False)
+        ])
         
-        # SYNC WITH TPE OPTIMIZER (strategy_core.py generate_signals)
-        # Quality is based on confluence score itself, not individual pillars
-        quality_factors = max(1, confluence_score // 3)
-        
-        # Apply volatile asset boost
-        from strategy_core import apply_volatile_asset_boost
-        boosted_confluence, boosted_quality = apply_volatile_asset_boost(
-            symbol,
-            confluence_score,
-            quality_factors,
-            self.params.volatile_asset_boost
-        )
-        
-        # Use boosted scores for threshold comparison (same as TPE optimizer)
-        min_quality_for_active = max(1, self.params.min_quality_factors - 1)
-        if not (boosted_confluence >= MIN_CONFLUENCE and boosted_quality >= min_quality_for_active):
+        # BUGFIX: Removed has_rr gate for consistency with new active signal criteria
+        if not (confluence_score >= MIN_CONFLUENCE and quality_factors >= 1):
             log.warning(f"[{symbol}] Setup no longer valid (conf: {confluence_score}/7, quality: {quality_factors}) - cancelling")
             if setup.order_ticket:
                 self.mt5.cancel_pending_order(setup.order_ticket)
@@ -1405,89 +1316,6 @@ class LiveTradingBot:
                 log.error(f"[{symbol}] Error validating setup: {e}")
         
         self.last_validate_time = datetime.now(timezone.utc)
-    
-    def check_awaiting_spread_signals(self):
-        """
-        Check signals awaiting better spread (after daily close).
-        
-        After daily close, we may have signals that couldn't execute due to wide spreads.
-        This function checks every 10 minutes if spread has improved enough to enter.
-        Uses MARKET ORDERS for immediate execution when spread is good.
-        """
-        if not self.awaiting_spread:
-            return
-        
-        from ftmo_config import get_pip_size
-        
-        now = datetime.now(timezone.utc)
-        log.info(f"Checking {len(self.awaiting_spread)} signals awaiting better spread...")
-        
-        symbols_to_remove = []
-        symbols_executed = []
-        
-        for symbol, setup in list(self.awaiting_spread.items()):
-            try:
-                # Check age - remove if older than 12 hours
-                if 'created_at' in setup:
-                    created_at = setup['created_at']
-                    if isinstance(created_at, str):
-                        try:
-                            created_at = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                            age_hours = (now - created_at).total_seconds() / 3600
-                            if age_hours > 12:
-                                log.info(f"[{symbol}] Signal expired (age: {age_hours:.1f}h > 12h)")
-                                symbols_to_remove.append(symbol)
-                                continue
-                        except:
-                            pass
-                
-                broker_symbol = setup.get("broker_symbol", self.symbol_map.get(symbol, symbol))
-                
-                # Get current spread
-                tick = self.mt5.get_tick(broker_symbol)
-                if tick is None:
-                    log.warning(f"[{symbol}] Cannot get tick for spread check")
-                    continue
-                
-                pip_size = get_pip_size(symbol)
-                if pip_size <= 0:
-                    pip_size = 0.0001
-                
-                current_spread_pips = tick.spread / pip_size
-                max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
-                
-                if current_spread_pips <= max_spread:
-                    log.info(f"[{symbol}] Spread OK ({current_spread_pips:.1f} <= {max_spread:.1f} pips) - attempting market order")
-                    
-                    # Force immediate entry with market order
-                    setup['entry_distance_r'] = 0  # Force market order
-                    setup['created_at'] = now.isoformat()  # Refresh timestamp
-                    
-                    if self.place_setup_order(setup):
-                        symbols_executed.append(symbol)
-                        symbols_to_remove.append(symbol)
-                    else:
-                        log.warning(f"[{symbol}] Order placement failed - will retry")
-                else:
-                    log.info(f"[{symbol}] Spread still too wide: {current_spread_pips:.1f} > {max_spread:.1f} pips")
-                
-                time.sleep(0.2)  # Rate limit
-                
-            except Exception as e:
-                log.error(f"[{symbol}] Error checking spread: {e}")
-        
-        # Clean up
-        for symbol in symbols_to_remove:
-            if symbol in self.awaiting_spread:
-                del self.awaiting_spread[symbol]
-        
-        if symbols_to_remove:
-            self._save_awaiting_spread()
-        
-        if symbols_executed:
-            log.info(f"Executed {len(symbols_executed)} signals: {symbols_executed}")
-        
-        self.last_spread_check_time = now
     
     def monitor_live_pnl(self) -> bool:
         """
@@ -1525,38 +1353,18 @@ class LiveTradingBot:
         if current_equity < initial:
             total_dd_pct = ((initial - current_equity) / initial) * 100
         
-        # GRADUATED RISK MANAGEMENT (3-tier system)
-        now = datetime.now(timezone.utc)
-        
-        # TIER 1: WARNING at 2.0% daily loss - Reduce position size
-        if daily_loss_pct >= 2.0 and self.risk_reduction_factor == 1.0:
-            self.risk_reduction_factor = 0.67  # 0.6% -> 0.4% risk
-            log.warning("=" * 70)
-            log.warning(f"⚠️  TIER 1 WARNING: Daily Loss {daily_loss_pct:.2f}%")
-            log.warning(f"   Reducing position size: 0.6% -> 0.4% risk per trade")
-            log.warning("=" * 70)
-        
-        # TIER 2: WARNING at 3.5% daily - Cancel pending orders
+        # Cancel pending orders if approaching limits (above 3.5% daily or 7% total)
         if daily_loss_pct >= 3.5 or total_dd_pct >= 7.0:
-            # Warn every 5 minutes
-            if self.last_risk_warning_time is None or (now - self.last_risk_warning_time).total_seconds() > 300:
-                log.warning("=" * 70)
-                log.warning(f"⚠️  TIER 2 WARNING: Approaching Limits!")
-                log.warning(f"   Daily Loss: {daily_loss_pct:.2f}% (limit: 5%)")
-                log.warning(f"   Total DD: {total_dd_pct:.2f}% (limit: 10%)")
-                log.warning("=" * 70)
-                self.last_risk_warning_time = now
-            
             pending_orders = self.mt5.get_my_pending_orders()
             if pending_orders:
-                log.warning(f"Cancelling {len(pending_orders)} pending orders to reduce risk")
+                log.warning(f"Approaching limits (Daily: {daily_loss_pct:.1f}%, DD: {total_dd_pct:.1f}%) - cancelling {len(pending_orders)} pending orders")
                 for order in pending_orders:
                     self.mt5.cancel_pending_order(order.ticket)
                 self.pending_setups.clear()
                 self._save_pending_setups()
         
-        # TIER 3: EMERGENCY at 4.5% daily or 8.0% total - Start closing positions
-        if daily_loss_pct >= 4.5 or total_dd_pct >= 8.0:
+        # Start closing positions if above 4.0% daily or 8.0% total
+        if daily_loss_pct >= 4.0 or total_dd_pct >= 8.0:
             positions = self.mt5.get_my_positions()
             if not positions:
                 return False
@@ -1596,10 +1404,9 @@ class LiveTradingBot:
                         
                         log.info(f"  After close: Daily Loss: {new_daily_loss:.2f}%, Total DD: {new_total_dd:.2f}%")
                         
-                        # Stop if we're back under 3.0% daily and 7% total
-                        if new_daily_loss < 3.0 and new_total_dd < 7.0:
+                        # Stop if we're back under 3.5% daily and 7% total
+                        if new_daily_loss < 3.5 and new_total_dd < 7.0:
                             log.info("  Back under safe thresholds - stopping protective close")
-                            self.risk_reduction_factor = 1.0  # Reset to normal risk
                             return False
                         
                         # Emergency if we've breached hard limits
@@ -1692,11 +1499,8 @@ class LiveTradingBot:
             current_volume = pos.volume
             
             # EXACT same partial close volumes as backtest_live_bot.py
-            if CHALLENGE_MODE:
-                # Calculate partial close volumes from params
-                tp1_vol = round(original_volume * self.params.tp1_close_pct, 2)
-                tp2_vol = round(original_volume * self.params.tp2_close_pct, 2)
-                tp3_vol = round(original_volume * self.params.tp3_close_pct, 2)
+            if CHALLENGE_MODE and self.challenge_manager:
+                tp1_vol, tp2_vol, tp3_vol = self.challenge_manager.get_partial_close_volumes(original_volume)
             else:
                 # Match backtest: 45% TP1, 30% TP2, 25% TP3
                 tp1_vol = round(original_volume * FIVEERS_CONFIG.tp1_close_pct, 2)
@@ -1773,11 +1577,10 @@ class LiveTradingBot:
         Returns:
             True if an emergency action was triggered (halt trading), False otherwise
         """
-        if not CHALLENGE_MODE:
+        if not CHALLENGE_MODE or not self.challenge_manager:
             return False
         
-        # Simplified protection - no challenge_manager
-        actions = []
+        actions = self.challenge_manager.run_protection_check()
         
         if not actions:
             return False
@@ -1816,9 +1619,50 @@ class LiveTradingBot:
                     self.pending_setups.clear()
                     self._save_pending_setups()
                     
+                    action.executed = True
                     emergency_triggered = True
                     
-                # ActionType checks removed - using simplified risk management
+                elif action.action == ActionType.CANCEL_PENDING:
+                    for ticket in action.positions_affected:
+                        result = self.mt5.cancel_pending_order(ticket)
+                        if result:
+                            log.info(f"  ✓ Cancelled pending order {ticket}")
+                        else:
+                            log.error(f"  ✗ Failed to cancel pending order {ticket}")
+                    action.executed = True
+                    
+                elif action.action == ActionType.MOVE_SL_BREAKEVEN:
+                    for ticket in action.positions_affected:
+                        positions = self.mt5.get_my_positions()
+                        pos = next((p for p in positions if p.ticket == ticket), None)
+                        if pos:
+                            result = self.mt5.modify_sl_tp(ticket, sl=pos.price_open)
+                            if result:
+                                log.info(f"  ✓ Moved SL to breakeven for {pos.symbol} ({pos.price_open:.5f})")
+                            else:
+                                log.error(f"  ✗ Failed to move SL to breakeven for {pos.symbol}")
+                        else:
+                            log.warning(f"  Position {ticket} not found for SL modification")
+                    action.executed = True
+                    
+                elif action.action == ActionType.CLOSE_WORST:
+                    for ticket in action.positions_affected:
+                        result = self.mt5.close_position(ticket)
+                        if result.success:
+                            log.info(f"  ✓ Closed worst position {ticket} at {result.price}")
+                            self.risk_manager.record_trade_close(
+                                order_id=ticket,
+                                exit_price=result.price,
+                                pnl_usd=0.0,
+                            )
+                        else:
+                            log.error(f"  ✗ Failed to close position {ticket}: {result.error}")
+                    action.executed = True
+                    
+                elif action.action == ActionType.HALT_TRADING:
+                    log.error(f"[RISK] Trading HALTED: {action.reason}")
+                    action.executed = True
+                    emergency_triggered = True
                     
             except Exception as e:
                 log.error(f"[RISK] Error executing action {action.action.value}: {e}")
@@ -1916,14 +1760,7 @@ class LiveTradingBot:
         log.info(f"FTMO Risk Limits:")
         log.info(f"  - Max single trade risk: 0.75% (Challenge Mode)")
         log.info(f"  - Max cumulative risk: {FIVEERS_CONFIG.max_cumulative_risk_pct}%")
-        log.info(f"  - GRADUATED PROTECTION:")
-        log.info(f"    * Tier 1: 2.0% daily -> Reduce risk to 0.4%")
-        log.info(f"    * Tier 2: 3.5% daily -> Cancel pending orders")
-        log.info(f"    * Tier 3: 4.5% daily -> Emergency close")
-        log.info(f"  - Daily Close Scan: 22:05 UTC (after NY close)")
-        log.info(f"  - Entry Filter: Spread quality only (no session filter)")
-        log.info(f"  - Spread Monitoring: Every 10 min for signals awaiting better spread")
-        log.info(f"  - Signal Expiry: 12 hours after creation")
+        log.info(f"  - Emergency close at: 4.5% daily loss / 8% drawdown")
         log.info(f"  - Partial TPs: 45% TP1, 30% TP2, 25% TP3 (Challenge Mode)")
         log.info(f"Server: {MT5_SERVER}")
         log.info(f"Login: {MT5_LOGIN}")
@@ -1953,14 +1790,24 @@ class LiveTradingBot:
             try:
                 now = datetime.now(timezone.utc)
                 
-                # Check protection logic
+                if CHALLENGE_MODE and self.challenge_manager and self.challenge_manager.halted:
+                    if not emergency_triggered:
+                        emergency_triggered = True
+                        log.error(f"Challenge Manager halted trading: {self.challenge_manager.halt_reason}")
+                
                 if not emergency_triggered:
                     time_since_protection_check = (now - last_protection_check).total_seconds()
                     if time_since_protection_check >= self.MAIN_LOOP_INTERVAL_SECONDS:
-                        if self.monitor_live_pnl():
-                            emergency_triggered = True
-                            log.error("Emergency close triggered - halting all trading")
-                            continue
+                        if CHALLENGE_MODE and self.challenge_manager:
+                            if self.execute_protection_actions():
+                                emergency_triggered = True
+                                log.error("Challenge protection triggered emergency - halting all trading")
+                                continue
+                        else:
+                            if self.monitor_live_pnl():
+                                emergency_triggered = True
+                                log.error("Emergency close triggered - halting all trading")
+                                continue
                         
                         self.manage_partial_takes()
                         last_protection_check = now
@@ -1977,46 +1824,10 @@ class LiveTradingBot:
                     if now >= next_validate:
                         self.validate_all_setups()
                 
-                # DAILY CLOSE SCAN: Only scan at 22:05-22:30 UTC (after NY close)
-                # This ensures we analyze complete daily candles (like backtest)
-                hour_utc = now.hour
-                minute_utc = now.minute
-                is_scan_window = (hour_utc == 22 and 5 <= minute_utc <= 30)
-                
-                if is_scan_window:
-                    # Check if we already scanned today
-                    if self.last_scan_time:
-                        hours_since_scan = (now - self.last_scan_time).total_seconds() / 3600
-                        if hours_since_scan < 20:  # Already scanned in last 20 hours
-                            pass  # Skip, already scanned today
-                        else:
-                            log.info("=" * 70)
-                            log.info("DAILY CLOSE SCAN (22:05 UTC) - Analyzing complete candles")
-                            log.info("=" * 70)
-                            self.scan_all_symbols()
-                    else:
-                        # First scan
-                        log.info("=" * 70)
-                        log.info("DAILY CLOSE SCAN (22:05 UTC) - Analyzing complete candles")
-                        log.info("=" * 70)
+                if self.last_scan_time:
+                    next_scan = self.last_scan_time + timedelta(hours=SCAN_INTERVAL_HOURS)
+                    if now >= next_scan:
                         self.scan_all_symbols()
-                
-                # SPREAD MONITORING: Every 10 min for signals awaiting better spread
-                # Check if we can enter now with improved spread
-                if self.awaiting_spread:
-                    should_check_spread = False
-                    if self.last_spread_check_time is None:
-                        should_check_spread = True
-                    else:
-                        mins_since_check = (now - self.last_spread_check_time).total_seconds() / 60
-                        if mins_since_check >= self.SPREAD_CHECK_INTERVAL_MINUTES:
-                            should_check_spread = True
-                    
-                    if should_check_spread:
-                        log.info("=" * 50)
-                        log.info(f"SPREAD MONITORING: Checking {len(self.awaiting_spread)} signals")
-                        log.info("=" * 50)
-                        self.check_awaiting_spread_signals()
                 
                 if not self.mt5.connected:
                     log.warning("MT5 connection lost, attempting reconnect...")
@@ -2040,7 +1851,6 @@ class LiveTradingBot:
         log.info("Shutting down...")
         
         self._save_pending_setups()
-        self._save_awaiting_spread()
         self.disconnect()
         log.info("Bot stopped")
 

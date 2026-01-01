@@ -205,15 +205,7 @@ def get_forexcom_demo_config() -> BrokerConfig:
         trade_metals=True,
         trade_indices=True,
         trade_crypto=False,  # Forex.com demo may not have crypto
-        
-        # Exclude JPY pairs and Silver due to minimum lot size issues
-        # JPY pairs have 0.01 pip value → large SL → min lot (0.01) = 2-4% risk!
-        # XAG_USD has huge SL → min lot (0.01) = 0.87% risk
-        excluded_symbols=[
-            "USD_JPY", "EUR_JPY", "GBP_JPY", "AUD_JPY", "NZD_JPY",
-            "CAD_JPY", "CHF_JPY",  # All JPY pairs
-            "XAG_USD",  # Silver - SL too large for 0.01 min lot
-        ],
+        excluded_symbols=[],
     )
 
 

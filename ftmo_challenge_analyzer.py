@@ -193,32 +193,32 @@ TIMEFRAME_CONFIG = {
     }
 }
 
-# Warm-start anchor params (run_006) and tight search space around them
+# Warm-start anchor params (from current_params.json) and tight search space around them
 RUN_006_PARAMS = {
     'risk_per_trade_pct': 0.6,
-    'min_confluence_score': 3,
-    'min_quality_factors': 2,
-    'adx_trend_threshold': 18,
-    'adx_range_threshold': 12,
-    'trend_min_confluence': 5,
-    'range_min_confluence': 3,
-    'atr_min_percentile': 50,
-    'atr_trail_multiplier': 1.8,
-    'atr_vol_ratio_range': 0.8,
-    'trail_activation_r': 1.0,
-    'tp1_r_multiple': 1.75,
-    'tp2_r_multiple': 3.0,
-    'tp3_r_multiple': 5.5,
-    'tp1_close_pct': 0.35,
-    'tp2_close_pct': 0.20,
-    'tp3_close_pct': 0.25,
+    'min_confluence_score': 2,
+    'min_quality_factors': 3,
+    'adx_trend_threshold': 22.0,
+    'adx_range_threshold': 11.0,
+    'trend_min_confluence': 6,
+    'range_min_confluence': 2,
+    'atr_min_percentile': 42.0,
+    'atr_trail_multiplier': 1.6,
+    'atr_vol_ratio_range': 0.95,
+    'trail_activation_r': 0.8,
+    'tp1_r_multiple': 1.7,
+    'tp2_r_multiple': 2.6,
+    'tp3_r_multiple': 5.4,
+    'tp1_close_pct': 0.38,
+    'tp2_close_pct': 0.16,
+    'tp3_close_pct': 0.30,
     'partial_exit_at_1r': True,
-    'partial_exit_pct': 0.80,
-    'december_atr_multiplier': 1.5,
-    'volatile_asset_boost': 1.3,
+    'partial_exit_pct': 0.70,
+    'december_atr_multiplier': 1.65,
+    'volatile_asset_boost': 1.35,
     'daily_loss_halt_pct': 3.8,
-    'max_total_dd_warning': 7.5,
-    'consecutive_loss_halt': 9,
+    'max_total_dd_warning': 7.9,
+    'consecutive_loss_halt': 10,
     'use_htf_filter': False,
     'use_structure_filter': False,
     'use_confirmation_filter': False,
@@ -227,31 +227,32 @@ RUN_006_PARAMS = {
     'use_candle_rejection': False,
 }
 
+# Tight search space around current_params.json (±10-15% of current values)
 WARM_START_SEARCH_SPACE = {
-    'risk_per_trade_pct': (0.5, 0.8, 0.05),
-    'min_confluence_score': (2, 4, 1),
-    'min_quality_factors': (1, 3, 1),
-    'adx_trend_threshold': (15.0, 22.0, 1.0),
-    'adx_range_threshold': (10.0, 15.0, 1.0),
-    'trend_min_confluence': (4, 6, 1),
-    'range_min_confluence': (2, 4, 1),
-    'atr_min_percentile': (40.0, 60.0, 2.0),
-    'atr_trail_multiplier': (1.5, 2.2, 0.1),
-    'atr_vol_ratio_range': (0.6, 1.0, 0.05),
-    'trail_activation_r': (0.8, 1.2, 0.05),
-    'tp1_r_multiple': (1.5, 2.0, 0.1),
-    'tp2_r_multiple': (2.5, 3.5, 0.1),
-    'tp3_r_multiple': (4.5, 6.5, 0.1),
-    'tp1_close_pct': (0.30, 0.40, 0.01),
-    'tp2_close_pct': (0.15, 0.25, 0.01),
-    'tp3_close_pct': (0.20, 0.30, 0.01),
+    'risk_per_trade_pct': (0.5, 0.7, 0.05),          # Current: 0.6
+    'min_confluence_score': (2, 3, 1),               # Current: 2
+    'min_quality_factors': (2, 4, 1),                # Current: 3
+    'adx_trend_threshold': (19.0, 25.0, 1.0),        # Current: 22.0
+    'adx_range_threshold': (9.0, 13.0, 1.0),         # Current: 11.0
+    'trend_min_confluence': (5, 7, 1),               # Current: 6
+    'range_min_confluence': (2, 3, 1),               # Current: 2
+    'atr_min_percentile': (38.0, 48.0, 2.0),         # Current: 42.0
+    'atr_trail_multiplier': (1.4, 1.9, 0.1),         # Current: 1.6
+    'atr_vol_ratio_range': (0.85, 1.05, 0.05),       # Current: 0.95
+    'trail_activation_r': (0.65, 0.95, 0.05),        # Current: 0.8
+    'tp1_r_multiple': (1.5, 2.0, 0.1),               # Current: 1.7
+    'tp2_r_multiple': (2.3, 3.0, 0.1),               # Current: 2.6
+    'tp3_r_multiple': (4.8, 6.0, 0.2),               # Current: 5.4
+    'tp1_close_pct': (0.34, 0.42, 0.02),             # Current: 0.38
+    'tp2_close_pct': (0.12, 0.20, 0.02),             # Current: 0.16
+    'tp3_close_pct': (0.25, 0.35, 0.02),             # Current: 0.30
     'partial_exit_at_1r': [True],
-    'partial_exit_pct': (0.70, 0.90, 0.02),
-    'december_atr_multiplier': (1.3, 1.7, 0.05),
-    'volatile_asset_boost': (1.1, 1.5, 0.05),
-    'daily_loss_halt_pct': (3.5, 4.0, 0.1),
-    'max_total_dd_warning': (7.0, 8.0, 0.1),
-    'consecutive_loss_halt': (7, 11, 1),
+    'partial_exit_pct': (0.60, 0.80, 0.05),          # Current: 0.70
+    'december_atr_multiplier': (1.50, 1.80, 0.05),   # Current: 1.65
+    'volatile_asset_boost': (1.20, 1.50, 0.05),      # Current: 1.35
+    'daily_loss_halt_pct': (3.5, 4.2, 0.1),          # Current: 3.8
+    'max_total_dd_warning': (7.5, 8.5, 0.2),         # Current: 7.9
+    'consecutive_loss_halt': (8, 12, 1),             # Current: 10
     'use_htf_filter': [False],
     'use_structure_filter': [False],
     'use_confirmation_filter': [False],
