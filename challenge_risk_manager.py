@@ -211,12 +211,20 @@ class ChallengeRiskManager:
         # Check for emergency conditions
         if self.total_drawdown_pct >= self.config.total_dd_emergency_pct:
             self.risk_mode = RiskMode.EMERGENCY
+            log.critical(f"🚨 EMERGENCY: Total DD {self.total_drawdown_pct:.1f}% >= {self.config.total_dd_emergency_pct}%! CLOSING ALL POSITIONS!")
         elif self.daily_loss_pct >= self.config.daily_loss_halt_pct:
             self.risk_mode = RiskMode.HALTED
+            log.error(f"🛑 HALT: Daily loss {self.daily_loss_pct:.1f}% >= {self.config.daily_loss_halt_pct}%! NO NEW TRADES!")
         elif self.daily_loss_pct >= self.config.daily_loss_reduce_pct:
             self.risk_mode = RiskMode.CONSERVATIVE
+            log.warning(f"⚠️ DE-RISKING: Daily loss {self.daily_loss_pct:.1f}% >= {self.config.daily_loss_reduce_pct}%! Reducing risk to {self.config.conservative_risk_pct}%")
+        elif self.daily_loss_pct >= self.config.daily_loss_warning_pct:
+            # Warning level - still normal mode but log warning
+            log.warning(f"⚠️ WARNING: Daily loss {self.daily_loss_pct:.1f}% approaching limit!")
+            self.risk_mode = RiskMode.NORMAL
         elif self.total_drawdown_pct >= self.config.total_dd_warning_pct:
             self.risk_mode = RiskMode.CONSERVATIVE
+            log.warning(f"⚠️ DE-RISKING: Total DD {self.total_drawdown_pct:.1f}% >= {self.config.total_dd_warning_pct}%!")
         else:
             # Check for ultra-safe mode (near profit target)
             profit_pct = (self.current_balance - self.starting_balance) / self.starting_balance * 100
