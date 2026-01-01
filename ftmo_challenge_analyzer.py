@@ -71,15 +71,19 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 def save_best_params_persistent(best_params: Dict) -> None:
     """
-    Save best parameters to best_params.json for instant bot updates.
-    This persists even if optimization run is halted abruptly.
+    Save best parameters to output directory (NOT to root or live bot).
+    
+    IMPORTANT: This NO LONGER updates params/current_params.json automatically!
+    To use new parameters in the live bot, you must manually:
+    1. Review the optimization results
+    2. Copy desired run's params to params/current_params.json
+    3. Pull changes on Windows VM
+    
+    This prevents accidental parameter changes during optimization.
     """
-    try:
-        params_file = Path("best_params.json")
-        params_file.write_text(json.dumps(best_params, indent=2))
-        print(f"✓ Best parameters saved to best_params.json")
-    except Exception as e:
-        print(f"[!] Error saving best_params.json: {e}")
+    # NOTE: We intentionally do NOT save to root best_params.json anymore
+    # The OutputManager.save_best_params() handles saving to the correct output directory
+    print(f"ℹ️  Best params will be saved to output directory (NOT auto-updating live bot)")
 
 DEFAULT_OPTUNA_DB_PATH = "sqlite:///regime_adaptive_v2_clean.db"
 DEFAULT_STUDY_NAME = "regime_adaptive_v2_clean"
@@ -196,7 +200,7 @@ TIMEFRAME_CONFIG = {
 # Warm-start anchor params (from current_params.json) and tight search space around them
 RUN_006_PARAMS = {
     'risk_per_trade_pct': 0.6,
-    'min_confluence_score': 2,
+    'min_confluence': 2,
     'min_quality_factors': 3,
     'adx_trend_threshold': 22.0,
     'adx_range_threshold': 11.0,
@@ -233,7 +237,7 @@ WARM_START_SEARCH_SPACE = {
     # LOCO MODE: Extreme parameter ranges to explore maximum potential
     # ============================================================================
     'risk_per_trade_pct': (0.3, 1.0, 0.05),          # LOCO: 0.3% to 1.0% (was 0.5-0.7)
-    'min_confluence_score': (1, 5, 1),               # LOCO: 1 to 5 (was 2-3)
+    'min_confluence': (1, 5, 1),               # LOCO: 1 to 5 (was 2-3)
     'min_quality_factors': (1, 5, 1),                # LOCO: 1 to 5 (was 2-4)
     'adx_trend_threshold': (15.0, 35.0, 2.0),        # LOCO: 15 to 35 (was 19-25)
     'adx_range_threshold': (5.0, 18.0, 1.0),         # LOCO: 5 to 18 (was 9-13)
@@ -1529,7 +1533,7 @@ class OptunaOptimizer:
         if self.use_warm_start:
             # Tight search space centered on run_006
             rp_low, rp_high, rp_step = WARM_START_SEARCH_SPACE['risk_per_trade_pct']
-            mcs_low, mcs_high, mcs_step = WARM_START_SEARCH_SPACE['min_confluence_score']
+            mcs_low, mcs_high, mcs_step = WARM_START_SEARCH_SPACE['min_confluence']
             mqf_low, mqf_high, mqf_step = WARM_START_SEARCH_SPACE['min_quality_factors']
             adx_trend_low, adx_trend_high, adx_trend_step = WARM_START_SEARCH_SPACE['adx_trend_threshold']
             adx_range_low, adx_range_high, adx_range_step = WARM_START_SEARCH_SPACE['adx_range_threshold']
@@ -1553,7 +1557,7 @@ class OptunaOptimizer:
             clh_low, clh_high, clh_step = WARM_START_SEARCH_SPACE['consecutive_loss_halt']
             params = {
                 'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', rp_low, rp_high, step=rp_step),
-                'min_confluence_score': trial.suggest_int('min_confluence_score', mcs_low, mcs_high, step=mcs_step),
+                'min_confluence': trial.suggest_int('min_confluence', mcs_low, mcs_high, step=mcs_step),
                 'min_quality_factors': trial.suggest_int('min_quality_factors', mqf_low, mqf_high, step=mqf_step),
                 'adx_trend_threshold': trial.suggest_float('adx_trend_threshold', adx_trend_low, adx_trend_high, step=adx_trend_step),
                 'adx_range_threshold': trial.suggest_float('adx_range_threshold', adx_range_low, adx_range_high, step=adx_range_step),
@@ -1586,7 +1590,7 @@ class OptunaOptimizer:
         else:
             params = {
                 'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.3, 0.8, step=0.05),
-                'min_confluence_score': trial.suggest_int('min_confluence_score', 2, 4),
+                'min_confluence': trial.suggest_int('min_confluence', 2, 4),
                 'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 2),
                 'adx_trend_threshold': trial.suggest_float('adx_trend_threshold', 15.0, 24.0, step=1.0),
                 'adx_range_threshold': trial.suggest_float('adx_range_threshold', 10.0, 18.0, step=1.0),
@@ -1646,7 +1650,7 @@ class OptunaOptimizer:
         training_trades = run_full_period_backtest(
             start_date=TRAINING_START,
             end_date=TRAINING_END,
-            min_confluence=params['min_confluence_score'],
+            min_confluence=params['min_confluence'],
             min_quality_factors=params['min_quality_factors'],
             risk_per_trade_pct=params['risk_per_trade_pct'],
             atr_min_percentile=params['atr_min_percentile'],
@@ -2160,7 +2164,7 @@ class OptunaOptimizer:
 
         # Apply necessary key mappings (Optuna name -> StrategyParams name)
         key_mappings = {
-            'min_confluence_score': 'min_confluence',
+            'min_confluence': 'min_confluence',
             'atr_vol_ratio_range': 'atr_volatility_ratio',
         }
 
@@ -2296,7 +2300,7 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
         validation_trades = run_full_period_backtest(
             start_date=VALIDATION_START,
             end_date=VALIDATION_END,
-            min_confluence=params.get('min_confluence_score', 3),
+            min_confluence=params.get('min_confluence', 3),
             min_quality_factors=params.get('min_quality_factors', 2),
             risk_per_trade_pct=params.get('risk_per_trade_pct', 0.5),
             atr_min_percentile=params.get('atr_min_percentile', 60.0),
@@ -2448,7 +2452,7 @@ def finalize_incomplete_run(optimization_mode: str = "TPE", top_n: int = 5):
         start_date=TRAINING_START,
         end_date=TRAINING_END,
         tf_config=self.tf_config,
-        min_confluence=best_params.get('min_confluence_score', 3),
+        min_confluence=best_params.get('min_confluence', 3),
         min_quality_factors=best_params.get('min_quality_factors', 2),
         risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
         atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
@@ -2496,7 +2500,7 @@ def finalize_incomplete_run(optimization_mode: str = "TPE", top_n: int = 5):
     full_year_trades = run_full_period_backtest(
         start_date=TRAINING_START,
         end_date=VALIDATION_END,
-        min_confluence=best_params.get('min_confluence_score', 3),
+        min_confluence=best_params.get('min_confluence', 3),
         min_quality_factors=best_params.get('min_quality_factors', 2),
         risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
         atr_min_percentile=best_params.get('atr_min_percentile', 60.0),
@@ -2846,7 +2850,7 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
     # Sample hyperparameters (same as single-objective)
     params = {
         # === CORE RISK & CONFLUENCE PARAMETERS ===
-        'min_confluence_score': trial.suggest_int('min_confluence_score', 2, 4),
+        'min_confluence': trial.suggest_int('min_confluence', 2, 4),
         'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 2),
         'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', 0.3, 0.8, step=0.05),
         
@@ -2915,7 +2919,7 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
         start_date=TRAINING_START,
         end_date=TRAINING_END,
         tf_config=GLOBAL_TF_CONFIG,
-        min_confluence=params['min_confluence_score'],
+        min_confluence=params['min_confluence'],
         min_quality_factors=params['min_quality_factors'],
         risk_per_trade_pct=risk_pct,
         atr_min_percentile=params['atr_min_percentile'],
@@ -3178,7 +3182,7 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
     print("Running backtests with loaded parameters...")
 
     # Get parameter values with defaults
-    min_confluence = best_params.get('min_confluence_score', best_params.get('min_confluence', 3))
+    min_confluence = best_params.get('min_confluence', best_params.get('min_confluence', 3))
     min_quality = best_params.get('min_quality_factors', 2)
     risk_pct = best_params.get('risk_per_trade_pct', 0.5)
     atr_min_pct = best_params.get('atr_min_percentile', 50.0)
@@ -3708,7 +3712,7 @@ def main():
     full_year_trades = run_full_period_backtest(
         start_date=FULL_PERIOD_START,
         end_date=FULL_PERIOD_END,
-        min_confluence=best_params.get('min_confluence_score', 3),
+        min_confluence=best_params.get('min_confluence', 3),
         min_quality_factors=best_params.get('min_quality_factors', 2),
         risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
         atr_min_percentile=best_params.get('atr_min_percentile', 60.0),

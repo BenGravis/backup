@@ -151,18 +151,41 @@ log.info("=" * 70)
 
 def load_best_params_from_file() -> Dict:
     """
-    Load best parameters from best_params.json (optimizer output).
+    Load best parameters from params/current_params.json (single source of truth).
+    
+    NOTE: Parameters are ONLY loaded from params/current_params.json.
+    The optimizer writes to ftmo_analysis_output/{MODE}/best_params.json
+    but does NOT auto-update the live bot params. You must manually copy
+    the desired run's params to params/current_params.json.
+    
     Falls back to defaults if file doesn't exist.
     """
     try:
-        best_params_file = Path("best_params.json")
-        if best_params_file.exists():
-            with open(best_params_file, 'r') as f:
-                params_dict = json.load(f)
-            log.info("✓ Loaded best parameters from best_params.json (from optimizer)")
-            return params_dict
+        from params.params_loader import load_params_dict
+        params_dict = load_params_dict()
+        
+        # Handle naming mismatch: optimizer uses min_confluence_score, StrategyParams uses min_confluence
+        if 'parameters' in params_dict:
+            # New format: params nested under 'parameters' key
+            params = params_dict['parameters'].copy()
+        else:
+            # Old format: params at root level
+            params = params_dict.copy()
+        
+        # Rename min_confluence_score -> min_confluence if needed
+        if 'min_confluence_score' in params and 'min_confluence' not in params:
+            params['min_confluence'] = params.pop('min_confluence_score')
+        
+        # Remove any keys that aren't StrategyParams fields
+        from strategy_core import StrategyParams
+        import dataclasses
+        valid_fields = {f.name for f in dataclasses.fields(StrategyParams)}
+        params = {k: v for k, v in params.items() if k in valid_fields}
+        
+        log.info(f"✓ Loaded parameters from params/current_params.json")
+        return params
     except Exception as e:
-        log.warning(f"Could not load best_params.json: {e}")
+        log.warning(f"Could not load params/current_params.json: {e}")
     
     return {}  # Return empty dict to use StrategyParams defaults
 
