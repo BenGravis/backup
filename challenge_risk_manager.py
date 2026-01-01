@@ -36,34 +36,47 @@ class ActionType(Enum):
 @dataclass
 class ChallengeConfig:
     """Configuration for challenge risk management."""
+    # Core settings
+    enabled: bool = True
+    phase: int = 1
     account_size: float = 60000.0
+    
+    # Risk limits (from FIVEERS_CONFIG)
+    max_risk_per_trade_pct: float = 0.75
+    max_cumulative_risk_pct: float = 5.0
+    max_concurrent_trades: int = 7
+    max_pending_orders: int = 20
+    
+    # Take profit percentages
+    tp1_close_pct: float = 0.45
+    tp2_close_pct: float = 0.30
+    tp3_close_pct: float = 0.25
+    
+    # Daily loss thresholds
+    daily_loss_warning_pct: float = 2.5
+    daily_loss_reduce_pct: float = 3.5
+    daily_loss_halt_pct: float = 4.2
+    
+    # Total drawdown thresholds
+    total_dd_warning_pct: float = 5.0
+    total_dd_emergency_pct: float = 7.0
+    
+    # Protection settings
+    protection_loop_interval_sec: float = 30.0
+    pending_order_max_age_hours: float = 24.0
+    
+    # Ultra-safe mode (near target)
+    profit_ultra_safe_threshold_pct: float = 9.0
+    ultra_safe_risk_pct: float = 0.25
+    
+    # Challenge rules
     max_daily_loss_pct: float = 5.0
     max_total_drawdown_pct: float = 10.0
     phase1_target_pct: float = 8.0
     phase2_target_pct: float = 5.0
-    
-    # Safety buffers
-    daily_loss_warning_pct: float = 2.5
-    daily_loss_reduce_pct: float = 3.5
-    daily_loss_halt_pct: float = 4.2
-    total_dd_warning_pct: float = 5.0
-    total_dd_emergency_pct: float = 7.0
-    
-    # Position limits
-    max_concurrent_trades: int = 7
     max_trades_per_day: int = 10
-    max_pending_orders: int = 20
-    max_cumulative_risk_pct: float = 5.0
-    
-    # Risk settings
     risk_per_trade_pct: float = 0.6
     conservative_risk_pct: float = 0.4
-    ultra_safe_risk_pct: float = 0.25
-    
-    # Other settings
-    protection_loop_interval_sec: float = 30.0
-    pending_order_max_age_hours: float = 24.0
-    profit_ultra_safe_threshold_pct: float = 9.0
 
 
 class ChallengeRiskManager:
