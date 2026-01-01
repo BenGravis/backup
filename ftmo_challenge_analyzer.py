@@ -229,30 +229,33 @@ RUN_006_PARAMS = {
 
 # Tight search space around current_params.json (±10-15% of current values)
 WARM_START_SEARCH_SPACE = {
-    'risk_per_trade_pct': (0.5, 0.7, 0.05),          # Current: 0.6
-    'min_confluence_score': (2, 3, 1),               # Current: 2
-    'min_quality_factors': (2, 4, 1),                # Current: 3
-    'adx_trend_threshold': (19.0, 25.0, 1.0),        # Current: 22.0
-    'adx_range_threshold': (9.0, 13.0, 1.0),         # Current: 11.0
-    'trend_min_confluence': (5, 7, 1),               # Current: 6
-    'range_min_confluence': (2, 3, 1),               # Current: 2
-    'atr_min_percentile': (38.0, 48.0, 2.0),         # Current: 42.0
-    'atr_trail_multiplier': (1.4, 1.9, 0.1),         # Current: 1.6
-    'atr_vol_ratio_range': (0.85, 1.05, 0.05),       # Current: 0.95
-    'trail_activation_r': (0.65, 0.95, 0.05),        # Current: 0.8
-    'tp1_r_multiple': (1.5, 2.0, 0.1),               # Current: 1.7
-    'tp2_r_multiple': (2.3, 3.0, 0.1),               # Current: 2.6
-    'tp3_r_multiple': (4.8, 6.0, 0.2),               # Current: 5.4
-    'tp1_close_pct': (0.34, 0.42, 0.02),             # Current: 0.38
-    'tp2_close_pct': (0.12, 0.20, 0.02),             # Current: 0.16
-    'tp3_close_pct': (0.25, 0.35, 0.02),             # Current: 0.30
-    'partial_exit_at_1r': [True],
-    'partial_exit_pct': (0.60, 0.80, 0.05),          # Current: 0.70
-    'december_atr_multiplier': (1.50, 1.80, 0.05),   # Current: 1.65
-    'volatile_asset_boost': (1.20, 1.50, 0.05),      # Current: 1.35
-    'daily_loss_halt_pct': (3.5, 4.2, 0.1),          # Current: 3.8
-    'max_total_dd_warning': (7.5, 8.5, 0.2),         # Current: 7.9
-    'consecutive_loss_halt': (8, 12, 1),             # Current: 10
+    # ============================================================================
+    # LOCO MODE: Extreme parameter ranges to explore maximum potential
+    # ============================================================================
+    'risk_per_trade_pct': (0.3, 1.0, 0.05),          # LOCO: 0.3% to 1.0% (was 0.5-0.7)
+    'min_confluence_score': (1, 5, 1),               # LOCO: 1 to 5 (was 2-3)
+    'min_quality_factors': (1, 5, 1),                # LOCO: 1 to 5 (was 2-4)
+    'adx_trend_threshold': (15.0, 35.0, 2.0),        # LOCO: 15 to 35 (was 19-25)
+    'adx_range_threshold': (5.0, 18.0, 1.0),         # LOCO: 5 to 18 (was 9-13)
+    'trend_min_confluence': (3, 9, 1),               # LOCO: 3 to 9 (was 5-7)
+    'range_min_confluence': (1, 5, 1),               # LOCO: 1 to 5 (was 2-3)
+    'atr_min_percentile': (20.0, 70.0, 5.0),         # LOCO: 20 to 70 (was 38-48)
+    'atr_trail_multiplier': (1.0, 3.0, 0.2),         # LOCO: 1.0 to 3.0 (was 1.4-1.9)
+    'atr_vol_ratio_range': (0.5, 1.5, 0.1),          # LOCO: 0.5 to 1.5 (was 0.85-1.05)
+    'trail_activation_r': (0.3, 1.5, 0.1),           # LOCO: 0.3 to 1.5 (was 0.65-0.95)
+    'tp1_r_multiple': (0.8, 3.0, 0.2),               # LOCO: 0.8 to 3.0 (was 1.5-2.0)
+    'tp2_r_multiple': (1.5, 5.0, 0.5),               # LOCO: 1.5 to 5.0 (was 2.3-3.0)
+    'tp3_r_multiple': (3.0, 10.0, 0.5),              # LOCO: 3.0 to 10.0 (was 4.8-6.0)
+    'tp1_close_pct': (0.20, 0.60, 0.05),             # LOCO: 20% to 60% (was 34-42%)
+    'tp2_close_pct': (0.10, 0.40, 0.05),             # LOCO: 10% to 40% (was 12-20%)
+    'tp3_close_pct': (0.10, 0.50, 0.05),             # LOCO: 10% to 50% (was 25-35%)
+    'partial_exit_at_1r': [True, False],             # LOCO: both options
+    'partial_exit_pct': (0.40, 0.90, 0.10),          # LOCO: 40% to 90% (was 60-80%)
+    'december_atr_multiplier': (1.0, 2.5, 0.1),      # LOCO: 1.0 to 2.5 (was 1.5-1.8)
+    'volatile_asset_boost': (1.0, 2.0, 0.1),         # LOCO: 1.0 to 2.0 (was 1.2-1.5)
+    'daily_loss_halt_pct': (2.5, 4.8, 0.1),          # LOCO: 2.5 to 4.8 (was 3.5-4.2)
+    'max_total_dd_warning': (6.0, 9.0, 0.5),         # LOCO: 6.0 to 9.0 (was 7.5-8.5)
+    'consecutive_loss_halt': (5, 20, 1),             # LOCO: 5 to 20 (was 8-12)
     'use_htf_filter': [False],
     'use_structure_filter': [False],
     'use_confirmation_filter': [False],
@@ -3386,9 +3389,9 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
 
         # Generate professional report to run_dir
         try:
-            training_risk = calculate_risk_metrics(training_trades, risk_pct)
-            validation_risk = calculate_risk_metrics(validation_trades, risk_pct)
-            full_risk = calculate_risk_metrics(full_trades, risk_pct)
+            training_risk = calculate_risk_metrics(training_trades, risk_pct, account_size=ACCOUNT_SIZE)
+            validation_risk = calculate_risk_metrics(validation_trades, risk_pct, account_size=ACCOUNT_SIZE)
+            full_risk = calculate_risk_metrics(full_trades, risk_pct, account_size=ACCOUNT_SIZE)
 
             generate_professional_report(
                 best_params=best_params,
@@ -3430,9 +3433,9 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         )
 
         try:
-            training_risk = calculate_risk_metrics(training_trades, risk_pct)
-            validation_risk = calculate_risk_metrics(validation_trades, risk_pct)
-            full_risk = calculate_risk_metrics(full_trades, risk_pct)
+            training_risk = calculate_risk_metrics(training_trades, risk_pct, account_size=ACCOUNT_SIZE)
+            validation_risk = calculate_risk_metrics(validation_trades, risk_pct, account_size=ACCOUNT_SIZE)
+            full_risk = calculate_risk_metrics(full_trades, risk_pct, account_size=ACCOUNT_SIZE)
 
             generate_professional_report(
                 best_params=best_params,
@@ -3819,9 +3822,9 @@ def main():
     print(f"{'='*80}\n")
     
     # Risk Metrics Calculation
-    training_risk_metrics = calculate_risk_metrics(training_trades, best_params.get('risk_per_trade_pct', 0.5))
-    validation_risk_metrics = calculate_risk_metrics(validation_trades, best_params.get('risk_per_trade_pct', 0.5))
-    full_risk_metrics = calculate_risk_metrics(full_year_trades, best_params.get('risk_per_trade_pct', 0.5))
+    training_risk_metrics = calculate_risk_metrics(training_trades, best_params.get('risk_per_trade_pct', 0.5), account_size=ACCOUNT_SIZE)
+    validation_risk_metrics = calculate_risk_metrics(validation_trades, best_params.get('risk_per_trade_pct', 0.5), account_size=ACCOUNT_SIZE)
+    full_risk_metrics = calculate_risk_metrics(full_year_trades, best_params.get('risk_per_trade_pct', 0.5), account_size=ACCOUNT_SIZE)
     
     print("Risk Metrics (Sharpe, Sortino, Calmar Ratios):")
     print(f"  Training:   Sharpe={training_risk_metrics.sharpe_ratio:+.2f}  Sortino={training_risk_metrics.sortino_ratio:+.2f}  Calmar={training_risk_metrics.calmar_ratio:+.2f}")

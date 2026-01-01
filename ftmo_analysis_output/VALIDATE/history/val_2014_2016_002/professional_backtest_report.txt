@@ -1,28 +1,28 @@
 ====================================================================================================
 PROFESSIONAL QUANTITATIVE TRADING ANALYSIS REPORT
 ====================================================================================================
-Generated: 2025-12-31 10:07:12
+Generated: 2026-01-01 02:13:17
 
 EXECUTIVE SUMMARY
 ----------------------------------------------------------------------------------------------------
 Strategy Status: APPROVED
-Training Sharpe Ratio: +2.20
-Validation Sharpe Ratio: +5.23
-Degradation: -3.03
+Training Sharpe Ratio: +1.61
+Validation Sharpe Ratio: +6.25
+Degradation: -4.64
 
 PERFORMANCE METRICS COMPARISON
 ----------------------------------------------------------------------------------------------------
 Metric                                     Training           Validation          Full Period
 ----------------------------------------------------------------------------------------------------
-Total Return                             379394.11$           397201.33$           807218.59$
-Annual Return                                90.75%              223.04%              134.91%
-Sharpe Ratio                                   2.20                 5.23                 3.19
-Sortino Ratio                                 41.41               116.89                62.81
-Calmar Ratio                                   4.49                15.18                 6.63
-Max Drawdown                              40428.76$            29381.84$            40691.38$
-Win Rate                                      45.7%                55.0%                48.7%
-Profit Factor                                  1.34                 1.99                 1.52
-Recovery Factor                                9.38                13.52                19.84
+Total Return                              53824.23$            99372.09$           153148.46$
+Annual Return                                43.72%              195.64%               85.95%
+Sharpe Ratio                                   1.61                 6.25                 3.07
+Sortino Ratio                                 29.63               133.77                58.95
+Calmar Ratio                                   2.03                29.77                 4.00
+Max Drawdown                              12901.93$             3942.88$            12901.93$
+Win Rate                                      43.8%                58.1%                48.3%
+Profit Factor                                  1.24                 2.28                 1.50
+Recovery Factor                                4.17                25.20                11.87
 
 ROBUSTNESS ANALYSIS (Walk-Forward Testing)
 ----------------------------------------------------------------------------------------------------
@@ -38,18 +38,16 @@ OPTIMAL PARAMETERS
   atr_min_percentile                          42.0000
   atr_trail_multiplier                         1.6000
   atr_vol_ratio_range                          0.9500
-  atr_volatility_ratio                         0.9500
   consecutive_loss_halt                            10
   daily_loss_halt_pct                          3.8000
   december_atr_multiplier                      1.6500
   max_total_dd_warning                         7.9000
-  min_confluence                                    2
   min_confluence_score                              2
   min_quality_factors                               3
   partial_exit_at_1r                             True
   partial_exit_pct                             0.7000
   range_min_confluence                              2
-  risk_per_trade_pct                           0.6000
+  risk_per_trade_pct                           0.5500
   tp1_close_pct                                0.3800
   tp1_r_multiple                               1.7000
   tp2_close_pct                                0.1600
@@ -72,6 +70,6 @@ APPROVAL CRITERIA
 ✓ Win Rate > 45%: True
 ✓ Profit Factor > 1.5: True
 ✓ IS-OOS Degradation < 0.5: True
-✓ Consistency Score: 236.48%
+✓ Consistency Score: 384.95%
 
 ====================================================================================================

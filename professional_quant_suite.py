@@ -81,9 +81,24 @@ def calculate_risk_metrics(trades: List[Any],
     if not trades:
         return RiskMetrics()
     
+    # Helper to get R-multiple from Trade object or dict
+    def get_rr(t):
+        # Try object attributes first
+        for attr in ('rr', 'result_r', 'reward_risk'):
+            if hasattr(t, attr):
+                val = getattr(t, attr, None)
+                if val is not None:
+                    return val
+        # Try dict keys
+        if isinstance(t, dict):
+            for key in ('rr', 'result_r', 'reward_risk'):
+                if key in t and t[key] is not None:
+                    return t[key]
+        return 0
+    
     # Convert R-multiples to account returns
     risk_amount = account_size * (risk_per_trade_pct / 100.0)
-    returns = [getattr(t, 'rr', 0) * risk_amount for t in trades]
+    returns = [get_rr(t) * risk_amount for t in trades]
     
     # Total return
     total_return = sum(returns)
@@ -92,7 +107,8 @@ def calculate_risk_metrics(trades: List[Any],
     # Time period calculation
     entry_dates = []
     for t in trades:
-        entry = getattr(t, 'entry_date', None)
+        # Support both object attributes and dict keys
+        entry = getattr(t, 'entry_date', None) or (t.get('entry_date') if isinstance(t, dict) else None)
         if entry:
             if isinstance(entry, str):
                 try:
