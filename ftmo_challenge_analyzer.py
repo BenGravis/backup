@@ -1830,19 +1830,19 @@ class OptunaOptimizer:
         zero_trade_quarters = sum(1 for c in quarterly_trade_counts.values() if c == 0)
         
         # ============================================================================
-        # MULTI-OBJECTIVE SCORING FORMULA V6 (PROFIT-AWARE)
-        # Combines: R-multiples (60%) + Absolute Profit (40%) + Quality Metrics
-        # This balances risk-normalized returns with actual dollar performance
+        # MULTI-OBJECTIVE SCORING FORMULA V7 (PROFIT-FIRST)
+        # Combines: R-multiples (40%) + Absolute Profit (60%) + Quality Metrics
+        # Philosophy: Profit is king when DD < 9% and WR ~ 50%
         # ============================================================================
         
         # Calculate total profit in USD
         total_profit_usd = total_r * risk_usd
         
         # Base score: Weighted combination of R and absolute profit
-        # V6: 60% R-multiples (risk-normalized) + 40% dollar profit (scaled)
-        # Scaling: $5000 profit = 1 point, so $250k = 50 points
-        r_component = total_r * 0.6
-        profit_component = (total_profit_usd / 5000.0) * 0.4
+        # V7: 40% R-multiples (risk-normalized) + 60% dollar profit (scaled)
+        # Scaling: $10000 profit = 1 point, so $100k = 10 points, $200k = 20 points
+        r_component = total_r * 0.4
+        profit_component = (total_profit_usd / 2500.0) * 0.6  # More aggressive profit scaling
         base_score = r_component + profit_component
         
         # Sharpe Ratio Bonus: Reward risk-adjusted returns (NEW!)
@@ -1891,39 +1891,34 @@ class OptunaOptimizer:
             dd_penalty = (max_drawdown_pct - 0.08) * 50
 
         # ============================================================================
-        # COMPONENT: FTMO DRAWDOWN PENALTY (CRITICAL!)
+        # COMPONENT: FTMO DRAWDOWN PENALTY (REVISED V7)
         # ============================================================================
+        # 5ers rules: Max 10% total DD, 5% daily DD
+        # Philosophy: DD under 9% is safe, profit matters more than ultra-low DD
         max_ftmo_dd = compliance_report.get('max_ftmo_dd_pct', 0)
 
-        # Tiered FTMO DD scoring (V5):
+        # V7 Tiered FTMO DD scoring (PROFIT-FOCUSED):
         # - FAIL zone (>=10%): Instant disqualification
-        # - Danger zone (8-10%): Heavy penalty, too close to limit
-        # - Warning zone (5-8%): Moderate penalty, risky
-        # - Safe zone (3-5%): No penalty, acceptable DD
-        # - Excellent zone (<3%): Bonus for very low DD
+        # - Danger zone (9-10%): Heavy penalty, too close to limit
+        # - Safe zone (0-9%): NO penalty - profit should decide winner here!
         ftmo_dd_penalty = 0.0
         if max_ftmo_dd >= 10.0:
             ftmo_dd_penalty = 999999.0  # FAIL - instant disqualification
-        elif max_ftmo_dd >= 8.0:
-            ftmo_dd_penalty = 100.0 + (max_ftmo_dd - 8.0) * 50  # 100 to 200 penalty
-        elif max_ftmo_dd >= 5.0:
-            ftmo_dd_penalty = 20.0 + (max_ftmo_dd - 5.0) * 20  # 20 to 80 penalty
-        elif max_ftmo_dd >= 3.0:
-            ftmo_dd_penalty = 0.0  # Safe zone: no penalty, profit matters more here
+        elif max_ftmo_dd >= 9.0:
+            ftmo_dd_penalty = 50.0 + (max_ftmo_dd - 9.0) * 100  # 50 to 150 penalty
         else:
-            ftmo_dd_penalty = -10.0 - (3.0 - max_ftmo_dd) * 5  # Bonus: -10 to -25 (max +25 at 0%)
+            ftmo_dd_penalty = 0.0  # DD < 9% is safe, let profit decide
 
         # ============================================================================
-        # COMPONENT: FTMO CHALLENGE PASS BONUS
+        # COMPONENT: FTMO CHALLENGE PASS BONUS (REVISED V7)
         # ============================================================================
+        # Smaller bonus for low DD, since profit matters more
         ftmo_pass_bonus = 0.0
         if max_ftmo_dd < 10.0 and compliance_report.get('challenge_passed', False):
-            ftmo_pass_bonus = 50.0
+            ftmo_pass_bonus = 25.0  # Reduced from 50
 
-            if max_ftmo_dd < 5.0:
-                ftmo_pass_bonus += 30.0
-            elif max_ftmo_dd < 7.0:
-                ftmo_pass_bonus += 15.0
+            if max_ftmo_dd < 3.0:
+                ftmo_pass_bonus += 10.0  # Small bonus for exceptionally low DD
         
         # Consistency Penalty: Penalize bad quarters (but don't kill the score)
         consistency_penalty = 0.0
@@ -3641,10 +3636,10 @@ def main():
         print(f"   Objectives: Total R, Sharpe Ratio, Win Rate (all maximized)")
         print(f"   Sampler: NSGA-II (evolutionary algorithm)")
     else:
-        print(f"\n📊 SINGLE-OBJECTIVE MODE: Composite Score Optimization (V6 Profit-Aware)")
-        print(f"   Base Score = (R × 0.6) + (Profit_USD / 5000 × 0.4)")
-        print(f"   Final Score = Base + Sharpe_bonus + PF_bonus + WR_bonus - penalties")
-        print(f"   This balances risk-normalized returns with absolute dollar performance")
+        print(f"\n📊 SINGLE-OBJECTIVE MODE: Composite Score Optimization (V7 Profit-First)")
+        print(f"   Base Score = (R × 0.4) + (Profit_USD / 2500 × 0.6)")
+        print(f"   Final Score = Base + bonuses - penalties (DD < 9% = no penalty)")
+        print(f"   Philosophy: Profit is king when DD < 9% and WR ~ 50%")
     
     print(f"\nResumable: Study stored in {OPTUNA_DB_PATH}")
     print(f"{'='*80}\n")
