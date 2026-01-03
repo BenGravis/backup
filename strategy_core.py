@@ -22,6 +22,43 @@ except ImportError:
     analyze_fib_setup = None
 
 
+# ==============================================================================
+# ScanResult Class (moved from strategy.py - 2026-01-03)
+# ==============================================================================
+
+@dataclass
+class ScanResult:
+    """
+    Result of scanning a symbol for trading opportunities.
+    Moved from strategy.py during cleanup 2026-01-03.
+    """
+    symbol: str
+    direction: str
+    confluence_score: int
+    htf_bias: str
+    location_note: str
+    fib_note: str
+    liquidity_note: str
+    structure_note: str
+    confirmation_note: str
+    rr_note: str
+    summary_reason: str
+    status: str = "scan_only"
+    entry: Optional[float] = None
+    stop_loss: Optional[float] = None
+    tp1: Optional[float] = None
+    tp2: Optional[float] = None
+    tp3: Optional[float] = None
+    tp4: Optional[float] = None
+    tp5: Optional[float] = None
+    setup_type: str = ""
+    what_to_look_for: str = ""
+
+# ==============================================================================
+# End of ScanResult Class
+# ==============================================================================
+
+
 def _get_candle_datetime(candle: Dict) -> Optional[datetime]:
     """Extract datetime from candle dictionary."""
     time_val = candle.get("time") or candle.get("timestamp") or candle.get("date")

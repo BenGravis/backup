@@ -1,16 +1,8 @@
 """
-Data module - Data sources for backtesting and live trading.
+Data module for tradr package.
 
-Includes:
-- Dukascopy historical data for backtest parity
-- OANDA API for real-time data
-- MT5 data adapter
+Note: dukascopy.py and oanda.py are deprecated and moved to _deprecated/
+Data is now loaded from CSV files in data/ohlcv/
 """
 
-from tradr.data.dukascopy import DukascopyDownloader
-from tradr.data.oanda import OandaClient
-
-__all__ = [
-    "DukascopyDownloader",
-    "OandaClient",
-]
+# No active exports - data loading happens via pandas in main code

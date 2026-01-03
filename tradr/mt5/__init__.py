@@ -1,15 +1,10 @@
 """
-MT5 Integration module.
+MT5 module for tradr package.
 
-Contains:
-- MT5 Bridge client (for connecting from Replit to Windows VM)
-- MT5 Direct client (for running directly on Windows VM with MT5)
+Provides MT5 trading functionality via client.py
+Note: bridge_client.py is deprecated and moved to _deprecated/
 """
 
-from tradr.mt5.client import MT5Client
-from tradr.mt5.bridge_client import MT5BridgeClient
+from .client import MT5Client
 
-__all__ = [
-    "MT5Client",
-    "MT5BridgeClient",
-]
+__all__ = ['MT5Client']

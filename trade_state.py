@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field, asdict
 
-from strategy import ScanResult
+from strategy_core import ScanResult
 from data import get_ohlcv
 
 
