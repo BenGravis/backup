@@ -1157,42 +1157,56 @@ def run_full_period_backtest(
             # if atr_percentile < atr_min_percentile:
             #     continue
             
-            params = StrategyParams(
-                min_confluence=effective_confluence,
-                min_quality_factors=min_quality_factors,
-                risk_per_trade_pct=risk_per_trade_pct,
-                atr_min_percentile=atr_min_percentile,
-                trail_activation_r=trail_activation_r,
-                december_atr_multiplier=december_atr_multiplier,
-                volatile_asset_boost=volatile_asset_boost,
-                adx_trend_threshold=adx_trend_threshold,
-                adx_range_threshold=adx_range_threshold,
-                use_adx_regime_filter=use_adx_regime_filter,
-                # NEW: TP parameters
-                tp1_close_pct=tp1_close_pct,
-                tp2_close_pct=tp2_close_pct,
-                tp3_close_pct=tp3_close_pct,
-                # NEW: Filter toggles
-                use_htf_filter=use_htf_filter,
-                use_structure_filter=use_structure_filter,
-                use_confirmation_filter=use_confirmation_filter,
-                use_fib_filter=use_fib_filter,
-                use_displacement_filter=use_displacement_filter,
-                use_candle_rejection=use_candle_rejection,
-                # ATR and trail
-                atr_trail_multiplier=atr_trail_multiplier,
-                partial_exit_at_1r=partial_exit_at_1r,
-                partial_exit_pct=partial_exit_pct,
-                # NEW: Session filter & graduated risk
-                use_session_filter=use_session_filter,
-                session_start_utc=session_start_utc,
-                session_end_utc=session_end_utc,
-                use_graduated_risk=use_graduated_risk,
-                tier1_dd_pct=tier1_dd_pct,
-                tier1_risk_factor=tier1_risk_factor,
-                tier2_dd_pct=tier2_dd_pct,
-                tier3_dd_pct=tier3_dd_pct,
-            )
+            # Build complete params dict from PARAMETER_DEFAULTS + function args
+            # This ensures ALL 77 params are passed, matching live bot behavior
+            params_dict = PARAMETER_DEFAULTS.copy()
+            params_dict.update({
+                'min_confluence': effective_confluence,
+                'min_quality_factors': min_quality_factors,
+                'risk_per_trade_pct': risk_per_trade_pct,
+                'atr_min_percentile': atr_min_percentile,
+                'trail_activation_r': trail_activation_r,
+                'december_atr_multiplier': december_atr_multiplier,
+                'volatile_asset_boost': volatile_asset_boost,
+                'adx_trend_threshold': adx_trend_threshold,
+                'adx_range_threshold': adx_range_threshold,
+                'use_adx_regime_filter': use_adx_regime_filter,
+                'use_adx_slope_rising': use_adx_slope_rising,
+                'trend_min_confluence': trend_min_confluence,
+                'range_min_confluence': range_min_confluence,
+                'atr_vol_ratio_range': atr_vol_ratio_range,
+                'tp1_r_multiple': tp1_r_multiple,
+                'tp2_r_multiple': tp2_r_multiple,
+                'tp3_r_multiple': tp3_r_multiple,
+                'tp1_close_pct': tp1_close_pct,
+                'tp2_close_pct': tp2_close_pct,
+                'tp3_close_pct': tp3_close_pct,
+                'use_htf_filter': use_htf_filter,
+                'use_structure_filter': use_structure_filter,
+                'use_confirmation_filter': use_confirmation_filter,
+                'use_fib_filter': use_fib_filter,
+                'use_displacement_filter': use_displacement_filter,
+                'use_candle_rejection': use_candle_rejection,
+                'atr_trail_multiplier': atr_trail_multiplier,
+                'partial_exit_at_1r': partial_exit_at_1r,
+                'partial_exit_pct': partial_exit_pct,
+                'use_session_filter': use_session_filter,
+                'session_start_utc': session_start_utc,
+                'session_end_utc': session_end_utc,
+                'use_graduated_risk': use_graduated_risk,
+                'tier1_dd_pct': tier1_dd_pct,
+                'tier1_risk_factor': tier1_risk_factor,
+                'tier2_dd_pct': tier2_dd_pct,
+                'tier3_dd_pct': tier3_dd_pct,
+                'daily_loss_halt_pct': daily_loss_halt_pct,
+                'max_total_dd_warning': max_total_dd_warning,
+                'consecutive_loss_halt': consecutive_loss_halt,
+            })
+            # Filter to only valid StrategyParams fields
+            import dataclasses
+            valid_fields = {f.name for f in dataclasses.fields(StrategyParams)}
+            params_dict = {k: v for k, v in params_dict.items() if k in valid_fields}
+            params = StrategyParams(**params_dict)
             
             trades = simulate_trades(
                 candles=entry_candles,

@@ -149,64 +149,42 @@ log.info(f"Tradable Symbols: {len(TRADABLE_SYMBOLS)}")
 log.info("=" * 70)
 
 
-def load_best_params_from_file() -> Dict:
+def load_best_params_from_file():
     """
     Load best parameters from params/current_params.json (single source of truth).
-    
-    NOTE: Parameters are ONLY loaded from params/current_params.json.
-    The optimizer writes to ftmo_analysis_output/{MODE}/best_params.json
-    but does NOT auto-update the live bot params. You must manually copy
-    the desired run's params to params/current_params.json.
-    
-    STRICT MODE: Raises error if file doesn't exist or is invalid.
-    No fallback to defaults - we NEVER want defaults in production!
-    
-    To select a run for live trading:
-        python scripts/select_run.py run009
+    - No fallback to StrategyParams defaults.
+    - Merges with PARAMETER_DEFAULTS (same as optimizer) to guarantee 77 params.
+    - Warns if the file is missing params (so you know to re-save from a run).
     """
-    from params.params_loader import load_params_dict
     from pathlib import Path
+    from params.params_loader import load_strategy_params, load_params_dict
+    from params.defaults import PARAMETER_DEFAULTS
     
     params_file = Path(__file__).parent / "params" / "current_params.json"
     if not params_file.exists():
         raise FileNotFoundError(
-            f"CRITICAL: params/current_params.json does not exist!\n"
-            f"The live bot requires optimized parameters.\n"
-            f"Run: python scripts/select_run.py <run_name>\n"
-            f"Example: python scripts/select_run.py run009"
+            "CRITICAL: params/current_params.json does not exist!\n"
+            "Select a run first: python scripts/select_run.py <run_name>"
         )
     
-    params_dict = load_params_dict()
-    
-    # Handle naming mismatch: optimizer uses min_confluence_score, StrategyParams uses min_confluence
-    if 'parameters' in params_dict:
-        # New format: params nested under 'parameters' key
-        params = params_dict['parameters'].copy()
+    # Load raw for diagnostics
+    raw = load_params_dict()
+    if "parameters" in raw:
+        raw_params = raw["parameters"]
     else:
-        # Old format: params at root level
-        params = params_dict.copy()
+        raw_params = {k: v for k, v in raw.items() if not k.startswith("_")}
     
-    # Remove metadata keys
-    params = {k: v for k, v in params.items() if not k.startswith("_")}
-    
-    # Rename min_confluence_score -> min_confluence if needed
-    if 'min_confluence_score' in params and 'min_confluence' not in params:
-        params['min_confluence'] = params.pop('min_confluence_score')
-    
-    # Remove any keys that aren't StrategyParams fields
-    from strategy_core import StrategyParams
-    import dataclasses
-    valid_fields = {f.name for f in dataclasses.fields(StrategyParams)}
-    params = {k: v for k, v in params.items() if k in valid_fields}
-    
-    if not params:
-        raise ValueError(
-            f"CRITICAL: params/current_params.json contains no valid parameters!\n"
-            f"Run: python scripts/select_run.py <run_name>"
+    missing = set(PARAMETER_DEFAULTS.keys()) - set(raw_params.keys())
+    if missing:
+        log.warning(
+            "params/current_params.json is missing %d parameters; filling from defaults: %s",
+            len(missing), sorted(missing)
         )
     
-    log.info(f"✓ Loaded {len(params)} parameters from params/current_params.json")
-    return params
+    # Use the same merge logic as optimizer
+    params_obj = load_strategy_params()
+    log.info("✓ Loaded %d parameters (post-merge) from params/current_params.json", len(vars(params_obj)))
+    return params_obj
 
 
 def signal_handler(sig, frame):
@@ -241,10 +219,9 @@ class LiveTradingBot:
         )
         self.risk_manager = RiskManager(state_file="challenge_state.json")
         
-        # STRICT: Load params from current_params.json - NO FALLBACK TO DEFAULTS
-        # Will raise error if file doesn't exist or is invalid
-        best_params_dict = load_best_params_from_file()
-        self.params = StrategyParams(**best_params_dict)
+        # STRICT: Load params (merged with defaults) - no fallback to dataclass defaults
+        # load_best_params_from_file() returns StrategyParams with defaults merged
+        self.params = load_best_params_from_file()
         
         self.last_scan_time: Optional[datetime] = None
         self.last_validate_time: Optional[datetime] = None
