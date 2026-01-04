@@ -22,7 +22,8 @@ The trading bot is a **professional-grade automated trading system** for **5ers 
 - **Import Bug Fix**: Fixed `DEFAULT_STRATEGY_PARAMS` → `PARAMETER_DEFAULTS` error
   - Prevented crashes during best_params.json saving
   - Progress callback now works reliably
-- **Training Period**: 2023-01-01 to 2024-09-30 (in-sample)
+- **Training Period**: 2023-01-01 to 2024-09-30 (21 months in-sample)
+- **Validation Period**: 2024-10-01 to 2025-12-26 (15 months out-of-sample)
 - **Target**: 50 trials with TPE single-objective optimization
 
 ### ✅ Previous Achievements (Dec 31, 2025)

@@ -11,6 +11,8 @@
 **What**: Automated MetaTrader 5 trading bot for 5ers 60K High Stakes Challenge  
 **Strategy**: 6-Pillar Confluence System with multi-timeframe analysis  
 **Optimization**: Optuna (TPE/NSGA-II) with 25+ parameters, real-time best_params.json  
+**Training Period**: 2023-01-01 to 2024-09-30 (21 months)
+**Validation Period**: 2024-10-01 to 2025-12-26 (15 months)
 **Deployment**: Windows VM (live bot) + Linux (optimizer)  
 **Current Status**: Fresh TPE optimization running (50 trials, warm-start with run009 baseline)  
 **Performance**: ~48% win rate, +2,766R over 12 years (2014-2025)

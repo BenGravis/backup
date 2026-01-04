@@ -171,9 +171,9 @@ optuna_backups/
 
 ### Training & Validation Periods
 ```python
-TRAINING_START = "2023-01-01"
+TRAINING_START = "2023-01-01"    # 21 months in-sample
 TRAINING_END = "2024-09-30"
-VALIDATION_START = "2024-10-01"
+VALIDATION_START = "2024-10-01"  # 15 months out-of-sample  
 VALIDATION_END = "2025-12-26"
 ```
 

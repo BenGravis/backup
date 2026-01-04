@@ -2151,8 +2151,8 @@ class OptunaOptimizer:
                 # Merge trial params with defaults
                 best_params_full = {**PARAMETER_DEFAULTS, **trial.params}
                 
-                # Determine optimization mode
-                mode = "NSGA-II" if OPTUNA_CONFIG.mode == "multi_objective" else "TPE"
+                # Determine optimization mode from tf_config
+                mode = "NSGA-II" if self.tf_config.get('mode') == 'NSGA' else "TPE"
                 
                 # Add metadata
                 best_params_with_meta = {
@@ -2164,7 +2164,7 @@ class OptunaOptimizer:
                 }
                 
                 # Save to TPE folder (main location - always up to date)
-                tpe_folder = Path(output_mgr.output_folder)
+                tpe_folder = Path(output_mgr.output_dir)
                 best_params_path = tpe_folder / "best_params.json"
                 with open(best_params_path, 'w') as f:
                     json.dump(best_params_with_meta, f, indent=2)

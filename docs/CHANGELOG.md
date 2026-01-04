@@ -28,8 +28,8 @@
   - File location: `ftmo_challenge_analyzer.py` line 2147
 
 ### Optimization Settings
-- Training Period: 2023-01-01 to 2024-09-30 (in-sample)
-- Validation Period: 2024-10-01 to 2025-12-26 (out-of-sample)
+- Training Period: 2023-01-01 to 2024-09-30 (21 months in-sample)
+- Validation Period: 2024-10-01 to 2025-12-26 (15 months out-of-sample)
 - Target: 50 trials with TPE single-objective
 - Warm-start: run009 baseline (proven 48.6% WR across 12 years)
 

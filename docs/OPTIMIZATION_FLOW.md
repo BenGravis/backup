@@ -7,7 +7,7 @@ This document describes the TPE/NSGA-II optimization flow with end-of-run valida
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PHASE 1: TPE/NSGA-II Optimization (Training Only)                  │
-│ • All trials run training backtest only (2023-01 to 2024-09)       │
+│ • Training: 2023-01-01 to 2024-09-30 (21 months in-sample)         │
 │ • 25+ parameter search space (TP scaling, filters, ADX, etc.)      │
 │ • FTMOComplianceTracker computes DD metrics (no trade filtering)   │
 │ • Hard constraints: TP ordering, close-sum ≤85%, ADX thresholds    │
@@ -19,7 +19,7 @@ This document describes the TPE/NSGA-II optimization flow with end-of-run valida
                               ↓
 ┌─────────────────────────────────────────────────────────────────────┐
 │ PHASE 2: Top-5 Trial Validation (OOS Check)                        │
-│ • Run 2024-10-01 to 2025-12-26 backtest on top 5 trials            │
+│ • Validation: 2024-10-01 to 2025-12-26 (15 months out-of-sample)   │
 │ • Select best OOS performer (highest validation R)                 │
 │ • Time: ~10 minutes                                                │
 └─────────────────────────────────────────────────────────────────────┘
