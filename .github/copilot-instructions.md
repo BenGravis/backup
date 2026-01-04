@@ -154,12 +154,18 @@ tail -f ftmo_analysis_output/TPE/optimization.log  # Monitor TPE progress
 tail -f ftmo_analysis_output/NSGA/optimization.log # Monitor NSGA-II progress
 ```
 
-## 5ers Challenge Rules (hardcoded limits)
-- Max daily loss: **5%** (halt at 4.2%)
-- Max total drawdown: **10%** (emergency at 7%)
+## 5ers Challenge Rules (IMPORTANT - DIFFERENT FROM FTMO!)
+- **NO daily drawdown limit!** (5ers doesn't track daily DD)
+- Max total drawdown: **10% below STARTING balance** (stop-out at $54,000 for 60K)
+- NOT trailing: growth doesn't raise stop-out level
 - Step 1 target: **8%**, Step 2: **5%**
 - Min profitable days: **3**
 - Risk per trade: 0.6% = $360 per R (on 60K account)
+
+### Compliance Implementation
+- `daily_loss_halt_pct`: REMOVED from optimizer (5ers has no daily DD)
+- `stop_out_level`: Constant $54,000 (starting_balance * 0.90)
+- `use_graduated_risk`: False (disabled, no daily DD to tier against)
 
 ## File Locations
 - Historical data: `data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv`

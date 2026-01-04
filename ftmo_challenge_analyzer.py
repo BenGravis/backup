@@ -222,9 +222,9 @@ RUN_006_PARAMS = {
     'partial_exit_pct': 0.75,
     'december_atr_multiplier': 1.7,
     'volatile_asset_boost': 1.35,
-    'daily_loss_halt_pct': 4.1,
-    'max_total_dd_warning': 7.9,
-    'consecutive_loss_halt': 9,
+    # Note: 5ers has NO daily DD limit - removed daily_loss_halt_pct
+    'max_total_dd_warning': 7.9,  # Informational only, not for trade filtering
+    'consecutive_loss_halt': 999,  # Disabled
     'use_htf_filter': False,
     'use_structure_filter': False,
     'use_confirmation_filter': False,
@@ -259,9 +259,9 @@ WARM_START_SEARCH_SPACE = {
     'partial_exit_pct': (0.40, 0.90, 0.10),          # LOCO: 40% to 90% (was 60-80%)
     'december_atr_multiplier': (1.0, 2.5, 0.1),      # LOCO: 1.0 to 2.5 (was 1.5-1.8)
     'volatile_asset_boost': (1.0, 2.0, 0.1),         # LOCO: 1.0 to 2.0 (was 1.2-1.5)
-    'daily_loss_halt_pct': (2.5, 4.8, 0.1),          # LOCO: 2.5 to 4.8 (was 3.5-4.2)
-    'max_total_dd_warning': (6.0, 9.0, 0.5),         # LOCO: 6.0 to 9.0 (was 7.5-8.5)
-    'consecutive_loss_halt': (5, 20, 1),             # LOCO: 5 to 20 (was 8-12)
+    # Note: 5ers has NO daily DD limit - daily_loss_halt_pct removed
+    'max_total_dd_warning': (6.0, 9.0, 0.5),         # Informational warning level
+    'consecutive_loss_halt': [999],                  # Disabled for 5ers
     'use_htf_filter': [False],
     'use_structure_filter': [False],
     'use_confirmation_filter': [False],
@@ -400,45 +400,72 @@ def check_adx_filter(candles: List[Dict], min_adx: float = 25.0) -> Tuple[bool, 
 
 @dataclass
 class FTMOComplianceTracker:
-    """Track 5ers/FTMO compliance during backtest simulation."""
+    """
+    Track 5ers High Stakes compliance during backtest simulation.
+    
+    5ERS RULES (NOT FTMO):
+    ======================
+    - NO daily drawdown limit (5ers doesn't have one!)
+    - Total DD: Account cannot drop below 90% of STARTING balance
+    - Stop-out level = starting_balance * 0.90 = $54,000 for 60K account
+    - This is a CONSTANT level, not trailing!
+    
+    Example:
+    - Start: $60,000
+    - Stop-out: $54,000 (constant)
+    - If equity grows to $80,000 then drops to $55,000 -> STILL SAFE (above $54K)
+    - If equity drops to $53,000 -> FAILED (below $54K stop-out)
+    """
 
     account_size: float = 60000.0
     starting_balance: float = 60000.0
     current_balance: float = 60000.0
     highest_balance: float = 60000.0
     lowest_balance: float = 60000.0
+    # Note: day_start_balance kept for informational purposes only, NOT for DD calculation
     day_start_balance: float = 60000.0
     current_day: Optional[date] = None
 
-    trades_skipped_daily: int = 0
     trades_skipped_dd: int = 0
     trades_skipped_streak: int = 0
     consecutive_losses: int = 0
     halted_reason: Optional[str] = None
 
-    # 5ers Limits (same as FTMO)
-    daily_loss_halt_pct: float = 4.5
-    total_dd_halt_pct: float = 9.0
+    # 5ers Limits (NO daily DD limit!)
+    # Total DD: 10% below starting balance = stop-out
+    total_dd_limit_pct: float = 10.0  # Account fails if equity < starting_balance * 0.90
     consecutive_loss_halt: int = 999
     enable_streak_halt: bool = False
 
     @property
-    def daily_loss_pct(self) -> float:
-        """Current daily loss as percentage of day start balance."""
-        if self.current_balance >= self.day_start_balance:
-            return 0.0
-        return ((self.day_start_balance - self.current_balance) / self.day_start_balance) * 100
+    def stop_out_level(self) -> float:
+        """
+        5ers stop-out level: CONSTANT at 90% of starting balance.
+        For 60K account: $54,000
+        """
+        return self.starting_balance * (1 - self.total_dd_limit_pct / 100)
+    
+    @property
+    def is_stopped_out(self) -> bool:
+        """
+        5ers Total DD check: Is current equity below stop-out level?
+        
+        Example for 60K account:
+        - Stop-out level = $54,000 (constant)
+        - If current_balance < $54,000 -> FAILED
+        """
+        return self.current_balance < self.stop_out_level
 
     @property
     def total_dd_pct(self) -> float:
         """
-        FTMO Total Drawdown: How far below STARTING balance are we?
+        5ers Total Drawdown: How far below STARTING balance are we?
 
-        FTMO Rule: Account cannot drop more than 10% below STARTING balance.
-        If you start at €200k, you cannot go below €180k - EVER.
-
-        This is NOT peak-to-trough! If you grow to €250k then drop to €210k,
-        your FTMO drawdown is 0% (still above €200k start).
+        5ers Rule: Account cannot drop more than 10% below STARTING balance.
+        Stop-out level = starting_balance * 0.90 = $54,000 for 60K account.
+        
+        This is NOT peak-to-trough! If you grow to $80k then drop to $55k,
+        your 5ers drawdown is 0% (still above $60k start).
         """
         if self.current_balance >= self.starting_balance:
             return 0.0
@@ -494,15 +521,13 @@ class FTMOComplianceTracker:
         else:
             self.consecutive_losses = 0
 
-        # Check for FTMO hard limit breach (10% below START)
-        if self.total_dd_pct >= 10.0:
-            self.halted_reason = f"FAILED: Total DD {self.total_dd_pct:.1f}% >= 10% (below starting balance)"
+        # Check for 5ers hard limit breach: equity < stop_out_level
+        # Stop-out level = starting_balance * 0.90 = $54,000 for 60K account
+        if self.is_stopped_out:
+            self.halted_reason = f"FAILED: Equity ${self.current_balance:,.0f} < stop-out ${self.stop_out_level:,.0f} (10% below start)"
             return False
 
-        # Check for daily loss breach (5% of day start)
-        if self.daily_loss_pct >= 5.0:
-            self.halted_reason = f"FAILED: Daily loss {self.daily_loss_pct:.1f}% >= 5%"
-            return False
+        # Note: 5ers has NO daily loss limit - removed daily_loss_pct check
 
         if self.enable_streak_halt and self.consecutive_losses >= self.consecutive_loss_halt:
             self.halted_reason = (
@@ -513,21 +538,21 @@ class FTMOComplianceTracker:
         return True
 
     def get_report(self) -> Dict:
-        """Get compliance tracking report."""
+        """Get 5ers compliance tracking report."""
         return {
             'starting_balance': self.starting_balance,
             'final_balance': self.current_balance,
             'highest_balance': self.highest_balance,
             'lowest_balance': self.lowest_balance,
+            'stop_out_level': self.stop_out_level,  # Constant $54,000 for 60K
             'total_return_pct': ((self.current_balance - self.starting_balance) / self.starting_balance) * 100,
             'max_ftmo_dd_pct': self.max_ftmo_dd_pct,
             'max_peak_trough_dd_pct': ((self.highest_balance - self.lowest_balance) / self.highest_balance) * 100 if self.highest_balance > 0 else 0,
-            'trades_skipped_daily': self.trades_skipped_daily,
             'trades_skipped_dd': self.trades_skipped_dd,
             'trades_skipped_streak': self.trades_skipped_streak,
-            'total_skipped': self.trades_skipped_daily + self.trades_skipped_dd + self.trades_skipped_streak,
+            'total_skipped': self.trades_skipped_dd + self.trades_skipped_streak,
             'halted_reason': self.halted_reason,
-            'challenge_passed': self.halted_reason is None and self.max_ftmo_dd_pct < 10.0,
+            'challenge_passed': self.halted_reason is None and not self.is_stopped_out,
         }
 
 def compute_ftmo_compliance(trades: List[Any], risk_per_trade_usd: float) -> Dict:
@@ -1062,22 +1087,23 @@ def run_full_period_backtest(
     use_displacement_filter: bool = False,
     use_candle_rejection: bool = False,
     # ============================================================================
-    # NEW: FTMO COMPLIANCE PARAMETERS
+    # 5ERS COMPLIANCE PARAMETERS (NO daily DD limit!)
     # ============================================================================
-    daily_loss_halt_pct: float = 4.0,
-    max_total_dd_warning: float = 8.0,
+    # Note: 5ers only has total DD limit (10% below start = stop-out)
+    # daily_loss_halt_pct removed - 5ers doesn't have daily DD limit
+    max_total_dd_warning: float = 8.0,  # Informational warning only
     consecutive_loss_halt: int = 999,  # 999 = disabled
     # ============================================================================
-    # NEW: SESSION FILTER & GRADUATED RISK MANAGEMENT
+    # SESSION FILTER (optional, not used in backtest)
     # ============================================================================
-    use_session_filter: bool = True,  # Only trade during London/NY (08:00-22:00 UTC)
+    use_session_filter: bool = False,  # Disabled for backtest (daily candles)
     session_start_utc: int = 8,
     session_end_utc: int = 22,
-    use_graduated_risk: bool = True,  # 3-tier graduated risk management
-    tier1_dd_pct: float = 2.0,  # Reduce risk at 2% daily DD
-    tier1_risk_factor: float = 0.67,  # Risk multiplier (0.6% -> 0.4%)
-    tier2_dd_pct: float = 3.5,  # Cancel pending at 3.5% daily DD
-    tier3_dd_pct: float = 4.5,  # Emergency close at 4.5% daily DD
+    use_graduated_risk: bool = False,  # Disabled - 5ers has no daily DD
+    tier1_dd_pct: float = 2.0,  # Not used
+    tier1_risk_factor: float = 0.67,  # Not used
+    tier2_dd_pct: float = 3.5,  # Not used
+    tier3_dd_pct: float = 4.5,  # Not used
 ) -> List[Trade]:
     """
     Run backtest for a given period with Regime-Adaptive V2 filtering.
@@ -1199,7 +1225,7 @@ def run_full_period_backtest(
                 'tier1_risk_factor': tier1_risk_factor,
                 'tier2_dd_pct': tier2_dd_pct,
                 'tier3_dd_pct': tier3_dd_pct,
-                'daily_loss_halt_pct': daily_loss_halt_pct,
+                # Note: daily_loss_halt_pct removed - 5ers has no daily DD limit
                 'max_total_dd_warning': max_total_dd_warning,
                 'consecutive_loss_halt': consecutive_loss_halt,
             })
@@ -1568,9 +1594,8 @@ class OptunaOptimizer:
             pexit_low, pexit_high, pexit_step = WARM_START_SEARCH_SPACE['partial_exit_pct']
             decatr_low, decatr_high, decatr_step = WARM_START_SEARCH_SPACE['december_atr_multiplier']
             vab_low, vab_high, vab_step = WARM_START_SEARCH_SPACE['volatile_asset_boost']
-            dlh_low, dlh_high, dlh_step = WARM_START_SEARCH_SPACE['daily_loss_halt_pct']
+            # Note: daily_loss_halt_pct removed - 5ers has no daily DD limit
             ddw_low, ddw_high, ddw_step = WARM_START_SEARCH_SPACE['max_total_dd_warning']
-            clh_low, clh_high, clh_step = WARM_START_SEARCH_SPACE['consecutive_loss_halt']
             params = {
                 'risk_per_trade_pct': trial.suggest_float('risk_per_trade_pct', rp_low, rp_high, step=rp_step),
                 'min_confluence': trial.suggest_int('min_confluence', mcs_low, mcs_high, step=mcs_step),
@@ -1599,9 +1624,9 @@ class OptunaOptimizer:
                 'use_fib_filter': trial.suggest_categorical('use_fib_filter', WARM_START_SEARCH_SPACE['use_fib_filter']),
                 'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', WARM_START_SEARCH_SPACE['use_displacement_filter']),
                 'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', WARM_START_SEARCH_SPACE['use_candle_rejection']),
-                'daily_loss_halt_pct': trial.suggest_float('daily_loss_halt_pct', dlh_low, dlh_high, step=dlh_step),
+                # Note: daily_loss_halt_pct removed - 5ers has no daily DD limit
                 'max_total_dd_warning': trial.suggest_float('max_total_dd_warning', ddw_low, ddw_high, step=ddw_step),
-                'consecutive_loss_halt': trial.suggest_int('consecutive_loss_halt', clh_low, clh_high, step=clh_step),
+                'consecutive_loss_halt': 999,  # Disabled for 5ers
             }
         else:
             params = {
@@ -1632,9 +1657,9 @@ class OptunaOptimizer:
                 'use_fib_filter': trial.suggest_categorical('use_fib_filter', [False]),
                 'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', [False]),
                 'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', [False]),
-                'daily_loss_halt_pct': trial.suggest_float('daily_loss_halt_pct', 3.5, 4.5, step=0.1),
+                # Note: daily_loss_halt_pct removed - 5ers has no daily DD limit
                 'max_total_dd_warning': trial.suggest_float('max_total_dd_warning', 7.0, 9.0, step=0.5),
-                'consecutive_loss_halt': trial.suggest_int('consecutive_loss_halt', 5, 999),
+                'consecutive_loss_halt': 999,  # Disabled for 5ers
             }
         
         # ============================================================================
@@ -1700,8 +1725,7 @@ class OptunaOptimizer:
             use_fib_filter=params['use_fib_filter'],
             use_displacement_filter=params['use_displacement_filter'],
             use_candle_rejection=params['use_candle_rejection'],
-            # NEW: FTMO compliance
-            daily_loss_halt_pct=params['daily_loss_halt_pct'],
+            # 5ers compliance (no daily DD limit!)
             max_total_dd_warning=params['max_total_dd_warning'],
             consecutive_loss_halt=params['consecutive_loss_halt'],
         )
@@ -2348,8 +2372,7 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
             use_fib_filter=params.get('use_fib_filter', False),
             use_displacement_filter=params.get('use_displacement_filter', False),
             use_candle_rejection=params.get('use_candle_rejection', False),
-            # NEW: FTMO compliance
-            daily_loss_halt_pct=params.get('daily_loss_halt_pct', 4.0),
+            # 5ers compliance (no daily DD limit!)
             max_total_dd_warning=params.get('max_total_dd_warning', 8.0),
             consecutive_loss_halt=params.get('consecutive_loss_halt', 999),
         )
@@ -2467,7 +2490,7 @@ def finalize_incomplete_run(optimization_mode: str = "TPE", top_n: int = 5):
     training_trades = run_full_period_backtest(
         start_date=TRAINING_START,
         end_date=TRAINING_END,
-        tf_config=self.tf_config,
+        tf_config=GLOBAL_TF_CONFIG,
         min_confluence=best_params.get('min_confluence', 3),
         min_quality_factors=best_params.get('min_quality_factors', 2),
         risk_per_trade_pct=best_params.get('risk_per_trade_pct', 0.5),
@@ -2498,7 +2521,7 @@ def finalize_incomplete_run(optimization_mode: str = "TPE", top_n: int = 5):
         use_fib_filter=best_params.get('use_fib_filter', False),
         use_displacement_filter=best_params.get('use_displacement_filter', False),
         use_candle_rejection=best_params.get('use_candle_rejection', False),
-        daily_loss_halt_pct=best_params.get('daily_loss_halt_pct', 4.0),
+        # 5ers compliance (no daily DD limit!)
         max_total_dd_warning=best_params.get('max_total_dd_warning', 8.0),
         consecutive_loss_halt=best_params.get('consecutive_loss_halt', 999),
     )
@@ -2547,7 +2570,7 @@ def finalize_incomplete_run(optimization_mode: str = "TPE", top_n: int = 5):
         use_displacement_filter=best_params.get('use_displacement_filter', False),
         use_candle_rejection=best_params.get('use_candle_rejection', False),
         consecutive_loss_halt=best_params.get('consecutive_loss_halt', 999),
-        daily_loss_halt_pct=best_params.get('daily_loss_halt_pct', 4.5),
+        # 5ers compliance (no daily DD limit!)
         max_total_dd_warning=best_params.get('max_total_dd_warning', 9.0)
     )
     
@@ -2910,10 +2933,9 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
         'use_displacement_filter': trial.suggest_categorical('use_displacement_filter', [False]),
         'use_candle_rejection': trial.suggest_categorical('use_candle_rejection', [False]),
         
-        # === FTMO COMPLIANCE PARAMETERS ===
-        'daily_loss_halt_pct': trial.suggest_float('daily_loss_halt_pct', 3.5, 4.5, step=0.1),
+        # === 5ERS COMPLIANCE PARAMETERS (no daily DD limit!) ===
         'max_total_dd_warning': trial.suggest_float('max_total_dd_warning', 7.0, 9.0, step=0.5),
-        'consecutive_loss_halt': trial.suggest_int('consecutive_loss_halt', 5, 999),
+        'consecutive_loss_halt': 999,  # Disabled for 5ers
     }
     
     # Merge with PARAMETER_DEFAULTS for complete 77-param coverage (parity with TPE)
@@ -2973,8 +2995,7 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
         use_fib_filter=params.get('use_fib_filter', False),
         use_displacement_filter=params.get('use_displacement_filter', False),
         use_candle_rejection=params.get('use_candle_rejection', False),
-        # NEW: FTMO compliance
-        daily_loss_halt_pct=params.get('daily_loss_halt_pct', 4.0),
+        # 5ers compliance (no daily DD limit!)
         max_total_dd_warning=params.get('max_total_dd_warning', 8.0),
         consecutive_loss_halt=params.get('consecutive_loss_halt', 999),
     )
@@ -3266,7 +3287,7 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
     use_fib = params['use_fib_filter']
     use_disp = params['use_displacement_filter']
     use_candle = params['use_candle_rejection']
-    daily_halt = params['daily_loss_halt_pct']
+    # Note: daily_halt removed - 5ers has no daily DD limit
     total_dd_warn = params['max_total_dd_warning']
     consec_halt = params['consecutive_loss_halt']
     # Session and graduated risk params
@@ -3313,7 +3334,7 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         use_fib_filter=use_fib,
         use_displacement_filter=use_disp,
         use_candle_rejection=use_candle,
-        daily_loss_halt_pct=daily_halt,
+        # 5ers compliance (no daily DD limit!)
         max_total_dd_warning=total_dd_warn,
         consecutive_loss_halt=consec_halt,
         use_session_filter=use_session,
@@ -3359,7 +3380,7 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         use_fib_filter=use_fib,
         use_displacement_filter=use_disp,
         use_candle_rejection=use_candle,
-        daily_loss_halt_pct=daily_halt,
+        # 5ers compliance (no daily DD limit!)
         max_total_dd_warning=total_dd_warn,
         consecutive_loss_halt=consec_halt,
         use_session_filter=use_session,
@@ -3405,7 +3426,7 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         use_fib_filter=use_fib,
         use_displacement_filter=use_disp,
         use_candle_rejection=use_candle,
-        daily_loss_halt_pct=daily_halt,
+        # 5ers compliance (no daily DD limit!)
         max_total_dd_warning=total_dd_warn,
         consecutive_loss_halt=consec_halt,
         use_session_filter=use_session,
@@ -3834,8 +3855,7 @@ def main():
         use_fib_filter=best_params.get('use_fib_filter', False),
         use_displacement_filter=best_params.get('use_displacement_filter', False),
         use_candle_rejection=best_params.get('use_candle_rejection', False),
-        # NEW: FTMO compliance
-        daily_loss_halt_pct=best_params.get('daily_loss_halt_pct', 4.0),
+        # 5ers compliance (no daily DD limit!)
         max_total_dd_warning=best_params.get('max_total_dd_warning', 8.0),
         consecutive_loss_halt=best_params.get('consecutive_loss_halt', 999),
     )
