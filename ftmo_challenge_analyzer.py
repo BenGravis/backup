@@ -3132,19 +3132,28 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
     with open(params_path, 'r') as f:
         best_params = json.load(f)
 
+    # Handle nested "parameters" structure from best_params.json for display
+    # Format can be: {"parameters": {...}} or just {...}
+    display_params = best_params
+    if 'parameters' in best_params and isinstance(best_params['parameters'], dict):
+        if 'parameters' in best_params['parameters']:
+            display_params = best_params['parameters']['parameters']
+        else:
+            display_params = best_params['parameters']
+
     print(f"\n{'='*80}")
     print("FTMO PARAMETER VALIDATION MODE")
     print(f"{'='*80}")
     print(f"\n📊 Testing parameters from: {params_file}")
     print(f"📅 Validation Period: {val_start.strftime('%Y-%m-%d')} to {val_end.strftime('%Y-%m-%d')}")
     print(f"\nLoaded Parameters:")
-    for k, v in sorted(best_params.items())[:15]:  # Show first 15 params
+    for k, v in sorted(display_params.items())[:15]:  # Show first 15 params
         if isinstance(v, float):
             print(f"   {k}: {v:.4f}")
         else:
             print(f"   {k}: {v}")
-    if len(best_params) > 15:
-        print(f"   ... and {len(best_params) - 15} more parameters")
+    if len(display_params) > 15:
+        print(f"   ... and {len(display_params) - 15} more parameters")
     print(f"{'='*80}\n")
 
     # Create validation output directory
@@ -3181,37 +3190,48 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
     # Run backtests on all three periods
     print("Running backtests with loaded parameters...")
 
+    # Handle nested "parameters" structure from best_params.json
+    # Format can be: {"parameters": {...}} or just {...}
+    if 'parameters' in best_params and isinstance(best_params['parameters'], dict):
+        # Check for double-nesting: {"parameters": {"parameters": {...}}}
+        if 'parameters' in best_params['parameters']:
+            params = best_params['parameters']['parameters']
+        else:
+            params = best_params['parameters']
+    else:
+        params = best_params
+
     # Get parameter values with defaults
-    min_confluence = best_params.get('min_confluence', best_params.get('min_confluence', 3))
-    min_quality = best_params.get('min_quality_factors', 2)
-    risk_pct = best_params.get('risk_per_trade_pct', 0.5)
-    atr_min_pct = best_params.get('atr_min_percentile', 50.0)
-    trail_r = best_params.get('trail_activation_r', 1.0)
-    dec_atr = best_params.get('december_atr_multiplier', 1.5)
-    vol_boost = best_params.get('volatile_asset_boost', 1.3)
-    adx_trend = best_params.get('adx_trend_threshold', 18.0)
-    adx_range = best_params.get('adx_range_threshold', 12.0)
-    trend_conf = best_params.get('trend_min_confluence', 5)
-    range_conf = best_params.get('range_min_confluence', 3)
-    atr_vol_ratio = best_params.get('atr_volatility_ratio', best_params.get('atr_vol_ratio_range', 0.8))
-    atr_trail = best_params.get('atr_trail_multiplier', 1.8)
-    partial_1r = best_params.get('partial_exit_at_1r', True)
-    partial_pct = best_params.get('partial_exit_pct', 0.8)
-    tp1_r = best_params.get('tp1_r_multiple', 1.75)
-    tp2_r = best_params.get('tp2_r_multiple', 3.0)
-    tp3_r = best_params.get('tp3_r_multiple', 5.5)
-    tp1_close = best_params.get('tp1_close_pct', 0.35)
-    tp2_close = best_params.get('tp2_close_pct', 0.20)
-    tp3_close = best_params.get('tp3_close_pct', 0.25)
-    use_htf = best_params.get('use_htf_filter', False)
-    use_struct = best_params.get('use_structure_filter', False)
-    use_confirm = best_params.get('use_confirmation_filter', False)
-    use_fib = best_params.get('use_fib_filter', False)
-    use_disp = best_params.get('use_displacement_filter', False)
-    use_candle = best_params.get('use_candle_rejection', False)
-    daily_halt = best_params.get('daily_loss_halt_pct', 4.0)
-    total_dd_warn = best_params.get('max_total_dd_warning', 8.0)
-    consec_halt = best_params.get('consecutive_loss_halt', 999)
+    min_confluence = params.get('min_confluence', params.get('min_confluence_score', 3))
+    min_quality = params.get('min_quality_factors', 2)
+    risk_pct = params.get('risk_per_trade_pct', 0.5)
+    atr_min_pct = params.get('atr_min_percentile', 50.0)
+    trail_r = params.get('trail_activation_r', 1.0)
+    dec_atr = params.get('december_atr_multiplier', 1.5)
+    vol_boost = params.get('volatile_asset_boost', 1.3)
+    adx_trend = params.get('adx_trend_threshold', 18.0)
+    adx_range = params.get('adx_range_threshold', 12.0)
+    trend_conf = params.get('trend_min_confluence', 5)
+    range_conf = params.get('range_min_confluence', 3)
+    atr_vol_ratio = params.get('atr_volatility_ratio', params.get('atr_vol_ratio_range', 0.8))
+    atr_trail = params.get('atr_trail_multiplier', 1.8)
+    partial_1r = params.get('partial_exit_at_1r', True)
+    partial_pct = params.get('partial_exit_pct', 0.8)
+    tp1_r = params.get('tp1_r_multiple', 1.75)
+    tp2_r = params.get('tp2_r_multiple', 3.0)
+    tp3_r = params.get('tp3_r_multiple', 5.5)
+    tp1_close = params.get('tp1_close_pct', 0.35)
+    tp2_close = params.get('tp2_close_pct', 0.20)
+    tp3_close = params.get('tp3_close_pct', 0.25)
+    use_htf = params.get('use_htf_filter', False)
+    use_struct = params.get('use_structure_filter', False)
+    use_confirm = params.get('use_confirmation_filter', False)
+    use_fib = params.get('use_fib_filter', False)
+    use_disp = params.get('use_displacement_filter', False)
+    use_candle = params.get('use_candle_rejection', False)
+    daily_halt = params.get('daily_loss_halt_pct', 4.0)
+    total_dd_warn = params.get('max_total_dd_warning', 8.0)
+    consec_halt = params.get('consecutive_loss_halt', 999)
 
     # Training period backtest
     print(f"\n📈 TRAINING PERIOD: {val_start.strftime('%Y-%m-%d')} to {training_end_date.strftime('%Y-%m-%d')}")
