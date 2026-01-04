@@ -19,36 +19,62 @@ De exit strategy gebruikt een **gefaseerde take-profit structuur** met 5 TP nive
 
 ### 2.1 TP Berekening in Signal Generatie
 
-De TP niveaus worden berekend in `calculate_risk_reward()` (stratgy_core.py:2232-2380) met **ATR-based multipliers**:
+De TP niveaus worden berekend in `calculate_risk_reward()` (strategy_core.py:2232-2380) met **ATR-based multipliers**:
 
 ```python
 # strategy_core.py line 2322-2327 (bullish)
 risk = entry - sl
-tp1 = entry + risk * params.atr_tp1_multiplier  # Default: 0.6
-tp2 = entry + risk * params.atr_tp2_multiplier  # Default: 1.2
-tp3 = entry + risk * params.atr_tp3_multiplier  # Default: 2.0
-tp4 = entry + risk * 2.5                        # Hardcoded
-tp5 = entry + risk * 3.5                        # Hardcoded
+tp1 = entry + risk * params.atr_tp1_multiplier  # Default: 0.6 → 0.6R
+tp2 = entry + risk * params.atr_tp2_multiplier  # Default: 1.2 → 1.2R
+tp3 = entry + risk * params.atr_tp3_multiplier  # Default: 2.0 → 2.0R
+tp4 = entry + risk * 2.5                        # Hardcoded → 2.5R
+tp5 = entry + risk * 3.5                        # Hardcoded → 3.5R
 ```
 
-**⚠️ BELANGRIJK**: De parameters `tp1_r_multiple`, `tp2_r_multiple`, `tp3_r_multiple` zijn gedefinieerd in `StrategyParams` maar worden **NIET gebruikt** voor prijsberekening in de backtest. Ze zijn legacy/metadata. De daadwerkelijke prijzen komen uit `atr_tp_multiplier` parameters.
+### ⚠️ KRITIEKE MISMATCH
+
+De parameters `tp1_r_multiple`, `tp2_r_multiple`, `tp3_r_multiple` zijn gedefinieerd in `StrategyParams` en worden door de optimizer opgeslagen, maar **NIET gebruikt** voor prijsberekening in de backtest:
+
+| Parameter in JSON | Waarde | Daadwerkelijk Gebruikt | Waarde |
+|-------------------|--------|------------------------|--------|
+| `tp1_r_multiple` | 1.7R | `atr_tp1_multiplier` | **0.6R** |
+| `tp2_r_multiple` | 2.7R | `atr_tp2_multiplier` | **1.2R** |
+| `tp3_r_multiple` | 6.0R | `atr_tp3_multiplier` | **2.0R** |
+| *(niet in JSON)* | - | hardcoded | **2.5R** |
+| *(niet in JSON)* | - | hardcoded | **3.5R** |
+
+De backtest gebruikt dus **5 TP levels** op 0.6R, 1.2R, 2.0R, 2.5R, 3.5R.
 
 ### 2.2 Huidige Parameter Waarden (val_2023_2025_003)
 
 ```json
 {
-  "tp1_r_multiple": 1.7,       // Niet gebruikt in backtest prijsberekening
-  "tp2_r_multiple": 2.7,       // Niet gebruikt in backtest prijsberekening
-  "tp3_r_multiple": 6.0,       // Niet gebruikt in backtest prijsberekening
-  "tp1_close_pct": 0.34,       // 34% van positie sluit bij TP1
-  "tp2_close_pct": 0.16,       // 16% van positie sluit bij TP2
-  "tp3_close_pct": 0.35,       // 35% van positie sluit bij TP3
-  "tp4_close_pct": 0.20,       // 20% sluit bij TP4 (legacy)
-  "tp5_close_pct": 0.45,       // 45% sluit bij TP5 (final)
+  "# GEOPTIMALISEERD door Optuna (TP1-3 close%)": "",
+  "tp1_close_pct": 0.34,       // 34% van positie sluit bij TP1 (0.6R)
+  "tp2_close_pct": 0.16,       // 16% van positie sluit bij TP2 (1.2R)
+  "tp3_close_pct": 0.35,       // 35% van positie sluit bij TP3 (2.0R)
+  
+  "# DEFAULTS (TP4-5 - niet geoptimaliseerd)": "",
+  "tp4_close_pct": 0.20,       // 20% sluit bij TP4 (2.5R) - DEFAULT
+  "tp5_close_pct": 0.45,       // 45% sluit bij TP5 (3.5R) - DEFAULT
+  
+  "# LEGACY (niet gebruikt in backtest)": "",
+  "tp1_r_multiple": 1.7,       // NIET GEBRUIKT - backtest gebruikt 0.6R
+  "tp2_r_multiple": 2.7,       // NIET GEBRUIKT - backtest gebruikt 1.2R
+  "tp3_r_multiple": 6.0,       // NIET GEBRUIKT - backtest gebruikt 2.0R
+  
+  "# TRAILING": "",
   "trail_activation_r": 0.65,  // Trailing activeerd na 0.65R winst
-  "atr_trail_multiplier": 1.6  // Trailing afstand = 1.6 * ATR
+  "atr_trail_multiplier": 1.6  // NIET ACTIEF in trailing logica
 }
 ```
+
+**⚠️ TOTALE CLOSE %: 1.50 (niet 1.0!)**
+
+De close percentages zijn **weights** voor RR-berekening, geen strikte percentages:
+- Geoptimaliseerd: 0.34 + 0.16 + 0.35 = 0.85
+- Defaults: 0.20 + 0.45 = 0.65
+- Totaal: 1.50
 
 ### 2.3 Close Percentages (gewogen)
 
@@ -296,22 +322,24 @@ Als `tp1_rr < trail_activation_r`, blijft de trailing SL op de originele SL staa
 ```python
 # Vereiste parameters voor H1 backtester implementatie
 REQUIRED_EXIT_PARAMS = {
-    # TP Niveaus (berekend bij entry)
-    'atr_tp1_multiplier': 0.6,    # TP1 = entry ± risk * multiplier
-    'atr_tp2_multiplier': 1.2,
-    'atr_tp3_multiplier': 2.0,
-    # TP4/TP5 zijn hardcoded: 2.5R en 3.5R
+    # TP Niveaus (R-multiples - dit is wat de backtest ECHT gebruikt)
+    'tp1_r': 0.6,    # Via atr_tp1_multiplier default
+    'tp2_r': 1.2,    # Via atr_tp2_multiplier default
+    'tp3_r': 2.0,    # Via atr_tp3_multiplier default
+    'tp4_r': 2.5,    # Hardcoded in strategy_core.py
+    'tp5_r': 3.5,    # Hardcoded in strategy_core.py
     
-    # Close Percentages (weights voor RR)
-    'tp1_close_pct': 0.34,
-    'tp2_close_pct': 0.16,
-    'tp3_close_pct': 0.35,
-    'tp4_close_pct': 0.20,
-    'tp5_close_pct': 0.45,
+    # Close Percentages (weights voor RR, totaal = 1.50)
+    'tp1_close_pct': 0.34,  # Geoptimaliseerd
+    'tp2_close_pct': 0.16,  # Geoptimaliseerd
+    'tp3_close_pct': 0.35,  # Geoptimaliseerd
+    'tp4_close_pct': 0.20,  # Default
+    'tp5_close_pct': 0.45,  # Default
     
     # Trailing Stop
     'trail_activation_r': 0.65,   # Min R voor trailing activatie
-    'atr_trail_multiplier': 1.6,  # Trail afstand (niet gebruikt in huidige code!)
+    # Note: atr_trail_multiplier (1.6) wordt NIET gebruikt in trailing logica
+    # Trailing SL = previous_tp + 0.5*risk
 }
 ```
 
