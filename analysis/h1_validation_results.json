@@ -1,0 +1,391 @@
+{
+  "EUR_USD": {
+    "h1_vs_d1": {
+      "status": "FAIL",
+      "total_days": 3102,
+      "issues_count": 1060,
+      "issues": [
+        {
+          "date": "2014-01-01",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.37424,
+          "d1_value": 1.36296,
+          "diff_pct": 0.8276104948054204
+        },
+        {
+          "date": "2014-01-02",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.37756,
+          "d1_value": 1.36745,
+          "diff_pct": 0.7393323339061642
+        },
+        {
+          "date": "2014-01-22",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.35838,
+          "d1_value": 1.36986,
+          "diff_pct": 0.8380418436920676
+        },
+        {
+          "date": "2014-01-23",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.35302,
+          "d1_value": 1.3663,
+          "diff_pct": 0.9719680889995008
+        },
+        {
+          "date": "2014-01-30",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.36627,
+          "d1_value": 1.35741,
+          "diff_pct": 0.6527136237393337
+        },
+        {
+          "date": "2014-02-06",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.34824,
+          "d1_value": 1.35518,
+          "diff_pct": 0.512109092519071
+        },
+        {
+          "date": "2014-02-13",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.35859,
+          "d1_value": 1.36736,
+          "diff_pct": 0.641381933068098
+        },
+        {
+          "date": "2014-02-27",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.37268,
+          "d1_value": 1.3825,
+          "diff_pct": 0.7103074141048942
+        },
+        {
+          "date": "2014-03-05",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.37495,
+          "d1_value": 1.38732,
+          "diff_pct": 0.8916472046824245
+        },
+        {
+          "date": "2014-03-06",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.37213,
+          "d1_value": 1.38521,
+          "diff_pct": 0.9442611589578461
+        },
+        {
+          "date": "2014-03-18",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.38799,
+          "d1_value": 1.38096,
+          "diff_pct": 0.5090661568763825
+        },
+        {
+          "date": "2014-03-19",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.39326,
+          "d1_value": 1.38452,
+          "diff_pct": 0.6312657094155354
+        },
+        {
+          "date": "2014-03-23",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.38066,
+          "d1_value": 1.38761,
+          "diff_pct": 0.5008611929865028
+        },
+        {
+          "date": "2014-04-03",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.38071,
+          "d1_value": 1.37316,
+          "diff_pct": 0.5498266771534394
+        },
+        {
+          "date": "2014-04-30",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.37744,
+          "d1_value": 1.38629,
+          "diff_pct": 0.6383945639079864
+        },
+        {
+          "date": "2014-05-07",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.39092,
+          "d1_value": 1.38329,
+          "diff_pct": 0.5515835435808852
+        },
+        {
+          "date": "2014-05-08",
+          "type": "HIGH_MISMATCH",
+          "h1_value": 1.39936,
+          "d1_value": 1.38446,
+          "diff_pct": 1.0762318882452302
+        },
+        {
+          "date": "2014-05-08",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.38329,
+          "d1_value": 1.37452,
+          "diff_pct": 0.638040916101617
+        },
+        {
+          "date": "2014-06-04",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.35964,
+          "d1_value": 1.35034,
+          "diff_pct": 0.6887154346312679
+        },
+        {
+          "date": "2014-06-05",
+          "type": "LOW_MISMATCH",
+          "h1_value": 1.35034,
+          "d1_value": 1.3621,
+          "diff_pct": 0.8633727332794944
+        }
+      ],
+      "avg_high_diff_pct": 0.2997019398186018,
+      "avg_low_diff_pct": 0.28446989352851015,
+      "max_high_diff_pct": 3.6239424512509744,
+      "max_low_diff_pct": 3.281798436540605
+    },
+    "h1_vs_h4": {
+      "status": "FAIL",
+      "total_bars": 18602,
+      "issues_count": 201,
+      "issues": [
+        {
+          "timestamp": "2014-02-06 08:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.3534,
+          "h4_high": 1.36023,
+          "h1_low": 1.35147,
+          "h4_low": 1.34824
+        },
+        {
+          "timestamp": "2014-02-06 12:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.36192,
+          "h4_high": 1.36192,
+          "h1_low": 1.34824,
+          "h4_low": 1.35896
+        },
+        {
+          "timestamp": "2014-03-06 08:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.37513,
+          "h4_high": 1.38236,
+          "h1_low": 1.37213,
+          "h4_low": 1.37233
+        },
+        {
+          "timestamp": "2014-03-06 12:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.38544,
+          "h4_high": 1.38732,
+          "h1_low": 1.37233,
+          "h4_low": 1.38078
+        },
+        {
+          "timestamp": "2014-05-08 12:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.39936,
+          "h4_high": 1.39114,
+          "h1_low": 1.38489,
+          "h4_low": 1.38489
+        },
+        {
+          "timestamp": "2014-10-03 08:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.2645,
+          "h4_high": 1.26342,
+          "h1_low": 1.26116,
+          "h4_low": 1.25174
+        },
+        {
+          "timestamp": "2014-10-03 12:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.26191,
+          "h4_high": 1.25494,
+          "h1_low": 1.25006,
+          "h4_low": 1.25006
+        },
+        {
+          "timestamp": "2014-10-13 16:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.26932,
+          "h4_high": 1.27614,
+          "h1_low": 1.26647,
+          "h4_low": 1.26654
+        },
+        {
+          "timestamp": "2014-10-15 08:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.26765,
+          "h4_high": 1.27573,
+          "h1_low": 1.26375,
+          "h4_low": 1.26375
+        },
+        {
+          "timestamp": "2014-10-15 12:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.28864,
+          "h4_high": 1.28864,
+          "h1_low": 1.2665,
+          "h4_low": 1.27375
+        },
+        {
+          "timestamp": "2014-11-02 20:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.25152,
+          "h4_high": 1.25152,
+          "h1_low": 1.25017,
+          "h4_low": 1.24378
+        },
+        {
+          "timestamp": "2014-11-06 08:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.25332,
+          "h4_high": 1.25332,
+          "h1_low": 1.24952,
+          "h4_low": 1.23944
+        },
+        {
+          "timestamp": "2014-11-06 12:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.25299,
+          "h4_high": 1.2448,
+          "h1_low": 1.23944,
+          "h4_low": 1.2395
+        },
+        {
+          "timestamp": "2014-11-21 04:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.2567,
+          "h4_high": 1.25534,
+          "h1_low": 1.2537,
+          "h4_low": 1.24328
+        },
+        {
+          "timestamp": "2014-11-21 08:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.25534,
+          "h4_high": 1.24599,
+          "h1_low": 1.24156,
+          "h4_low": 1.2412
+        },
+        {
+          "timestamp": "2014-12-04 08:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.23252,
+          "h4_high": 1.24152,
+          "h1_low": 1.23046,
+          "h4_low": 1.22798
+        },
+        {
+          "timestamp": "2014-12-04 16:00:00",
+          "type": "HIGH_MISMATCH",
+          "h1_high": 1.24564,
+          "h4_high": 1.23874,
+          "h1_low": 1.236,
+          "h4_low": 1.236
+        },
+        {
+          "timestamp": "2014-12-05 08:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.23828,
+          "h4_high": 1.23789,
+          "h1_low": 1.23464,
+          "h4_low": 1.2279
+        },
+        {
+          "timestamp": "2015-01-15 04:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.17864,
+          "h4_high": 1.17864,
+          "h1_low": 1.17603,
+          "h4_low": 1.15721
+        },
+        {
+          "timestamp": "2015-01-15 08:00:00",
+          "type": "LOW_MISMATCH",
+          "h1_high": 1.1778,
+          "h4_high": 1.17739,
+          "h1_low": 1.15721,
+          "h4_low": 1.16666
+        }
+      ],
+      "avg_high_diff_pct": 0.04730192400508902,
+      "avg_low_diff_pct": 0.04692587964450341
+    },
+    "data_gaps": {
+      "status": "WARN",
+      "total_candles": 74593,
+      "large_gaps": 11,
+      "gaps": [
+        {
+          "after": "2015-12-24 18:00:00",
+          "before": "2015-12-27 22:00:00",
+          "gap_hours": 76.0
+        },
+        {
+          "after": "2015-12-31 18:00:00",
+          "before": "2016-01-03 22:00:00",
+          "gap_hours": 76.0
+        },
+        {
+          "after": "2016-12-23 21:00:00",
+          "before": "2016-12-26 23:00:00",
+          "gap_hours": 74.0
+        },
+        {
+          "after": "2016-12-30 21:00:00",
+          "before": "2017-01-02 23:00:00",
+          "gap_hours": 74.0
+        },
+        {
+          "after": "2017-12-22 21:00:00",
+          "before": "2017-12-25 22:00:00",
+          "gap_hours": 73.0
+        },
+        {
+          "after": "2017-12-29 21:00:00",
+          "before": "2018-01-01 22:00:00",
+          "gap_hours": 73.0
+        },
+        {
+          "after": "2020-12-24 21:00:00",
+          "before": "2020-12-27 22:00:00",
+          "gap_hours": 73.0
+        },
+        {
+          "after": "2020-12-31 21:00:00",
+          "before": "2021-01-03 22:00:00",
+          "gap_hours": 73.0
+        },
+        {
+          "after": "2022-12-23 21:00:00",
+          "before": "2022-12-26 22:00:00",
+          "gap_hours": 73.0
+        },
+        {
+          "after": "2023-12-22 21:00:00",
+          "before": "2023-12-25 22:00:00",
+          "gap_hours": 73.0
+        }
+      ],
+      "date_range": "2014-01-01 22:00:00 to 2025-12-30 23:00:00"
+    },
+    "timestamp_consistency": {
+      "status": "WARN",
+      "h1_range": "2014-01-01 22:00:00 to 2025-12-30 23:00:00",
+      "h1_candles": 74593,
+      "issues": [
+        "H1 starts later than D1: 2014-01-01 vs 2002-12-31",
+        "H1 starts later than H4: 2014-01-01 22:00:00 vs 2003-01-01 18:00:00"
+      ]
+    }
+  }
+}
