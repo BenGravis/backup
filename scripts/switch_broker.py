@@ -38,7 +38,7 @@ def switch_to_demo():
     
     # Copy demo config
     shutil.copy(demo_env, active_env)
-    print(f"✅ Switched to Forex.com Demo (account 531, $5,000)")
+    print(f"✅ Switched to Forex.com Demo (account 531, $50,000)")
     print(f"📝 Updated: {active_env}")
     print()
     print("⚠️  IMPORTANT:")
