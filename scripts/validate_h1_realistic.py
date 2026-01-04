@@ -541,6 +541,10 @@ class RealisticH1Simulator:
         self.state.current_day = date_str
         self.state.daily_hwm = max(self.state.balance, self.state.equity)
         self.state.trading_halted_today = False  # Reset halt flag for new day
+        
+        # Reset loss streak at new day (like taking a break after losses)
+        # This prevents permanent halt after consecutive_loss_halt is reached
+        self.state.loss_streak = 0
     
     def _calculate_floating_pnl(self, bar_data: dict) -> float:
         """Calculate total floating P&L for all open trades."""
@@ -1215,6 +1219,8 @@ def main():
     scaling_config = ScalingConfig(
         risk_per_trade_pct=params.get('risk_per_trade_pct', 0.6),
         use_dynamic_lot_sizing=not args.no_scaling,
+        # When scaling disabled, also disable consecutive loss halt
+        consecutive_loss_halt=999 if args.no_scaling else 5,
     )
     
     print(f"\n📋 Configuration:")
