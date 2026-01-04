@@ -1132,7 +1132,8 @@ class LiveTradingBot:
             historical_sr,
         )
         
-        entry, sl, tp1, tp2, tp3 = trade_levels
+        # compute_confluence returns 5 TP levels; unpack all to avoid tuple mismatch errors
+        entry, sl, tp1, tp2, tp3, tp4, tp5 = trade_levels
         
         confluence_score = sum(1 for v in flags.values() if v)
         
