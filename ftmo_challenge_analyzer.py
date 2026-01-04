@@ -53,7 +53,7 @@ from strategy_core import (
 from ftmo_config import FTMO_CONFIG, FTMO10KConfig, get_pip_size, get_sl_limits
 from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
 from tradr.risk.position_sizing import calculate_lot_size, get_contract_specs
-from params.params_loader import save_optimized_params
+# Note: save_optimized_params NOT imported - we don't auto-save to current_params.json
 from params.defaults import PARAMETER_DEFAULTS, merge_with_defaults
 
 # Professional Quant Suite Integration
@@ -2184,11 +2184,15 @@ class OptunaOptimizer:
         print(f"   From Optuna: {len(optuna_keys)} params")
         print(f"   From defaults: {len(default_keys)} params")
         
-        try:
-            save_optimized_params(params_to_save, backup=True)
-            print(f"\n✅ Saved {len(params_to_save)} parameters to params/current_params.json")
-        except Exception as e:
-            print(f"❌ Failed to save params: {e}")
+        # ============================================================================
+        # IMPORTANT: We do NOT auto-save to params/current_params.json!
+        # The OutputManager saves best_params.json to the run directory.
+        # User must manually choose which run to use for live trading:
+        #   python scripts/select_run.py run009
+        # ============================================================================
+        print(f"\n📁 Parameters saved to output directory only (NOT to current_params.json)")
+        print(f"   To use these params for live trading:")
+        print(f"   python scripts/select_run.py <run_name>")
         
         return {
             'best_params': self.best_params,
