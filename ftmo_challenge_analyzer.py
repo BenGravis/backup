@@ -2832,9 +2832,11 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
     3. Win Rate (consistency)
     
     All three should be MAXIMIZED (Optuna NSGA-II handles this).
+    
+    Uses PARAMETER_DEFAULTS as base to ensure parity with TPE and live bot.
     """
-    # Sample hyperparameters (same as single-objective)
-    params = {
+    # Start with PARAMETER_DEFAULTS (same as TPE) for parity
+    optuna_params = {
         # === CORE RISK & CONFLUENCE PARAMETERS ===
         'min_confluence': trial.suggest_int('min_confluence', 2, 4),
         'min_quality_factors': trial.suggest_int('min_quality_factors', 1, 2),
@@ -2883,6 +2885,10 @@ def multi_objective_function(trial) -> Tuple[float, float, float]:
         'max_total_dd_warning': trial.suggest_float('max_total_dd_warning', 7.0, 9.0, step=0.5),
         'consecutive_loss_halt': trial.suggest_int('consecutive_loss_halt', 5, 999),
     }
+    
+    # Merge with PARAMETER_DEFAULTS for complete 77-param coverage (parity with TPE)
+    params = PARAMETER_DEFAULTS.copy()
+    params.update(optuna_params)
     
     # === VALIDATION CONSTRAINTS ===
     
@@ -3082,12 +3088,14 @@ def run_multi_objective_optimization(n_trials: int = 50) -> Dict:
         }
 
 
-def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str = "best_params.json", optimization_mode: str = "VALIDATE"):
+def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str = "params/current_params.json", optimization_mode: str = "VALIDATE"):
     """
     Run validation mode: test existing parameters on a different date range.
 
     This is used to verify if optimized parameters generalize to other time periods.
     No optimization is performed - just a single backtest with loaded parameters.
+    
+    Uses PARAMETER_DEFAULTS merge for parity with TPE/NSGA and live bot.
 
     Args:
         start_date_str: Start date in YYYY-MM-DD format
@@ -3181,43 +3189,65 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
     if 'parameters' in best_params and isinstance(best_params['parameters'], dict):
         # Check for double-nesting: {"parameters": {"parameters": {...}}}
         if 'parameters' in best_params['parameters']:
-            params = best_params['parameters']['parameters']
+            raw_params = best_params['parameters']['parameters']
         else:
-            params = best_params['parameters']
+            raw_params = best_params['parameters']
     else:
-        params = best_params
+        raw_params = best_params
 
-    # Get parameter values with defaults
-    min_confluence = params.get('min_confluence', params.get('min_confluence_score', 3))
-    min_quality = params.get('min_quality_factors', 2)
-    risk_pct = params.get('risk_per_trade_pct', 0.5)
-    atr_min_pct = params.get('atr_min_percentile', 50.0)
-    trail_r = params.get('trail_activation_r', 1.0)
-    dec_atr = params.get('december_atr_multiplier', 1.5)
-    vol_boost = params.get('volatile_asset_boost', 1.3)
-    adx_trend = params.get('adx_trend_threshold', 18.0)
-    adx_range = params.get('adx_range_threshold', 12.0)
-    trend_conf = params.get('trend_min_confluence', 5)
-    range_conf = params.get('range_min_confluence', 3)
-    atr_vol_ratio = params.get('atr_volatility_ratio', params.get('atr_vol_ratio_range', 0.8))
-    atr_trail = params.get('atr_trail_multiplier', 1.8)
-    partial_1r = params.get('partial_exit_at_1r', True)
-    partial_pct = params.get('partial_exit_pct', 0.8)
-    tp1_r = params.get('tp1_r_multiple', 1.75)
-    tp2_r = params.get('tp2_r_multiple', 3.0)
-    tp3_r = params.get('tp3_r_multiple', 5.5)
-    tp1_close = params.get('tp1_close_pct', 0.35)
-    tp2_close = params.get('tp2_close_pct', 0.20)
-    tp3_close = params.get('tp3_close_pct', 0.25)
-    use_htf = params.get('use_htf_filter', False)
-    use_struct = params.get('use_structure_filter', False)
-    use_confirm = params.get('use_confirmation_filter', False)
-    use_fib = params.get('use_fib_filter', False)
-    use_disp = params.get('use_displacement_filter', False)
-    use_candle = params.get('use_candle_rejection', False)
-    daily_halt = params.get('daily_loss_halt_pct', 4.0)
-    total_dd_warn = params.get('max_total_dd_warning', 8.0)
-    consec_halt = params.get('consecutive_loss_halt', 999)
+    # CRITICAL: Merge with PARAMETER_DEFAULTS for parity with TPE/NSGA and live bot
+    # This ensures all 77 params are present with consistent defaults
+    params = PARAMETER_DEFAULTS.copy()
+    for key, value in raw_params.items():
+        if key in params and not key.startswith('_'):
+            params[key] = value
+    
+    # Handle min_confluence_score -> min_confluence alias
+    if 'min_confluence_score' in raw_params and 'min_confluence' not in raw_params:
+        params['min_confluence'] = raw_params['min_confluence_score']
+    
+    print(f"   Loaded {len([k for k in raw_params if not k.startswith('_')])} params from file, merged with {len(PARAMETER_DEFAULTS)} defaults")
+
+    # Get parameter values (all from merged params dict now)
+    min_confluence = params['min_confluence']
+    min_quality = params['min_quality_factors']
+    risk_pct = params['risk_per_trade_pct']
+    atr_min_pct = params['atr_min_percentile']
+    trail_r = params['trail_activation_r']
+    dec_atr = params['december_atr_multiplier']
+    vol_boost = params['volatile_asset_boost']
+    adx_trend = params['adx_trend_threshold']
+    adx_range = params['adx_range_threshold']
+    trend_conf = params['trend_min_confluence']
+    range_conf = params['range_min_confluence']
+    atr_vol_ratio = params['atr_vol_ratio_range']
+    atr_trail = params['atr_trail_multiplier']
+    partial_1r = params['partial_exit_at_1r']
+    partial_pct = params['partial_exit_pct']
+    tp1_r = params['tp1_r_multiple']
+    tp2_r = params['tp2_r_multiple']
+    tp3_r = params['tp3_r_multiple']
+    tp1_close = params['tp1_close_pct']
+    tp2_close = params['tp2_close_pct']
+    tp3_close = params['tp3_close_pct']
+    use_htf = params['use_htf_filter']
+    use_struct = params['use_structure_filter']
+    use_confirm = params['use_confirmation_filter']
+    use_fib = params['use_fib_filter']
+    use_disp = params['use_displacement_filter']
+    use_candle = params['use_candle_rejection']
+    daily_halt = params['daily_loss_halt_pct']
+    total_dd_warn = params['max_total_dd_warning']
+    consec_halt = params['consecutive_loss_halt']
+    # Session and graduated risk params
+    use_session = params['use_session_filter']
+    session_start = params['session_start_utc']
+    session_end = params['session_end_utc']
+    use_grad_risk = params['use_graduated_risk']
+    t1_dd = params['tier1_dd_pct']
+    t1_risk = params['tier1_risk_factor']
+    t2_dd = params['tier2_dd_pct']
+    t3_dd = params['tier3_dd_pct']
 
     # Training period backtest
     print(f"\n📈 TRAINING PERIOD: {val_start.strftime('%Y-%m-%d')} to {training_end_date.strftime('%Y-%m-%d')}")
@@ -3256,6 +3286,14 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         daily_loss_halt_pct=daily_halt,
         max_total_dd_warning=total_dd_warn,
         consecutive_loss_halt=consec_halt,
+        use_session_filter=use_session,
+        session_start_utc=session_start,
+        session_end_utc=session_end,
+        use_graduated_risk=use_grad_risk,
+        tier1_dd_pct=t1_dd,
+        tier1_risk_factor=t1_risk,
+        tier2_dd_pct=t2_dd,
+        tier3_dd_pct=t3_dd,
     )
 
     # Validation period backtest
@@ -3294,6 +3332,14 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         daily_loss_halt_pct=daily_halt,
         max_total_dd_warning=total_dd_warn,
         consecutive_loss_halt=consec_halt,
+        use_session_filter=use_session,
+        session_start_utc=session_start,
+        session_end_utc=session_end,
+        use_graduated_risk=use_grad_risk,
+        tier1_dd_pct=t1_dd,
+        tier1_risk_factor=t1_risk,
+        tier2_dd_pct=t2_dd,
+        tier3_dd_pct=t3_dd,
     )
 
     # Full period backtest
@@ -3332,6 +3378,14 @@ def run_validation_mode(start_date_str: str, end_date_str: str, params_file: str
         daily_loss_halt_pct=daily_halt,
         max_total_dd_warning=total_dd_warn,
         consecutive_loss_halt=consec_halt,
+        use_session_filter=use_session,
+        session_start_utc=session_start,
+        session_end_utc=session_end,
+        use_graduated_risk=use_grad_risk,
+        tier1_dd_pct=t1_dd,
+        tier1_risk_factor=t1_risk,
+        tier2_dd_pct=t2_dd,
+        tier3_dd_pct=t3_dd,
     )
 
     # Print results
@@ -3548,8 +3602,8 @@ def main():
     parser.add_argument(
         "--params-file",
         type=str,
-        default="best_params.json",
-        help="Path to params JSON file for validation mode (default: best_params.json)"
+        default="params/current_params.json",
+        help="Path to params JSON file for validation mode (default: params/current_params.json)"
     )
     parser.add_argument(
         "--exclude-symbols",
