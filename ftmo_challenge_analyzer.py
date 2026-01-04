@@ -2144,17 +2144,20 @@ class OptunaOptimizer:
             
             # Save best_params.json in TPE folder when new best is found
             if is_new_best:
-                from params.defaults import DEFAULT_STRATEGY_PARAMS
+                from params.defaults import PARAMETER_DEFAULTS
                 import json
                 from pathlib import Path
                 
                 # Merge trial params with defaults
-                best_params_full = {**DEFAULT_STRATEGY_PARAMS, **trial.params}
+                best_params_full = {**PARAMETER_DEFAULTS, **trial.params}
+                
+                # Determine optimization mode
+                mode = "NSGA-II" if OPTUNA_CONFIG.mode == "multi_objective" else "TPE"
                 
                 # Add metadata
                 best_params_with_meta = {
-                    "optimization_mode": self.tf_config['mode'],
-                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "optimization_mode": mode,
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f"),
                     "trial_number": trial.number,
                     "best_score": trial.value,
                     "parameters": best_params_full

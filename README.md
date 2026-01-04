@@ -16,6 +16,7 @@ python ftmo_challenge_analyzer.py --multi --trials 100   # NSGA-II multi-objecti
 # Monitor live progress
 tail -f ftmo_analysis_output/TPE/run.log          # Complete output
 tail -f ftmo_analysis_output/TPE/optimization.log # Trial results only
+cat ftmo_analysis_output/TPE/best_params.json     # Current best parameters (auto-updates!)
 
 # Check optimization status
 python ftmo_challenge_analyzer.py --status
@@ -49,9 +50,18 @@ python main_live_bot.py
 - Risk per trade: 0.6% = $360 per R
 - Min profitable days: 3 (5ers requirement)
 
-## Latest Updates (Dec 31, 2025)
+## Latest Updates (Jan 4, 2026)
 
-### Live Bot Enhancements
+### Optimization Infrastructure
+- ✨ **Real-time Best Params**: `best_params.json` auto-updates during optimization
+- ✨ **Fresh Start**: Clean database with warm-start from run009 baseline (0.6R/1.2R/2.0R)
+- ✨ **Import Fix**: Fixed `DEFAULT_STRATEGY_PARAMS` → `PARAMETER_DEFAULTS` bug
+- ✨ **Progress Tracking**: Visible best trial parameters while optimization runs
+- ✨ **Database Archiving**: Old trials archived to `optuna_backups/` with timestamps
+
+### Previous Updates (Dec 31, 2025)
+
+#### Live Bot Enhancements
 - ✨ **Daily Close Scanning**: Scan only at 22:05 UTC (after NY close) - matches backtest exactly
 - ✨ **Spread-Only Entry Filter**: No session filter, just check spread quality
 - ✨ **Spread Monitoring**: Every 10 min, check if spread improved for pending signals

@@ -1,7 +1,37 @@
 # Changelog
 
-**Last Updated**: 2025-12-31
-**Auto-generated**: From git commits
+**Last Updated**: 2026-01-04
+**Auto-generated**: From git commits and session logs
+
+---
+
+## v1.2.0 - Optimization Infrastructure Improvements (Jan 4, 2026)
+
+### Real-Time Best Parameters Tracking
+- ✨ **Auto-updating best_params.json**: File updates immediately when new best trial found
+  - Located in `ftmo_analysis_output/TPE/best_params.json` (or NSGA for multi-objective)
+  - Contains trial number, best score, and all parameters
+  - Updated via progress callback during optimization
+  - Visible even while optimization is running
+
+### Fresh Optimization Start
+- ✨ **Clean database with warm-start**: Started fresh with run009 baseline
+  - Database: `regime_adaptive_v2_clean_warm.db`
+  - Trial #0: Baseline parameters (TP 0.6R/1.2R/2.0R, partial_exit disabled, risk 0.65%)
+  - Previous trials archived to `optuna_backups/` with timestamps
+  - Warm-start ensures baseline is evaluated before exploration
+
+### Bug Fixes
+- ✅ **Import error fixed**: `DEFAULT_STRATEGY_PARAMS` → `PARAMETER_DEFAULTS`
+  - Was causing crashes when saving best_params.json
+  - Progress callback now works reliably
+  - File location: `ftmo_challenge_analyzer.py` line 2147
+
+### Optimization Settings
+- Training Period: 2023-01-01 to 2024-09-30 (in-sample)
+- Validation Period: 2024-10-01 to 2025-12-26 (out-of-sample)
+- Target: 50 trials with TPE single-objective
+- Warm-start: run009 baseline (proven 48.6% WR across 12 years)
 
 ---
 

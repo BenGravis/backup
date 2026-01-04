@@ -5,11 +5,12 @@
 ```
 ftmo_analysis_output/
 ├── TPE/                        # Single-objective TPE optimization runs
-│   ├── optimization.log        # Current run trial log
+│   ├── run.log                  # Complete console output (all debug info)
+│   ├── optimization.log        # Current run trial log (structured results)
+│   ├── best_params.json        # ⭐ REAL-TIME best parameters (auto-updates!)
 │   ├── best_trades_*.csv       # Best trades from current run
 │   ├── monthly_stats.csv       # Monthly performance breakdown
 │   ├── symbol_performance.csv  # Per-symbol statistics
-│   ├── best_params.json        # Best parameters from current run
 │   ├── professional_backtest_report.txt  # Detailed performance report
 │   ├── analysis_summary_*.txt  # Run summaries with timestamps
 │   └── history/                # Archived runs
@@ -45,8 +46,26 @@ ftmo_analysis_output/
 ## File Descriptions
 
 ### Current Run Files
-- **optimization.log**: Real-time trial results (score, R, win rate, profit)
-- **run.log**: Complete console output (all debug info, asset processing)
+- **run.log**: Complete console output with all debug info, asset processing, trial details
+- **optimization.log**: Real-time trial results (score, R, win rate, profit) - structured format
+- **best_params.json**: ⭐ **REAL-TIME best parameters** (auto-updates during optimization!)
+  - Updates immediately when new best trial is found
+  - Contains: trial number, best score, all parameters
+  - Can be monitored with: `watch -n 5 cat ftmo_analysis_output/TPE/best_params.json`
+  - Example:
+    ```json
+    {
+      "trial_number": 13,
+      "best_score": 273.18,
+      "parameters": {
+        "tp1_r_multiple": 0.8,
+        "tp2_r_multiple": 1.5,
+        "tp3_r_multiple": 4.0,
+        "partial_exit_at_1r": 1.0,
+        "risk_per_trade_pct": 0.55
+      }
+    }
+    ```
 - **best_trades_*.csv**: All trades from the best trial
   - `_training.csv`: In-sample period (2023-01-01 to 2024-09-30)
   - `_validation.csv`: Out-of-sample period (2024-10-01 to present)

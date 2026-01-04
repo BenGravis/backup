@@ -12,6 +12,7 @@ This document describes the TPE/NSGA-II optimization flow with end-of-run valida
 │ • FTMOComplianceTracker computes DD metrics (no trade filtering)   │
 │ • Hard constraints: TP ordering, close-sum ≤85%, ADX thresholds    │
 │ • No validation runs during optimization (speed optimization)       │
+│ • Real-time best_params.json updates on each new best trial        │
 │ • Output: Best training trial + study database                     │
 │ • Time: ~1-2 hours for 100 trials                                  │
 └─────────────────────────────────────────────────────────────────────┘
@@ -63,6 +64,31 @@ This document describes the TPE/NSGA-II optimization flow with end-of-run valida
 | 500    | 10h     | 10m     | 15m     | 5m      | ~11h  |
 
 ## Usage
+
+### Real-Time Monitoring (New Jan 2026)
+```bash
+# Monitor optimization progress
+tail -f ftmo_analysis_output/TPE/run.log          # Complete output
+tail -f ftmo_analysis_output/TPE/optimization.log # Trial results only
+
+# Check current best parameters (auto-updates!)
+cat ftmo_analysis_output/TPE/best_params.json
+# Example output:
+# {
+#   "trial_number": 13,
+#   "best_score": 273.18,
+#   "parameters": {
+#     "tp1_r_multiple": 0.8,
+#     "tp2_r_multiple": 1.5,
+#     "tp3_r_multiple": 4.0,
+#     "partial_exit_at_1r": 1.0,
+#     "risk_per_trade_pct": 0.55
+#   }
+# }
+
+# Watch for updates in real-time
+watch -n 5 cat ftmo_analysis_output/TPE/best_params.json
+```
 
 ### NSGA-II Multi-Objective (Recommended for FTMO)
 ```bash

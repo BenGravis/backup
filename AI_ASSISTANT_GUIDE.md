@@ -2,7 +2,7 @@
 
 **Purpose**: This file helps AI assistants (GitHub Copilot, ChatGPT, Claude, etc.) quickly understand the 5ers 60K Trading Bot project.
 
-**Last Updated**: 2025-12-31
+**Last Updated**: 2026-01-04
 
 ---
 
@@ -10,9 +10,9 @@
 
 **What**: Automated MetaTrader 5 trading bot for 5ers 60K High Stakes Challenge  
 **Strategy**: 6-Pillar Confluence System with multi-timeframe analysis  
-**Optimization**: Optuna (TPE/NSGA-II) with 25+ parameters  
+**Optimization**: Optuna (TPE/NSGA-II) with 25+ parameters, real-time best_params.json  
 **Deployment**: Windows VM (live bot) + Linux (optimizer)  
-**Current Status**: Deployed on Forex.com Demo, waiting for first trades  
+**Current Status**: Fresh TPE optimization running (50 trials, warm-start with run009 baseline)  
 **Performance**: ~48% win rate, +2,766R over 12 years (2014-2025)
 
 ---
@@ -91,7 +91,25 @@ ftmotrial/
 
 ## 🔑 Key Concepts for AI Understanding
 
-### 1. Live Bot Features (Dec 31, 2025)
+### 1. Optimization Infrastructure (Jan 4, 2026)
+
+**Real-Time Best Parameters Tracking**:
+- `ftmo_analysis_output/TPE/best_params.json` auto-updates during optimization
+- Updates immediately when new best trial found
+- Contains trial number, score, and all parameters
+- Monitor with: `watch -n 5 cat ftmo_analysis_output/TPE/best_params.json`
+
+**Warm-Start from Baseline**:
+- Trial #0: run009 baseline (0.6R/1.2R/2.0R, partial_exit disabled, 0.65% risk)
+- Proven performance: 48.6% WR across 12 years (2014-2025)
+- Parameter space exploration starts after baseline evaluation
+
+**Database Management**:
+- Current: `regime_adaptive_v2_clean_warm.db`
+- Old trials archived to `optuna_backups/` with timestamps
+- Resume support: optimization continues from last trial
+
+### 2. Live Bot Features (Dec 31, 2025)
 
 **Daily Close Scanning**:
 - Scan only at 22:05 UTC (after NY close)
@@ -111,7 +129,7 @@ ftmotrial/
 | 2 | ≥3.5% | Cancel all pending orders |
 | 3 | ≥4.5% | Emergency close positions |
 
-### 2. Live Bot Synced with TPE Optimizer
+### 3. Live Bot Synced with TPE Optimizer
 
 **CRITICAL**: Both use IDENTICAL logic:
 ```python
@@ -129,7 +147,7 @@ if boosted_confluence >= MIN_CONFLUENCE and boosted_quality >= min_quality_for_a
     is_active = True
 ```
 
-### 3. Parameters - NEVER Hardcode
+### 4. Parameters - NEVER Hardcode
 
 **Correct**:
 ```python
@@ -142,7 +160,16 @@ params = load_strategy_params()
 MIN_CONFLUENCE = 5  # Don't hardcode!
 ```
 
-### 4. Multi-Broker Symbol Mapping
+**Parameter Loading Pitfall** (Fixed Jan 4, 2026):
+```python
+# ❌ WRONG: This import doesn't exist
+from params.defaults import DEFAULT_STRATEGY_PARAMS
+
+# ✅ CORRECT: Use this import
+from params.defaults import PARAMETER_DEFAULTS
+```
+
+### 5. Multi-Broker Symbol Mapping
 
 ```python
 from symbol_mapping import get_broker_symbol

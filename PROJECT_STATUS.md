@@ -1,6 +1,6 @@
 # 5ers 60K High Stakes Trading Bot - Project Status Report
-**Date**: 2025-12-31  
-**Status**: ✅ **PRODUCTION READY** - Deployed on Windows VM with Forex.com Demo
+**Date**: 2026-01-04  
+**Status**: ✅ **PRODUCTION READY** - Live optimization & Windows VM deployment
 
 ---
 
@@ -8,7 +8,24 @@
 
 The trading bot is a **professional-grade automated trading system** for **5ers 60K High Stakes** Challenge accounts. Full 12-year validation (2014-2025) confirms production readiness with **~48.6% win rate** and strict compliance.
 
-### ✅ Latest Achievements (Dec 31, 2025)
+### ✅ Latest Achievements (Jan 4, 2026)
+
+#### Optimization Infrastructure Improvements
+- **Real-time Best Params Tracking**: Auto-updating `best_params.json` during optimization
+  - Updates immediately when new best trial found
+  - Located in `ftmo_analysis_output/TPE/best_params.json`
+  - Contains trial number, score, and all parameters
+- **Fresh Optimization Start**: Clean database with warm-start from run009 baseline
+  - Baseline parameters: TP 0.6R/1.2R/2.0R, partial_exit disabled, risk 0.65%
+  - Trial #0 scores baseline first, then explores parameter space
+  - Previous trials archived to `optuna_backups/` for reference
+- **Import Bug Fix**: Fixed `DEFAULT_STRATEGY_PARAMS` → `PARAMETER_DEFAULTS` error
+  - Prevented crashes during best_params.json saving
+  - Progress callback now works reliably
+- **Training Period**: 2023-01-01 to 2024-09-30 (in-sample)
+- **Target**: 50 trials with TPE single-objective optimization
+
+### ✅ Previous Achievements (Dec 31, 2025)
 
 #### Live Bot Enhancements
 - **Daily Close Scanning**: Only at 22:05 UTC (matches backtest exactly)
@@ -60,8 +77,10 @@ params/current_params.json       ← Optimized strategy parameters
          ↑                            ↓
 ftmo_challenge_analyzer.py      main_live_bot.py
 (Optuna optimization)           (loads params at startup)
-         ↑
-data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
+    ↓    ↑
+    │    └──── data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
+    │
+    └─ ftmo_analysis_output/TPE/best_params.json  (real-time best trial)
 ```
 
 ---
