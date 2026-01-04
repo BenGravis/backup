@@ -1,397 +1,150 @@
-# PROJECT OVERVIEW - 5ers 60K High Stakes Trading Bot
+# Project Overview - 5ers 60K High Stakes Trading Bot
 
-**START HERE** - This is the first file to read to understand the entire project.
+## What This Project Does
 
----
+This is an **automated trading bot** that trades forex, indices, and commodities on MetaTrader 5 (MT5) for the **5ers 60K High Stakes** prop firm challenge.
 
-## 1. Project Summary
+### Key Results (Validated 2023-2025)
 
-This is an automated **MetaTrader 5 Trading Bot** designed specifically for **5ers 60K High Stakes Challenge accounts**, paired with a **Walk-Forward Optimization System**.
+If this bot ran from January 2023 to December 2025:
 
-- **Account Size**: $60,000 USD
-- **Step 1 Target**: 8% ($4,800)
-- **Step 2 Target**: 5% ($3,000)
-- **Min Profitable Days**: 3
-- **Platform**: MetaTrader 5 (MT5)
-- **Strategy**: 6 Confluence Pillars (multi-timeframe analysis)
-- **Optimization**: Parameter optimization saves to JSON config (no source code mutation)
-
-### Post-Fix Status: All Critical Issues Resolved
-
-| Issue | Status |
-|-------|--------|
-| Hardcoded pip values | **FIXED** - Symbol-specific pip values for all 34 assets |
-| Source code mutation | **FIXED** - Optimizer saves to `params/current_params.json` only |
-| Transaction costs | **FIXED** - Spread + slippage deducted in backtests |
-| Look-ahead bias | **FIXED** - Timestamp-based multi-timeframe alignment |
-| MT5 connectivity | **FIXED** - Exponential backoff reconnection with heartbeat |
-| Spread validation | **FIXED** - Pre-trade checks enforced |
+| Metric | Result |
+|--------|--------|
+| **Starting Balance** | $60,000 |
+| **Final Balance** | $1,160,462 |
+| **Total Profit** | $1,100,462 |
+| **Return** | +1,834% |
+| **Win Rate** | 71.8% |
 
 ---
 
-## 2. Two Main Components
+## How It Works
 
-### A. `main_live_bot.py` - Live Trading Bot
-**Runs on: Windows VM with MetaTrader 5**
+### 1. Signal Generation
+The bot scans 34 trading instruments daily at 22:05 UTC (after NY close) looking for high-probability setups based on:
+- Multi-timeframe trend alignment (Monthly → Weekly → Daily → H4)
+- Support/Resistance levels
+- Fibonacci retracements
+- Price action patterns
 
-The primary live trading bot that:
-- Executes trades 24/7 using the "6 Confluence Pillars" strategy
-- Connects directly to MT5 for order execution
-- **Loads all tunable parameters from `params/current_params.json` at startup**
-- Includes comprehensive FTMO-compliant risk management
-- Supports 34 assets (Forex, Metals, Crypto, Indices)
-- Features robust auto-reconnection with exponential backoff
+### 2. Trade Entry
+When a setup has enough "confluence" (multiple factors aligning), the bot:
+- Calculates entry price, stop loss, and 5 take profit levels
+- Places a pending order or enters immediately
+- Sizes position based on 0.6% account risk per trade
 
+### 3. Trade Management (5-TP System)
+The bot uses 5 take profit levels with partial exits:
+
+| Level | Target | Close % | What Happens |
+|-------|--------|---------|--------------|
+| TP1 | 0.6R | 10% | Close 10%, move SL to breakeven |
+| TP2 | 1.2R | 10% | Close 10%, trail SL |
+| TP3 | 2.0R | 15% | Close 15%, trail SL |
+| TP4 | 2.5R | 20% | Close 20%, trail SL |
+| TP5 | 3.5R | 45% | Close remaining 45% |
+
+### 4. Risk Management
+- **Base Risk**: 0.6% per trade ($360 on 60K)
+- **Dynamic Scaling**: Adjusts size based on win/loss streaks and equity curve
+- **Safety Mechanism**: Closes all trades if daily DD exceeds 4.2%
+
+---
+
+## Core Files
+
+### Trading Logic
+| File | Purpose |
+|------|---------|
+| `strategy_core.py` | All trading logic: signals, entries, exits |
+| `main_live_bot.py` | Live trading on MT5 |
+
+### Optimization & Validation
+| File | Purpose |
+|------|---------|
+| `ftmo_challenge_analyzer.py` | Optimize and validate parameters |
+| `scripts/validate_h1_realistic.py` | Simulate exact live bot behavior |
+
+### Parameters
+| File | Purpose |
+|------|---------|
+| `params/current_params.json` | Active trading parameters |
+| `params/defaults.py` | Default parameter values |
+
+---
+
+## How to Run
+
+### Validate Current Parameters
 ```bash
-# Run on Windows VM with MT5 installed
+python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
+```
+
+### Run H1 Realistic Simulation
+```bash
+python scripts/validate_h1_realistic.py --trades ftmo_analysis_output/VALIDATE/best_trades_final.csv --balance 60000
+```
+
+### Run Live Bot (Windows with MT5)
+```bash
 python main_live_bot.py
 ```
 
-### B. `ftmo_challenge_analyzer.py` - Walk-Forward Optimizer
-**Runs on: Replit (no MT5 required)**
+---
 
-The optimization engine that:
-- Backtests the strategy using 2024 historical OHLCV data
-- Training Period: Jan-Sep 2024
-- Validation Period: Oct-Dec 2024
-- Runs multiple optimization iterations
-- **Saves optimized parameters to `params/current_params.json`** (no source code modification)
-- Deducts realistic transaction costs (spread + slippage)
-- Generates detailed performance reports and trade logs
+## 5ers Challenge Rules
 
-```bash
-# Run on Replit
-python ftmo_challenge_analyzer.py
-```
+| Rule | Requirement |
+|------|-------------|
+| Account Size | $60,000 |
+| Step 1 Target | 8% = $4,800 |
+| Step 2 Target | 5% = $3,000 |
+| Max Total Drawdown | 10% = $6,000 (stop-out at $54,000) |
+| Min Profitable Days | 3 |
 
 ---
 
-## 3. How They Work Together
+## Expected Performance
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        REPLIT                                    │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │           ftmo_challenge_analyzer.py                      │   │
-│  │                                                           │   │
-│  │   1. Load historical data (data/ohlcv/2024)               │   │
-│  │   2. Run backtests with different parameters              │   │
-│  │   3. Score results (win rate, R-multiple, drawdown)       │   │
-│  │   4. Find optimal parameters                              │   │
-│  │   5. SAVE PARAMETERS TO:                                  │   │
-│  │      - params/current_params.json (single source of truth)│   │
-│  │   6. Save backups to ftmo_optimization_backups/           │   │
-│  │                                                           │   │
-│  │   NOTE: Does NOT modify main_live_bot.py or other source  │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                              │
-                              │ Git sync / manual copy
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                      WINDOWS VM                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │              main_live_bot.py                             │   │
-│  │                                                           │   │
-│  │   1. LOAD params from params/current_params.json          │   │
-│  │   2. Connect to MT5 broker (FTMO)                         │   │
-│  │   3. Scan 34 assets every 4 hours                         │   │
-│  │   4. Use loaded parameters for strategy decisions         │   │
-│  │   5. Place pending orders when setup detected             │   │
-│  │   6. Manage positions (partial TPs, trailing SL)          │   │
-│  │   7. Enforce FTMO risk rules                              │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-```
+Based on H1 realistic simulation:
 
-**Key Parameter Flow:**
-- All tunable parameters are stored in `params/current_params.json`
-- Optimizer writes to this file after finding best parameters
-- Live bot reads from this file at startup
-- No source code is ever modified by the optimizer
-
-**Parameters Controlled:**
-- `min_confluence` - Minimum confluence score required (currently 5-6)
-- `risk_per_trade_pct` - Risk per trade (0.5-1.0% = $1,000-$2,000)
-- `min_quality_factors` - Minimum quality factors required
-- TP levels (atr_tp1_multiplier, atr_tp2_multiplier, etc.)
-- Transaction costs (spread_pips, slippage_pips, commission_per_lot)
+| Timeframe | Expected Return |
+|-----------|-----------------|
+| Per Month | ~$38,000 profit |
+| Step 1 (8%) | 2-3 weeks |
+| Step 2 (5%) | 1-2 weeks |
+| Total Challenge | 4-5 weeks |
 
 ---
 
-## 4. Trading Strategy Overview
+## Key Technical Details
 
-### The 6 Confluence Pillars
+### Data
+- Historical data in `data/ohlcv/` (D1, H1 timeframes)
+- 34 trading instruments (forex pairs, gold, indices)
+- Data range: 2003-2025
 
-Each trade setup is scored 0-6 based on how many pillars align:
-
-| # | Pillar | Description |
-|---|--------|-------------|
-| 1 | **HTF Bias** | Monthly/Weekly/Daily trend alignment |
-| 2 | **Location** | Price at significant S/R zones |
-| 3 | **Fibonacci** | Price in Golden Pocket (0.382-0.886 retracement) |
-| 4 | **Structure** | Break of Structure (BOS) or Change of Character (CHoCH) |
-| 5 | **Confirmation** | 4H candle pattern confirmation |
-| 6 | **Risk:Reward** | Minimum 1:1 R:R ratio |
-
-**Trade Entry Requirement**: Minimum 4-5/6 confluence (configurable via params)
-
-### Multi-Timeframe Analysis (Look-Ahead Bias Fixed)
-
-- **Monthly (MN)**: Long-term bias
-- **Weekly (W1)**: Intermediate bias  
-- **Daily (D1)**: Primary trend direction
-- **4-Hour (H4)**: Entry timeframe
-
-**Important**: Timestamp-based alignment ensures no future data leaks into signals.
-
-### 5 Take-Profit Levels with Partial Closes
-
-| Level | R-Multiple | Close % |
-|-------|------------|---------|
-| TP1 | 1.5R | 10% |
-| TP2 | 3.0R | 10% |
-| TP3 | 5.0R | 15% |
-| TP4 | 7.0R | 20% |
-| TP5 | 10.0R | 45% |
+### Output
+- Validation results: `ftmo_analysis_output/VALIDATE/`
+- H1 simulation: `ftmo_analysis_output/hourly_validator/`
+- Optimization: `ftmo_analysis_output/TPE/` or `NSGA/`
 
 ---
 
-## 5. Key Files Reference
+## Important Notes
 
-### Core Trading Files
-| File | Purpose |
-|------|---------|
-| `main_live_bot.py` | Live trading bot (runs on Windows VM, loads params from JSON) |
-| `ftmo_challenge_analyzer.py` | Walk-forward optimizer (saves params to JSON) |
-| `strategy_core.py` | Core strategy logic (6 Confluence Pillars) |
-| `ftmo_config.py` | FTMO-specific configuration and risk parameters |
+### The 5-TP System is Critical
+The strategy uses 5 take profit levels. Attempts to simplify to 3 TPs broke the exit calculations. Always maintain all 5 levels:
+- `atr_tp1_multiplier` through `atr_tp5_multiplier`
+- `tp1_close_pct` through `tp5_close_pct`
 
-### Parameter Management
-| File | Purpose |
-|------|---------|
-| `params/current_params.json` | **Single source of truth** for all tunable parameters |
-| `params/params_loader.py` | Utility functions to load/save parameters |
-
-### Data Files
-| Directory/File | Purpose |
-|----------------|---------|
-| `data/ohlcv/` | Historical OHLCV data (2023-2024) for 34 assets |
-| `tradr/mt5/client.py` | MT5 connection and order execution |
-| `tradr/risk/manager.py` | Risk management logic |
-| `tradr/risk/position_sizing.py` | Symbol-specific lot size calculations |
-| `tradr/data/oanda.py` | OANDA API data fetching |
-
-### Output Files
-| Directory/File | Purpose |
-|----------------|---------|
-| `ftmo_analysis_output/` | Analysis results and trade logs |
-| `ftmo_analysis_output/all_trades_jan_dec_2024.csv` | Complete trade history with all details |
-| `ftmo_analysis_output/monthly_performance.csv` | Monthly breakdown |
-| `ftmo_analysis_output/symbol_performance.csv` | Per-symbol performance |
-| `ftmo_optimization_backups/` | Backup copies of each optimization iteration |
-
-### Configuration Files
-| File | Purpose |
-|------|---------|
-| `config.py` | General configuration and asset lists |
-| `challenge_rules.py` | 5ers challenge rule definitions |
-| `symbol_mapping.py` | Symbol format conversion (OANDA ↔ 5ers/MT5) |
+### H1 Simulation = Live Bot Behavior
+The `validate_h1_realistic.py` script simulates exactly what the live bot would do:
+- Dynamic lot sizing
+- Commission deduction
+- Safety mechanisms
+- Hour-by-hour price simulation
 
 ---
 
-## 6. Position Sizing (FIXED)
-
-### Account Parameters
-- **Account Size**: $60,000 USD
-- **Risk Per Trade**: 0.6% ($360 per trade)
-- **Max Daily Loss**: 5% ($3,000)
-- **Max Total Drawdown**: 10% ($6,000)
-
-### Lot Size Calculation (Symbol-Specific Pip Values)
-
-The formula (from `tradr/risk/position_sizing.py`):
-
-```
-lot_size = risk_usd / (stop_pips × pip_value_per_lot)
-```
-
-**Pip values are now correctly calculated per symbol:**
-
-| Asset Type | Pip Size | Example |
-|------------|----------|---------|
-| Standard Forex | 0.0001 | EURUSD, GBPUSD |
-| JPY Pairs | 0.01 | USDJPY, EURJPY |
-| Gold (XAUUSD) | 0.01 | ~$1/pip/lot |
-| Silver (XAGUSD) | 0.01 | |
-| BTC/ETH | 1.0 | |
-| Indices | 0.1 | SPX500, NAS100 |
-
-**Example Calculations:**
-
-| Asset | Risk | Stop Pips | Pip Value | Lot Size |
-|-------|------|-----------|-----------|----------|
-| EURUSD | $1,000 | 50 pips | $10/lot | 2.0 lots |
-| USDJPY | $1,000 | 80 pips | $6.67/lot | 1.87 lots |
-| XAUUSD | $1,500 | 300 pips | $1/lot | 5.0 lots |
-
----
-
-## 7. How to Use
-
-### Step 1: Run the Optimizer (Replit)
-```bash
-python ftmo_challenge_analyzer.py
-```
-This will:
-1. Load 2024 historical data
-2. Run backtests with various parameter combinations
-3. Deduct realistic transaction costs
-4. Output results to `ftmo_analysis_output/`
-5. **Save optimal parameters to `params/current_params.json`**
-6. Save backups to `ftmo_optimization_backups/`
-
-### Step 2: Review Generated Parameters
-Check `params/current_params.json` for the optimized settings.
-
-### Step 3: Run the Live Bot (Windows VM)
-```bash
-python main_live_bot.py
-```
-Requires:
-- MetaTrader 5 installed and running
-- `.env` file with credentials:
-```
-MT5_SERVER=FTMO-Demo
-MT5_LOGIN=your_account_number
-MT5_PASSWORD=your_password
-```
-- The bot will automatically load parameters from `params/current_params.json`
-
-### View Status (Replit Web Server)
-```bash
-python main.py
-```
-Runs a web server showing bot status and performance.
-
----
-
-## 8. For New Replit Projects
-
-### Getting Started Checklist
-
-1. **Read this file first** (PROJECT_OVERVIEW.md)
-
-2. **Run optimizer to generate parameters**:
-   ```bash
-   python ftmo_challenge_analyzer.py
-   ```
-
-3. **Check generated parameters** in `params/current_params.json`:
-   - `min_confluence`: Minimum confluence score
-   - `risk_per_trade_pct`: Risk per trade percentage
-   - `max_concurrent_trades`: Maximum open trades
-   - `transaction_costs`: Spread, slippage, commission settings
-
-4. **Review backtest results**:
-   - `ftmo_analysis_output/all_trades_jan_dec_2024.csv` - All trades with details
-   - `ftmo_analysis_output/monthly_performance.csv` - Monthly breakdown
-
-5. **Key metrics to monitor**:
-   - Win Rate: Target 60%+
-   - Average R-Multiple: Target 1.5R+
-   - Max Drawdown: Must stay under 10%
-   - Challenge Pass Rate: Target 70%+
-
-### Environment Variables Required
-
-```bash
-# OANDA API (for data fetching on Replit)
-OANDA_API_KEY=your_oanda_key
-OANDA_ACCOUNT_ID=your_account_id
-
-# MT5 (for live trading on Windows VM)
-MT5_SERVER=FTMO-Demo
-MT5_LOGIN=your_account_number
-MT5_PASSWORD=your_password
-```
-
----
-
-## 9. FTMO Challenge Rules Summary
-
-| Rule | Phase 1 | Phase 2 | Funded |
-|------|---------|---------|--------|
-| Profit Target | 10% ($20,000) | 5% ($10,000) | N/A |
-| Max Daily Loss | 5% ($10,000) | 5% ($10,000) | 5% |
-| Max Total DD | 10% ($20,000) | 10% ($20,000) | 10% |
-| Min Trading Days | 4 | 4 | N/A |
-| Time Limit | Unlimited | Unlimited | N/A |
-
----
-
-## 10. Supported Assets (34 Total)
-
-### Forex Majors (7)
-EUR_USD, GBP_USD, USD_JPY, USD_CHF, USD_CAD, AUD_USD, NZD_USD
-
-### Forex Crosses (21)
-EUR_GBP, EUR_JPY, EUR_CHF, EUR_AUD, EUR_CAD, EUR_NZD,
-GBP_JPY, GBP_CHF, GBP_AUD, GBP_CAD, GBP_NZD,
-AUD_JPY, AUD_CHF, AUD_CAD, AUD_NZD,
-NZD_JPY, NZD_CHF, NZD_CAD,
-CAD_JPY, CAD_CHF, CHF_JPY
-
-### Metals (2)
-XAU_USD (Gold), XAG_USD (Silver)
-
-### Indices (2)
-SPX500_USD (S&P 500), NAS100_USD (Nasdaq 100)
-
-### Crypto (2)
-BTC_USD (Bitcoin), ETH_USD (Ethereum)
-
----
-
-## Quick Reference Card
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                    QUICK COMMANDS                          │
-├────────────────────────────────────────────────────────────┤
-│ Generate parameters:   python ftmo_challenge_analyzer.py   │
-│ Run live bot:          python main_live_bot.py             │
-│ View web status:       python main.py                      │
-├────────────────────────────────────────────────────────────┤
-│                    KEY PARAMETERS                          │
-├────────────────────────────────────────────────────────────┤
-│ Parameters file:       params/current_params.json          │
-│ Min Confluence:        5-6 (out of 7)                      │
-│ Risk Per Trade:        0.5-1.0% ($1,000-$2,000)            │
-│ Max Concurrent Trades: 3-7                                 │
-│ Take Profits:          1.5R, 3R, 5R, 7R, 10R               │
-├────────────────────────────────────────────────────────────┤
-│                    KEY FILES                               │
-├────────────────────────────────────────────────────────────┤
-│ Parameter Config:      params/current_params.json          │
-│ Strategy Logic:        strategy_core.py                    │
-│ FTMO Config:           ftmo_config.py                      │
-│ Trade Results:         ftmo_analysis_output/               │
-│ Historical Data:       data/ohlcv/                         │
-└────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 11. Assessment
-
-**Current Rating**: 7.5-8/10  
-**Estimated FTMO Pass Probability**: 50-70%
-
-**Status**: Ready for paper trading; monitor closely on live challenge.
-
-**Recommendation**: Complete 1-2 weeks of demo testing before starting a real FTMO challenge.
-
----
-
-*Last Updated: December 2024*
+**Last Updated**: January 4, 2026

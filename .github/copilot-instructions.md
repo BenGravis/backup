@@ -1,210 +1,217 @@
-# 5ers 60K High Stakes Trading Bot - AI Agent Instructions
+# AI Assistant Instructions - 5ers Trading Bot
 
 ## Project Overview
-Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accounts. Two-environment architecture:
-- **Live Bot** (`main_live_bot.py`): Runs on Windows VM with MT5 installed
-- **Optimizer** (`ftmo_challenge_analyzer.py`): Runs anywhere (Replit/local) - no MT5 required
 
-### Multi-Broker Support (NEW)
-The bot now supports multiple brokers for testing and production:
-- **Forex.com Demo** ($50K): For testing before 5ers live
-- **5ers Live** ($60K): Production trading
+Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accounts.
 
-Set `BROKER_TYPE=forexcom_demo` or `BROKER_TYPE=fiveers_live` in `.env`
+### Current State (January 2026)
+- **Status**: ✅ Production Ready
+- **Validation**: H1 realistic simulation confirms +1,834% return (2023-2025)
+- **Exit System**: 5 Take Profit levels (NOT 3)
 
-## Architecture & Data Flow
+---
+
+## Architecture
 
 ```
-broker_config.py                 ← Multi-broker configuration (Forex.com, 5ers)
-params/optimization_config.json  ← Optimization mode settings (multi-obj, ADX, etc.)
-params/current_params.json       ← Optimized strategy parameters
-         ↑                            ↓
-ftmo_challenge_analyzer.py      main_live_bot.py
-(Optuna optimization)           (loads params at startup)
-         ↑
-data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
+┌─────────────────────────────────┐     ┌────────────────────────────────┐
+│   OPTIMIZER (Any Platform)      │     │  LIVE BOT (Windows VM + MT5)   │
+│                                  │     │                                 │
+│  ftmo_challenge_analyzer.py      │────▶│  main_live_bot.py              │
+│  - Optuna TPE / NSGA-II          │     │  - Loads params/current*.json  │
+│  - Backtesting 2003-2025         │     │  - Real-time MT5 execution     │
+│  - H1 realistic validation       │     │  - 5 Take Profit levels        │
+└─────────────────────────────────┘     └────────────────────────────────┘
 ```
 
-### Key Modules
+---
+
+## Key Modules
+
 | File | Purpose |
 |------|---------|
-| `strategy_core.py` | Trading strategy logic - 7 Confluence Pillars, regime detection |
-| `broker_config.py` | Multi-broker configuration (Forex.com, 5ers) |
-| `params/params_loader.py` | Load/save optimized parameters from JSON |
-| `params/optimization_config.py` | Unified optimization config (DB path, mode toggles) |
-| `config.py` | Account settings, CONTRACT_SPECS (pip values), tradable symbols |
-| `ftmo_config.py` | 5ers challenge rules, risk limits, TP/SL settings |
-| `symbol_mapping.py` | Multi-broker symbol conversion (`EUR_USD` → broker-specific) |
-| `tradr/mt5/client.py` | MT5 API wrapper (Windows only) |
-| `tradr/risk/manager.py` | 5ers drawdown tracking, pre-trade risk checks |
+| `strategy_core.py` | Trading strategy - 5-TP system, signals, simulate_trades() |
+| `ftmo_challenge_analyzer.py` | Optimization & validation engine |
+| `main_live_bot.py` | Live MT5 trading |
+| `scripts/validate_h1_realistic.py` | H1 realistic simulation (matches live bot) |
+| `tradr/backtest/h1_trade_simulator.py` | H1 trade simulation engine |
+| `params/current_params.json` | Active optimized parameters |
+| `params/defaults.py` | Default parameter values (includes tp4/tp5) |
+
+---
+
+## 5-TP Exit System (CRITICAL)
+
+The strategy uses **5 Take Profit levels**. This is critical - DO NOT reduce to 3 TPs.
+
+| Level | R-Multiple | Close % |
+|-------|------------|---------|
+| TP1 | 0.6R | 10% |
+| TP2 | 1.2R | 10% |
+| TP3 | 2.0R | 15% |
+| TP4 | 2.5R | 20% |
+| TP5 | 3.5R | 45% |
+
+**Trailing Stop**:
+- Activated after TP1 hit
+- Moves to breakeven after TP1
+- After TP2+: `trailing_sl = previous_tp + 0.5 * risk`
+
+---
+
+## Validated Performance (2023-2025)
+
+### H1 Realistic Simulation Results
+```json
+{
+  "starting_balance": 60000,
+  "final_balance": 1160461.64,
+  "net_pnl": 1100461.64,
+  "return_pct": 1834.1,
+  "total_trades": 1673,
+  "winners": 1201,
+  "win_rate": 71.8,
+  "total_r": 274.71,
+  "total_dd_breached": false
+}
+```
+
+---
+
+## Commands
+
+### Validation
+```bash
+python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
+```
+
+### H1 Realistic Simulation
+```bash
+python scripts/validate_h1_realistic.py --trades ftmo_analysis_output/VALIDATE/best_trades_final.csv --balance 60000
+```
+
+### Optimization
+```bash
+python ftmo_challenge_analyzer.py --single --trials 100  # TPE
+python ftmo_challenge_analyzer.py --multi --trials 100   # NSGA-II
+```
+
+### Status
+```bash
+python ftmo_challenge_analyzer.py --status
+```
+
+---
 
 ## Critical Conventions
 
-### Simplified Exit Strategy (Jan 2026)
-**IMPORTANT**: Reduced from 5 TPs to 3 TPs for simplicity:
-- **TP1**: 0.6R - closes 35% of position
-- **TP2**: 1.2R - closes 30% of position  
-- **TP3**: 2.0R - closes ALL remaining (35%)
-- After TP1/TP2, trailing stop is activated
-- TP4/TP5 have been completely removed from codebase
-
-### Multi-Broker Symbol Mapping (Dec 31, 2025)
-Symbol mapping is now broker-aware:
-```python
-from symbol_mapping import get_broker_symbol, get_internal_symbol
-
-# Convert internal -> broker
-broker_sym = get_broker_symbol("EUR_USD", "forexcom")  # -> "EURUSD"
-broker_sym = get_broker_symbol("SPX500_USD", "fiveers")  # -> "US500.cash"
-broker_sym = get_broker_symbol("SPX500_USD", "forexcom")  # -> "US500"
-```
-
-### Recent Bug Fixes (Dec 28, 2025)
-**IMPORTANT**: The following bugs were recently fixed - avoid reintroducing:
-
-1. **ComplianceTracker**: Implemented compliance tracking class with daily DD (4.5%), total DD (9%), streak halt (999)
-   - Metrics-only mode for backtesting (no trade filtering)
-   - Returns (trades, compliance_report) tuple from run_full_period_backtest
-   - Hard constraints: TP ordering (tp1<tp2<tp3), close-sum ≤100%, ADX threshold ordering
-2. **Parameter expansion**: Expanded search space from 17→25+ parameters:
-   - TP scaling: tp1/2/3_r_multiple (1.0-6.0R) and tp1/2/3_close_pct (0.15-0.40)
-   - Filter toggles: 6 new filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)
-   - All filter toggles HARD-CODED to False during optimization (baseline establishment)
-3. **0-trade bug fix**: Initial implementation filtered all trades due to:
-   - Aggressive filter toggles set to True
-   - Compliance penalty rejecting trials with DD breaches
-   - Streak halt (7) filtering 889/897 trades
-   - FIX: Filters disabled, compliance penalty removed, streak halt set to 999
-4. **params_loader.py**: Removed `liquidity_sweep_lookback` parameter (doesn't exist in StrategyParams)
-5. **professional_quant_suite.py**:
-   - Win rate: Remove duplicate `* 100` (already percentage)
-   - Calmar ratio: Use `max_drawdown_pct` not `max_drawdown` (USD)
-   - Total return: Return USD value, not percentage
-6. **ftmo_challenge_analyzer.py**:
-   - Quarterly stats must be calculated BEFORE early return for losing trials
-   - Use `overall_stats['r_total']` not `user_attrs.get('total_r')` for logging
-   - ADX filter disabled: `require_adx_filter=False` everywhere
-
 ### Symbol Format
-- **Config/data files**: OANDA format with underscores (`EUR_USD`, `XAU_USD`)
-- **MT5 execution**: FTMO format (`EURUSD`, `XAUUSD`, `US500.cash`)
-- Always use `symbol_mapping.py` for conversions
+- **Internal/Data**: OANDA format with underscores (`EUR_USD`, `XAU_USD`)
+- **MT5 Execution**: Broker format (`EURUSD`, `XAUUSD`)
+- Use `symbol_mapping.py` for conversions
 
 ### Parameters - NEVER Hardcode
 ```python
-# ✅ CORRECT: Load from params loader
+# ✅ CORRECT
 from params.params_loader import load_strategy_params
 params = load_strategy_params()
 
-# ❌ WRONG: Hardcoding in source files
-MIN_CONFLUENCE = 5  # Don't do this
+# ❌ WRONG
+MIN_CONFLUENCE = 5  # Don't hardcode
 ```
 
-### Pip Values - Symbol-Specific
-Different instruments have different pip sizes. Always use `get_contract_specs()`:
-- Standard forex: `0.0001` (4 decimal)
-- JPY pairs: `0.01` (2 decimal)
-- Gold (XAUUSD): `0.01`
-- Crypto (BTCUSD): `1.0`
-
 ### Multi-Timeframe Data
-Prevent look-ahead bias by slicing HTF data to reference timestamp:
+Always prevent look-ahead bias:
 ```python
-# strategy_core.py pattern - always use _slice_htf_by_timestamp()
 htf_candles = _slice_htf_by_timestamp(weekly_candles, current_daily_dt)
 ```
 
-## Development Commands
+---
 
-### Run Optimization (resumable)
+## StrategyParams Key Fields
 
-**Recommended: Use helper script for background runs**
-```bash
-./run_optimization.sh --single --trials 100  # TPE (logs to ftmo_analysis_output/TPE/run.log)
-./run_optimization.sh --multi --trials 100   # NSGA-II (logs to ftmo_analysis_output/NSGA/run.log)
-tail -f ftmo_analysis_output/TPE/run.log     # Monitor complete output
-```
-
-**Direct Python execution**
-```bash
-python ftmo_challenge_analyzer.py             # Run/resume optimization
-python ftmo_challenge_analyzer.py --status    # Check progress
-python ftmo_challenge_analyzer.py --config    # Show current configuration
-python ftmo_challenge_analyzer.py --trials 100  # Set trial count
-python ftmo_challenge_analyzer.py --multi     # Use NSGA-II multi-objective
-python ftmo_challenge_analyzer.py --single    # Use TPE single-objective
-python ftmo_challenge_analyzer.py --adx       # Enable ADX regime filtering
-```
-Uses Optuna with SQLite storage (`ftmo_optimization.db`) for crash-resistant optimization.
-Configuration loaded from `params/optimization_config.json`.
-
-**Output Structure:**
-- NSGA-II runs: `ftmo_analysis_output/NSGA/` (run.log + optimization.log + CSVs)
-- TPE runs: `ftmo_analysis_output/TPE/` (run.log + optimization.log + CSVs)
-- `run.log`: Complete console output (all debug info, asset processing)
-- `optimization.log`: Trial results only (clean, structured)
-- Each mode has its own optimization.log and CSV files
-
-### Run Live Bot (Windows VM only)
-```bash
-# Requires .env with MT5_SERVER, MT5_LOGIN, MT5_PASSWORD
-python main_live_bot.py
-```
-
-### Background Optimization
-```bash
-# Recommended: Use helper script
-./run_optimization.sh --single --trials 100  # Auto-logs to ftmo_analysis_output/TPE/run.log
-
-# Manual nohup
-nohup python ftmo_challenge_analyzer.py > ftmo_analysis_output/TPE/run.log 2>&1 &
-tail -f ftmo_analysis_output/TPE/optimization.log  # Monitor TPE progress
-tail -f ftmo_analysis_output/NSGA/optimization.log # Monitor NSGA-II progress
-```
-
-## 5ers Challenge Rules (IMPORTANT - DIFFERENT FROM FTMO!)
-- **NO daily drawdown limit!** (5ers doesn't track daily DD)
-- Max total drawdown: **10% below STARTING balance** (stop-out at $54,000 for 60K)
-- NOT trailing: growth doesn't raise stop-out level
-- Step 1 target: **8%**, Step 2: **5%**
-- Min profitable days: **3**
-- Risk per trade: 0.6% = $360 per R (on 60K account)
-
-### Compliance Implementation
-- `daily_loss_halt_pct`: REMOVED from optimizer (5ers has no daily DD)
-- `stop_out_level`: Constant $54,000 (starting_balance * 0.90)
-- `use_graduated_risk`: False (disabled, no daily DD to tier against)
-
-## File Locations
-- Historical data: `data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv`
-- Optimized params: `params/current_params.json`
-- Backtest output: `ftmo_analysis_output/`
-- Logs: `logs/tradr_live.log`
-- Documentation: `docs/` (system guide, strategy analysis, compliance tracking)
-- Utility scripts: `scripts/` (optimization monitoring, debug tools)
-- New docs: `docs/COMPLIANCE_TRACKING_IMPLEMENTATION.md` (FTMOComplianceTracker guide)
-
-## Testing Strategy Changes
-1. Modify `strategy_core.py` (contains `compute_confluence()`, `simulate_trades()`)
-2. Run optimizer: `python ftmo_challenge_analyzer.py --trials 50`
-3. Check `ftmo_analysis_output/` for trade CSVs and performance metrics
-4. Verify OOS (out-of-sample) performance matches training period
-
-## Common Patterns
-
-### Adding a New Indicator Filter
 ```python
-# In strategy_core.py StrategyParams dataclass
-use_my_filter: bool = False
-my_threshold: float = 0.5
-
-# In compute_confluence() function
-if params.use_my_filter and my_indicator < params.my_threshold:
-    return Signal(...)  # Skip or adjust
+@dataclass
+class StrategyParams:
+    # Confluence
+    min_confluence: int = 5
+    min_quality_factors: int = 3
+    
+    # TP R-Multiples (5 levels)
+    atr_tp1_multiplier: float = 0.6
+    atr_tp2_multiplier: float = 1.2
+    atr_tp3_multiplier: float = 2.0
+    atr_tp4_multiplier: float = 2.5
+    atr_tp5_multiplier: float = 3.5
+    
+    # Close Percentages (5 levels)
+    tp1_close_pct: float = 0.10
+    tp2_close_pct: float = 0.10
+    tp3_close_pct: float = 0.15
+    tp4_close_pct: float = 0.20
+    tp5_close_pct: float = 0.45
+    
+    # Risk
+    risk_per_trade_pct: float = 0.6
+    trail_activation_r: float = 0.65
 ```
 
-### Adding to Optimization
-```python
-# In ftmo_challenge_analyzer.py objective function
-my_param = trial.suggest_float("my_param", 0.1, 2.0)
+---
+
+## 5ers Challenge Rules
+
+| Rule | Limit |
+|------|-------|
+| Account Size | $60,000 |
+| Max Total DD | 10% below start ($54K stop-out) |
+| Daily DD | None (5ers doesn't track) |
+| Step 1 Target | 8% = $4,800 |
+| Step 2 Target | 5% = $3,000 |
+| Min Profitable Days | 3 |
+
+---
+
+## File Structure
+
 ```
+botcreativehub/
+├── strategy_core.py              # 5-TP system, signals
+├── ftmo_challenge_analyzer.py    # Optimization & validation
+├── main_live_bot.py              # Live MT5 trading
+├── params/
+│   ├── current_params.json       # Active parameters
+│   ├── defaults.py               # Default values (tp1-tp5)
+│   └── params_loader.py          # Load utilities
+├── scripts/
+│   └── validate_h1_realistic.py  # H1 simulation
+├── tradr/backtest/
+│   └── h1_trade_simulator.py     # H1 trade engine
+├── data/ohlcv/                   # Historical data
+└── ftmo_analysis_output/         # Results
+```
+
+---
+
+## What NOT to Do
+
+1. ❌ **Never reduce from 5 TPs to 3 TPs** - breaks exit logic
+2. ❌ **Never hardcode parameters** - use params_loader
+3. ❌ **Never change exit logic** without full H1 validation
+4. ❌ **Never use look-ahead bias** - always slice HTF data
+
+---
+
+## Recent History
+
+### January 4, 2026
+- REVERTED to 5-TP system (3-TP removal broke exit logic)
+- Added H1 realistic validation
+- Confirmed +1,834% return over 2023-2025
+
+### Key Commits
+- `61bdcac` - REVERT: Restore 5-TP system
+- `2d1979c` - Add H1 validator results
+
+---
+
+**Last Updated**: January 4, 2026

@@ -1,182 +1,80 @@
 # Trading Strategy Guide
 
-**Last Updated**: 2025-12-30  
-**Strategy**: 6-Pillar Confluence System with ADX Regime Detection
-
----
-
-## Table of Contents
-1. [Strategy Overview](#strategy-overview)
-2. [7 Confluence Pillars](#7-confluence-pillars)
-3. [ADX Regime Detection](#adx-regime-detection)
-4. [Entry Rules](#entry-rules)
-5. [Exit Management](#exit-management)
-6. [Risk Management](#risk-management)
-7. [Current Parameters](#current-parameters)
-
----
-
 ## Strategy Overview
 
-The bot uses a **multi-timeframe confluence system** that combines 6 independent signals to identify high-probability setups. Each pillar votes on trade direction and quality, with entries requiring a minimum confluence score.
+Multi-timeframe confluence-based trading strategy for the **5ers 60K High Stakes Challenge**.
 
-> **Note**: The Liquidity pillar (sweep of equal highs/lows) was removed from the system as it was found to be unreliable and is now always treated as passed.
-
-### Key Principles
-- **Confluence over single indicators**: Requires multiple confirmations
-- **Regime-adaptive**: Different rules for trending vs ranging markets
-- **Risk-first approach**: Every trade pre-validated for R:R and FTMO limits
-- **Multi-timeframe**: D1 signals confirmed by H4, W1, MN context
+### Key Characteristics
+- **Confluence-based entries**: Minimum 5 confluence points required
+- **Quality factor filtering**: Minimum 3 quality factors
+- **5-TP exit system**: Partial closes at 5 levels (0.6R to 3.5R)
+- **Dynamic trailing stop**: Activates after TP1
 
 ---
 
-## 6 Confluence Pillars
+## Entry Conditions
 
-### 1. Trend Alignment (Daily → Weekly → Monthly)
-**Weight**: 2 points  
-**Logic**: Entry must align with higher timeframe trend direction
+### Confluence Scoring
 
+Each factor adds to the confluence score:
+
+| Factor | Description |
+|--------|-------------|
+| Weekly Trend | Price above/below weekly EMA |
+| Daily Trend | Price above/below daily EMA |
+| RSI Zone | Not overbought/oversold |
+| Bollinger Position | Price at bands |
+| S/R Level | Near support/resistance |
+| EMA Alignment | Multiple EMAs aligned |
+| Volume Confirmation | Above average volume |
+| Candle Pattern | Bullish/bearish patterns |
+
+### Quality Factors
+
+Additional confirmation signals:
+- Strong momentum
+- Clean price action
+- No divergences
+- Proper market structure
+
+### Entry Logic
 ```python
-# Weekly trend trumps daily, monthly trumps weekly
-weekly_trend = _infer_trend(weekly_candles)
-monthly_trend = _infer_trend(monthly_candles)
-
-if direction != weekly_trend or direction != monthly_trend:
-    pillar_score -= 2  # Reject counter-trend
-```
-
-### 2. Support/Resistance Confluence
-**Weight**: 1 point  
-**Logic**: Price near key S/R level
-
-```python
-# Check if entry near S/R level (within 0.5% tolerance)
-if abs(entry_price - sr_level) / entry_price < 0.005:
-    pillar_score += 1
-```
-
-### 3. Fibonacci Zone Alignment
-**Weight**: 1 point  
-**Logic**: Entry at Fibonacci retracement level (38.2%, 50%, 61.8%)
-
-```python
-# Calculate Fib levels from recent swing
-fib_levels = [0.382, 0.5, 0.618]
-for level in fib_levels:
-    if abs(entry_price - fib_price) < fib_tolerance:
-        pillar_score += 1
-```
-
-### 4. RSI Divergence
-**Weight**: 1 point  
-**Logic**: Price makes new high/low but RSI doesn't (reversal signal)
-
-```python
-# Bullish divergence: price lower low, RSI higher low
-if price_trend == "down" and rsi_trend == "up":
-    pillar_score += 1
-```
-
-### 5. ADX Trend Strength
-**Weight**: 1 point  
-**Logic**: ADX > threshold confirms strong trend
-
-```python
-adx_value = calculate_adx(daily_candles, period=14)
-if adx_value >= params['adx_trend_threshold']:
-    pillar_score += 1
-```
-
-### 6. ATR Volatility Filter
-**Weight**: 1 point  
-**Logic**: Current ATR above minimum percentile (avoid dead markets)
-
-```python
-current_atr = calculate_atr(daily_candles, period=14)
-atr_percentile = get_atr_percentile(current_atr, historical_atr)
-
-if atr_percentile >= params['atr_min_percentile']:
-    pillar_score += 1
-```
-
-### 7. Candlestick Pattern
-**Weight**: 1 point  
-**Logic**: Bullish/bearish engulfing, pin bar, inside bar
-
-```python
-pattern = detect_candlestick_pattern(daily_candles[-3:])
-if pattern in ['engulfing', 'pin_bar'] and pattern_direction == direction:
-    pillar_score += 1
+if confluence >= params.min_confluence:
+    if quality_factors >= params.min_quality_factors:
+        generate_signal()
 ```
 
 ---
 
-## ADX Regime Detection
-
-The strategy adapts based on market regime:
-
-### Regime Classification
-```python
-adx = calculate_adx(daily_candles, period=14)
-
-if adx >= params['adx_trend_threshold']:
-    regime = "TREND"       # Momentum following
-elif adx <= params['adx_range_threshold']:
-    regime = "RANGE"       # Mean reversion
-else:
-    regime = "TRANSITION"  # No trading
-```
-
-### Regime-Specific Rules
-
-| Regime | Min Confluence | RSI Filter | ATR Filter | SL Distance |
-|--------|----------------|------------|------------|-------------|
-| **TREND** | 4 | Disabled | Strict | 1.5× ATR |
-| **RANGE** | 4 | Enabled (oversold/overbought) | Relaxed | 1.0× ATR |
-| **TRANSITION** | No entries | - | - | - |
-
----
-
-## Entry Rules
-
-### Minimum Requirements
-1. **Confluence Score** ≥ 4 pillars
-2. **Quality Factors** ≥ 1
-3. **Risk:Reward** ≥ 2.5:1
-4. **ADX Regime** = TREND or RANGE (not TRANSITION)
-5. **Spread** < 2× average spread
-6. **FTMO Limits** not breached
-
-### Entry Execution
-```python
-if confluence_score >= min_confluence and can_trade:
-    # Place pending order at entry price
-    lot_size = calculate_lot_size(risk_pct, sl_distance, symbol)
-    
-    if direction == "BUY":
-        place_buy_stop(entry_price, lot_size, sl, tp)
-    else:
-        place_sell_stop(entry_price, lot_size, sl, tp)
-```
-
----
-
-## Exit Management
+## Exit System (5-TP)
 
 ### Take Profit Levels
-1. **TP1**: 1.0R - Partial exit (35.0% position)
-2. **TP2**: 2.5R - Final target
+
+| Level | R-Multiple | Close % |
+|-------|------------|---------|
+| TP1 | 0.6R | 10% |
+| TP2 | 1.2R | 10% |
+| TP3 | 2.0R | 15% |
+| TP4 | 2.5R | 20% |
+| TP5 | 3.5R | 45% |
 
 ### Trailing Stop
-Activated after 1.0R profit:
-```python
-trail_distance = atr * params['atr_trail_multiplier']  # 2.2× ATR
-```
+- **Activation**: After TP1 hit
+- **Breakeven**: Move SL to entry after TP1
+- **Progressive**: Trail behind each TP level
 
-### Stop Loss
-- **Initial**: Set at S/R level or 1.5× ATR from entry
-- **Breakeven**: Move to entry +1 pip after 1R profit
-- **Trail**: Follows price at 2.2× ATR distance
+### Example Trade
+```
+Entry: 1.1000, SL: 1.0950 (50 pips risk)
+
+TP1: 1.1030 (0.6R) → Close 10%
+TP2: 1.1060 (1.2R) → Close 10%
+TP3: 1.1100 (2.0R) → Close 15%
+TP4: 1.1125 (2.5R) → Close 20%
+TP5: 1.1175 (3.5R) → Close 45%
+
+Maximum R = 2.555R if all TPs hit
+```
 
 ---
 
@@ -184,182 +82,160 @@ trail_distance = atr * params['atr_trail_multiplier']  # 2.2× ATR
 
 ### Position Sizing
 ```python
-# Current setting: 0.3% per trade
-risk_amount = account_size * 0.3 / 100
-lot_size = risk_amount / (sl_pips * pip_value)
+risk_per_trade_pct: float = 0.006  # 0.6% per trade
 ```
 
-### FTMO Limits
-- **Max Daily Loss**: 5.0% ($10,000) - Bot halts at 4.2%
-- **Max Total Drawdown**: 10.0% ($20,000) - Bot emergency stop at 7%
-- **Max Concurrent Trades**: 6
+### 5ers Challenge Limits
+| Rule | Value |
+|------|-------|
+| Max Total DD | 10% ($6,000 from $60K) |
+| Daily DD | Not tracked by 5ers |
+| Step 1 Target | 8% ($4,800) |
+| Step 2 Target | 5% ($3,000) |
+| Min Profitable Days | 3 |
 
-### Seasonal Adjustments
-- **Summer (June-Aug)**: Risk × 0.75 (lower volatility)
+### Safety Mechanisms (H1 Validator)
+- Safety close at 4.2% daily drawdown
+- Confluence scaling: ±15% per point from 5
+- Win/loss streak scaling: ±5% per trade
+- Risk limits: 0.2% minimum, 1.2% maximum
 
 ---
 
-## Current Parameters
+## Instruments Traded
 
-**Active Configuration** (from `params/current_params.json`, Dec 31, 2025):
+### Forex Majors
+- EUR_USD, GBP_USD, USD_JPY, USD_CHF
+- AUD_USD, NZD_USD, USD_CAD
 
+### Crosses
+- EUR_GBP, EUR_JPY, GBP_JPY
+- AUD_JPY, CAD_JPY, CHF_JPY
+
+### Commodities
+- XAU_USD (Gold)
+- XAG_USD (Silver)
+
+### Indices
+- US30_USD (Dow Jones)
+- SPX500_USD (S&P 500)
+- NAS100_USD (NASDAQ)
+
+---
+
+## Parameters
+
+### Current Parameters (params/current_params.json)
 ```json
 {
-    "risk_per_trade_pct": 0.6,
-    "min_confluence": 2,
-    "min_confluence_score": 2,
+    "min_confluence": 5,
     "min_quality_factors": 3,
-    "adx_trend_threshold": 22.0,
-    "adx_range_threshold": 11.0,
-    "trend_min_confluence": 6,
-    "range_min_confluence": 2,
-    "atr_trail_multiplier": 1.6,
-    "atr_volatility_ratio": 0.95,
-    "atr_vol_ratio_range": 0.95,
-    "atr_min_percentile": 42.0,
-    "trail_activation_r": 0.8,
-    "partial_exit_at_1r": true,
-    "partial_exit_pct": 0.7,
-    "december_atr_multiplier": 1.65,
-    "volatile_asset_boost": 1.35,
-    "tp1_r_multiple": 1.7,
-    "tp2_r_multiple": 2.6,
-    "tp3_r_multiple": 5.4,
-    "tp1_close_pct": 0.38,
-    "tp2_close_pct": 0.16,
-    "tp3_close_pct": 0.3,
-    "use_htf_filter": false,
-    "use_structure_filter": false,
-    "use_confirmation_filter": false,
-    "use_fib_filter": false,
-    "use_displacement_filter": false,
-    "use_candle_rejection": false,
-    "daily_loss_halt_pct": 3.8,
-    "max_total_dd_warning": 7.9,
-    "consecutive_loss_halt": 10
+    "atr_tp1_multiplier": 0.6,
+    "atr_tp2_multiplier": 1.2,
+    "atr_tp3_multiplier": 2.0,
+    "atr_tp4_multiplier": 2.5,
+    "atr_tp5_multiplier": 3.5,
+    "tp1_close_pct": 0.10,
+    "tp2_close_pct": 0.10,
+    "tp3_close_pct": 0.15,
+    "tp4_close_pct": 0.20,
+    "tp5_close_pct": 0.45,
+    "risk_per_trade_pct": 0.006,
+    "trail_activation_r": 0.65
 }
 ```
 
----
+### Loading Parameters
+```python
+from params.params_loader import load_strategy_params
+params = load_strategy_params()
 
-## Strategy Functions Reference
-
-### Core Functions
-
-
-#### `detect_regime(daily_candles: List[Dict], adx_trend_threshold: float, adx_range_threshold: float, use_adx_slope_rising: bool, use_adx_regime_filter: bool) -> Dict`
-
-Detect market regime based on ADX (Average Directional Index).
-
-When use_adx_regime_filter=False, the ADX filter is bypassed and all setups
-are treated as Trend Mode. This allows trading without regime restrictions.
-
-This is the core function for the Regime-Adaptive V2 trading system.
-It classifies the current market into one of three regimes:
-
-1. TREND MODE (ADX >= adx_trend_threshold):
-   - Market has strong directional movement
-   - Trade with momentum: use trend-following entries
-   - Higher confluence requirements, larger position sizing allowed
-   
-2. RANGE MODE (ADX < adx_range_threshold):
-   - Market is ranging/consolidating
-   - Trade mean reversion: fade extremes at S/R zones
-   - Ultra-conservative: ALL range mode filters must pass
-   - Require RSI extremes, Fib 0.786, H4 rejection candles
-   
-3. TRANSITION ZONE (ADX between thresholds):
-   - Market is transitioning between regimes
-   - OPTIMIZED: Allow trading at 6+/7 confluence (requires high conviction)
-   - This captures emerging trends early with strict confirmation
-
-V2 Enhancement: Early Trend Detection
-When use_adx_slope_rising=True, allows Trend Mode entry even when ADX is
-slightly below threshold if:
-- ADX is rising (slope > 0)
-- ADX is within 3 points of trend threshold
-- There's a recent +DI/-DI crossover (trend direction confirmation)
-
-Args:
-    daily_candles: List of D1 OHLCV candle dictionaries
-    adx_trend_threshold: ADX level for trend mode (default 25.0)
-    adx_range_threshold: ADX level for range mode (default 20.0)
-    use_adx_slope_rising: Enable early trend detection via ADX slope (default False)
-
-Returns:
-    Dict with keys:
-        'mode': str - 'Trend', 'Range', or 'Transition'
-        'adx': float - Current ADX value
-        'can_trade': bool - Whether entries are allowed in this regime
-        'description': str - Human-readable regime description
-        'adx_slope': float - ADX slope (only if use_adx_slope_rising=True)
-        'di_crossover': str - DI crossover info (only if use_adx_slope_rising=True)
-        'early_trend_entry': bool - True if triggered by early trend detection
-
-Note:
-    - No look-ahead bias: uses only data up to current candle
-    - ADX is calculated using standard 14-period smoothing
-
-
-#### `_infer_trend(candles: List[Dict], short_lookback: int, long_lookback: int) -> str`
-
-Infer trend direction without using EMA (EMA removed).
-
-Simple heuristic: compare short vs long simple averages and
-check recent price action for higher highs / lower lows.
-
-Returns: "bullish", "bearish" or "mixed".
-
-
-#### `compute_confluence(monthly_candles: List[Dict], weekly_candles: List[Dict], daily_candles: List[Dict], h4_candles: List[Dict], direction: str, params: Optional[StrategyParams], historical_sr: Optional[Dict[str, List[Dict]]]) -> Tuple[Dict[str, bool], Dict[str, str], Tuple]`
-
-Compute confluence flags for a given setup.
-
-Uses the same core logic as strategy.py but with parameterization.
-
-Args:
-    monthly_candles: Monthly OHLCV data
-    weekly_candles: Weekly OHLCV data
-    daily_candles: Daily OHLCV data
-    h4_candles: 4H OHLCV data
-    direction: Trade direction ("bullish" or "bearish")
-    params: Strategy parameters (uses defaults if None)
-    historical_sr: Optional dict with 'monthly' and 'weekly' S/R levels from historical data
-
-Returns:
-    Tuple of (flags dict, notes dict, trade_levels tuple)
-
-
-#### `simulate_trades(candles: List[Dict], symbol: str, params: Optional[StrategyParams], monthly_candles: Optional[List[Dict]], weekly_candles: Optional[List[Dict]], h4_candles: Optional[List[Dict]], include_transaction_costs: bool) -> List[Trade]`
-
-Simulate trades through historical candles using the Blueprint strategy.
-
-This is a walk-forward simulation with no look-ahead bias.
-Uses the same logic as live trading but runs through historical data.
-
-IMPORTANT: Supports multiple concurrent trades up to params.max_open_trades.
-Entry prices are validated against actual candle data.
-If the theoretical entry price is not available on the signal bar,
-we wait up to 5 bars for price to reach the entry level.
-
-Transaction costs (spread + slippage) are deducted from each trade
-when include_transaction_costs=True to produce realistic backtest results.
-
-Args:
-    candles: Daily OHLCV candles (oldest to newest)
-    symbol: Asset symbol
-    params: Strategy parameters
-    monthly_candles: Optional monthly data
-    weekly_candles: Optional weekly data
-    h4_candles: Optional 4H data
-    include_transaction_costs: Whether to include spread/slippage costs (default True)
-
-Returns:
-    List of completed Trade objects
-
+# Access values
+confluence = params.min_confluence
+tp1 = params.atr_tp1_multiplier
+```
 
 ---
 
-**Maintained by**: Auto-generated from source code  
-**Update command**: `python scripts/update_docs.py`  
-**Source**: `strategy_core.py`
+## Validation Results
+
+### H1 Realistic Simulation (2023-2025)
+```
+Starting Balance:  $60,000
+Final Balance:     $1,160,462
+Net P&L:           $1,100,462
+Return:            +1,834%
+Total Trades:      1,673
+Winners:           1,201
+Win Rate:          71.8%
+Total R:           +274.71R
+Safety Closes:     22
+DD Breaches:       0
+```
+
+### Monthly Performance
+- Average monthly R: ~11.4R
+- Worst month: ~-3.5R
+- Best month: ~35R
+
+---
+
+## Optimization
+
+### TPE (Tree-structured Parzen Estimator)
+```bash
+python ftmo_challenge_analyzer.py --single --trials 100
+```
+Best for single-objective optimization (maximize R).
+
+### NSGA-II (Multi-Objective)
+```bash
+python ftmo_challenge_analyzer.py --multi --trials 100
+```
+Optimizes multiple objectives: R, win rate, drawdown.
+
+### Validation
+```bash
+python ftmo_challenge_analyzer.py --validate \
+    --start 2023-01-01 --end 2025-12-31
+```
+
+### H1 Realistic Test
+```bash
+python scripts/validate_h1_realistic.py \
+    --trades ftmo_analysis_output/VALIDATE/best_trades_final.csv \
+    --balance 60000
+```
+
+---
+
+## Common Commands
+
+### Check Status
+```bash
+python ftmo_challenge_analyzer.py --status
+```
+
+### Run Full Validation
+```bash
+python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
+python scripts/validate_h1_realistic.py --trades ftmo_analysis_output/VALIDATE/best_trades_final.csv
+```
+
+### View Results
+```bash
+cat ftmo_analysis_output/hourly_validator/best_trades_final_realistic_summary.json
+```
+
+---
+
+## Critical Rules
+
+1. **NEVER reduce from 5 TPs to 3 TPs** - This breaks exit logic
+2. **NEVER hardcode parameters** - Always use params_loader
+3. **NEVER use look-ahead bias** - Slice HTF data properly
+4. **Always validate with H1 simulation** - Matches live bot behavior
+
+---
+
+**Last Updated**: January 4, 2026

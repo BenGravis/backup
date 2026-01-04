@@ -1,249 +1,253 @@
-# AI Assistant Quick Start Guide
+# AI Assistant Guide - 5ers Trading Bot
 
-**Purpose**: This file helps AI assistants (GitHub Copilot, ChatGPT, Claude, etc.) quickly understand the 5ers 60K Trading Bot project.
+## Project Overview
 
-**Last Updated**: 2026-01-04
+This is a **production-ready automated trading bot** for **5ers 60K High Stakes** Challenge accounts. 
 
----
-
-## 🎯 Project Summary in 30 Seconds
-
-**What**: Automated MetaTrader 5 trading bot for 5ers 60K High Stakes Challenge  
-**Strategy**: 6-Pillar Confluence System with multi-timeframe analysis  
-**Optimization**: Optuna (TPE/NSGA-II) with 25+ parameters, real-time best_params.json  
-**Training Period**: 2023-01-01 to 2024-09-30 (21 months)
-**Validation Period**: 2024-10-01 to 2025-12-26 (15 months)
-**Deployment**: Windows VM (live bot) + Linux (optimizer)  
-**Current Status**: Fresh TPE optimization running (50 trials, warm-start with run009 baseline)  
-**Performance**: ~48% win rate, +2,766R over 12 years (2014-2025)
+### Key Facts
+- **Platform**: MetaTrader 5 (MT5)
+- **Account Size**: $60,000
+- **Strategy**: 5-TP Confluence System with multi-timeframe analysis
+- **Validated**: H1 realistic simulation confirms +1,834% return (2023-2025)
 
 ---
 
-## 📁 Essential Files (Read These First)
+## Current State (January 2026)
 
-### 1. Core Trading Logic
-- **`strategy_core.py`** (3000+ lines) - Complete trading strategy implementation
-  - `compute_confluence()` - Main entry signal logic (6 pillars)
-  - `simulate_trades()` - Backtest engine
-  - `generate_signals()` - Signal generation for optimization
-  - `apply_volatile_asset_boost()` - Boost for XAU, NAS100, GBP_JPY, BTC
-
-### 2. Optimization Engine
-- **`ftmo_challenge_analyzer.py`** (3900 lines) - Parameter optimization & backtesting
-  - Dual-mode: TPE (fast) or NSGA-II (multi-objective)
-  - 25+ parameter search space
-  - Training/Validation/Full-period backtests
-  - Saves results to `ftmo_analysis_output/TPE/` or `NSGA/`
-
-### 3. Live Trading Bot
-- **`main_live_bot.py`** (2000+ lines) - Production MT5 execution
-  - Loads params from `params/current_params.json`
-  - Scans at 22:05 UTC (daily close only)
-  - Spread-only entry filter (no session filter)
-  - Spread monitoring every 10 min
-  - 3-tier graduated risk management
-
-### 4. Multi-Broker Support
-- **`broker_config.py`** - Forex.com Demo / 5ers Live configuration
-- **`symbol_mapping.py`** - OANDA ↔ broker symbol conversion
-
-### 5. Configuration
-- **`params/current_params.json`** - Active strategy parameters
-- **`params/optimization_config.json`** - Optimization settings
-- **`config.py`** - Contract specs (pip values for 34 assets)
-- **`ftmo_config.py`** - 5ers challenge rules & limits
-
----
-
-## 🗂️ Directory Structure
+### ✅ Working System
+The system is fully functional with the following validated results:
 
 ```
-ftmotrial/
-├── Core Files
-│   ├── strategy_core.py           # Trading strategy (6 pillars)
-│   ├── ftmo_challenge_analyzer.py # Optimization engine
-│   ├── main_live_bot.py           # Live MT5 bot (Windows)
-│   ├── broker_config.py           # Multi-broker configuration
-│   ├── symbol_mapping.py          # Symbol conversion
-│   ├── config.py                  # Contract specs, symbols
-│   └── ftmo_config.py             # 5ers rules
-│
-├── params/ (PARAMETER MANAGEMENT)
-│   ├── current_params.json        # Active params (loaded by bot)
-│   ├── optimization_config.json   # Optimization settings
-│   └── params_loader.py           # Load/save utilities
-│
-├── tradr/ (MODULES)
-│   ├── mt5/client.py              # MT5 API wrapper
-│   └── risk/manager.py            # Risk management
-│
-├── data/ (HISTORICAL DATA)
-│   ├── ohlcv/                     # OHLCV CSV files (2003-2025)
-│   └── sr_levels/                 # S/R levels (not integrated)
-│
-├── ftmo_analysis_output/ (RESULTS)
-│   ├── TPE/                       # Single-objective runs
-│   ├── NSGA/                      # Multi-objective runs
-│   └── VALIDATE/                  # Validation runs
-│
-└── docs/ (DOCUMENTATION)
+H1 REALISTIC SIMULATION (2023-2025):
+- Starting Balance: $60,000
+- Final Balance: $1,160,462
+- Return: +1,834%
+- Win Rate: 71.8%
+- Total DD Breached: NO ✅
 ```
+
+### 5-TP Exit System
+The strategy uses **5 Take Profit levels** (NOT 3):
+
+| Level | R-Multiple | Close % |
+|-------|------------|---------|
+| TP1 | 0.6R | 10% |
+| TP2 | 1.2R | 10% |
+| TP3 | 2.0R | 15% |
+| TP4 | 2.5R | 20% |
+| TP5 | 3.5R | 45% |
+
+> ⚠️ **CRITICAL**: Never reduce to 3 TPs - it breaks the exit logic!
 
 ---
 
-## 🔑 Key Concepts for AI Understanding
+## Core Files
 
-### 1. Optimization Infrastructure (Jan 4, 2026)
+### Primary Files
+| File | Lines | Purpose |
+|------|-------|---------|
+| `strategy_core.py` | ~3,100 | Trading strategy - signals, 5-TP exits, simulate_trades() |
+| `ftmo_challenge_analyzer.py` | ~2,900 | Optimization, validation, backtesting |
+| `main_live_bot.py` | ~1,500 | Live MT5 trading |
 
-**Real-Time Best Parameters Tracking**:
-- `ftmo_analysis_output/TPE/best_params.json` auto-updates during optimization
-- Updates immediately when new best trial found
-- Contains trial number, score, and all parameters
-- Monitor with: `watch -n 5 cat ftmo_analysis_output/TPE/best_params.json`
+### Parameters
+| File | Purpose |
+|------|---------|
+| `params/current_params.json` | Active optimized parameters |
+| `params/defaults.py` | Default values (includes tp4/tp5) |
+| `params/params_loader.py` | Load/merge parameters |
 
-**Warm-Start from Baseline**:
-- Trial #0: run009 baseline (0.6R/1.2R/2.0R, partial_exit disabled, 0.65% risk)
-- Proven performance: 48.6% WR across 12 years (2014-2025)
-- Parameter space exploration starts after baseline evaluation
+### H1 Validation
+| File | Purpose |
+|------|---------|
+| `scripts/validate_h1_realistic.py` | Simulates exact live bot behavior |
+| `tradr/backtest/h1_trade_simulator.py` | H1 trade simulation engine |
 
-**Database Management**:
-- Current: `regime_adaptive_v2_clean_warm.db`
-- Old trials archived to `optuna_backups/` with timestamps
-- Resume support: optimization continues from last trial
+---
 
-### 2. Live Bot Features (Dec 31, 2025)
+## Key Functions
 
-**Daily Close Scanning**:
-- Scan only at 22:05 UTC (after NY close)
-- Ensures complete daily candles
-- Matches backtest exactly
+### strategy_core.py
 
-**Spread-Only Entry Filter (No Session Filter)**:
-- Fresh signals saved to `awaiting_spread.json` if spread too wide
-- Every 10 min: check if spread improved
-- Good spread → MARKET ORDER immediately
-- Signals expire after 12 hours
-
-**3-Tier Graduated Risk**:
-| Tier | Daily DD | Action |
-|------|----------|--------|
-| 1 | ≥2.0% | Reduce risk: 0.6% → 0.4% |
-| 2 | ≥3.5% | Cancel all pending orders |
-| 3 | ≥4.5% | Emergency close positions |
-
-### 3. Live Bot Synced with TPE Optimizer
-
-**CRITICAL**: Both use IDENTICAL logic:
 ```python
-# Quality factors calculation (BOTH):
-quality_factors = max(1, confluence_score // 3)
+# Generate trading signals
+signals = generate_signals(candles, symbol, params, monthly_candles, weekly_candles, h4_candles)
 
-# Volatile asset boost (BOTH):
-boosted_confluence, boosted_quality = apply_volatile_asset_boost(
-    symbol, confluence_score, quality_factors, params.volatile_asset_boost
-)
+# Simulate trades through historical data
+trades = simulate_trades(candles, symbol, params, monthly_candles, weekly_candles, h4_candles)
 
-# Active status check (BOTH):
-min_quality_for_active = max(1, params.min_quality_factors - 1)
-if boosted_confluence >= MIN_CONFLUENCE and boosted_quality >= min_quality_for_active:
-    is_active = True
+# Compute trade levels (entry, SL, TP1-TP5)
+note, is_valid, entry, sl, tp1, tp2, tp3 = compute_trade_levels(daily_candles, direction, params)
 ```
 
-### 4. Parameters - NEVER Hardcode
+### ftmo_challenge_analyzer.py
 
-**Correct**:
 ```python
+# Run validation on date range
+python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
+
+# Run optimization
+python ftmo_challenge_analyzer.py --single --trials 100
+```
+
+### validate_h1_realistic.py
+
+```python
+# Run H1 simulation
+python scripts/validate_h1_realistic.py --trades path/to/trades.csv --balance 60000
+```
+
+---
+
+## StrategyParams Dataclass
+
+Key parameters in `strategy_core.py`:
+
+```python
+@dataclass
+class StrategyParams:
+    # Confluence
+    min_confluence: int = 5
+    min_quality_factors: int = 3
+    
+    # TP R-Multiples (5 levels)
+    atr_tp1_multiplier: float = 0.6
+    atr_tp2_multiplier: float = 1.2
+    atr_tp3_multiplier: float = 2.0
+    atr_tp4_multiplier: float = 2.5
+    atr_tp5_multiplier: float = 3.5
+    
+    # Close Percentages (5 levels)
+    tp1_close_pct: float = 0.10
+    tp2_close_pct: float = 0.10
+    tp3_close_pct: float = 0.15
+    tp4_close_pct: float = 0.20
+    tp5_close_pct: float = 0.45
+    
+    # Trailing Stop
+    trail_activation_r: float = 0.65
+    
+    # Risk
+    risk_per_trade_pct: float = 0.6
+```
+
+---
+
+## Data Structure
+
+### OHLCV Data
+Located in `data/ohlcv/`:
+```
+{SYMBOL}_{TIMEFRAME}_{START}_{END}.csv
+Examples:
+- EUR_USD_D1_2003_2025.csv
+- SPX500USD_H1_2023_2025.csv
+```
+
+### Output Structure
+```
+ftmo_analysis_output/
+├── VALIDATE/
+│   ├── history/
+│   │   └── val_2023_2025_007/     # Latest validation
+│   │       ├── best_trades_final.csv
+│   │       └── analysis_summary.txt
+│   └── best_params.json
+├── hourly_validator/
+│   └── best_trades_final_realistic_summary.json
+├── TPE/                           # TPE optimization results
+└── NSGA/                          # NSGA-II optimization results
+```
+
+---
+
+## Important Conventions
+
+### Symbol Format
+- **Internal/Data**: OANDA format (`EUR_USD`, `XAU_USD`)
+- **MT5 Execution**: Broker format (`EURUSD`, `XAUUSD`)
+- Always use `symbol_mapping.py` for conversions
+
+### Parameters - Never Hardcode
+```python
+# ✅ CORRECT
 from params.params_loader import load_strategy_params
 params = load_strategy_params()
+
+# ❌ WRONG
+MIN_CONFLUENCE = 5  # Don't hardcode
 ```
 
-**Wrong**:
+### Multi-Timeframe Data
+Always prevent look-ahead bias:
 ```python
-MIN_CONFLUENCE = 5  # Don't hardcode!
+# Slice HTF data to reference timestamp
+htf_candles = _slice_htf_by_timestamp(weekly_candles, current_daily_dt)
 ```
-
-**Parameter Loading Pitfall** (Fixed Jan 4, 2026):
-```python
-# ❌ WRONG: This import doesn't exist
-from params.defaults import DEFAULT_STRATEGY_PARAMS
-
-# ✅ CORRECT: Use this import
-from params.defaults import PARAMETER_DEFAULTS
-```
-
-### 5. Multi-Broker Symbol Mapping
-
-```python
-from symbol_mapping import get_broker_symbol
-
-# Forex.com examples:
-get_broker_symbol("EUR_USD", "forexcom")    # → "EURUSD"
-get_broker_symbol("SPX500_USD", "forexcom") # → "SPX500"
-get_broker_symbol("NAS100_USD", "forexcom") # → "NAS100"
-```
-
-### 5. Historical SR Data
-
-**NOT INTEGRATED**: Both TPE optimizer and live bot pass `historical_sr=None`.
-SR files exist in `data/sr_levels/` but are not used.
-
-### 6. Data Requirements
-
-The strategy uses MAXIMUM:
-- Monthly: 21 candles (MT5 provides 24)
-- Weekly: 21 candles (MT5 provides 104)
-- Daily: 50 candles (MT5 provides 500)
-
-**MT5 data is SUFFICIENT** for all strategy requirements.
 
 ---
 
-## 💻 Development Commands
+## Common Tasks
+
+### Run Validation
+```bash
+python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
+```
+
+### Run H1 Simulation
+```bash
+python scripts/validate_h1_realistic.py --trades ftmo_analysis_output/VALIDATE/best_trades_final.csv --balance 60000
+```
 
 ### Run Optimization
 ```bash
-./run_optimization.sh --single --trials 100  # TPE
-./run_optimization.sh --multi --trials 100   # NSGA-II
-python ftmo_challenge_analyzer.py --status   # Check progress
+python ftmo_challenge_analyzer.py --single --trials 100
 ```
 
-### Run Live Bot (Windows VM)
+### Check Status
 ```bash
-python main_live_bot.py
-```
-
-### Update VM After Code Changes
-```cmd
-cd C:\Users\Administrator\ftmotrial
-git pull
-schtasks /End /TN "FTMO_Live_Bot"
-schtasks /Run /TN "FTMO_Live_Bot"
+python ftmo_challenge_analyzer.py --status
 ```
 
 ---
 
-## 📁 Persistence Files
+## 5ers Challenge Rules
 
-| File | Purpose |
-|------|---------|
-| `pending_setups.json` | Pending limit orders |
-| `awaiting_spread.json` | Signals waiting for better spread |
-| `challenge_state.json` | Risk manager state |
-| `trading_days.json` | Profitable days tracking |
-
----
-
-## 🎯 5ers Challenge Rules
-
-| Rule | Limit | Bot Behavior |
-|------|-------|--------------|
-| Max Daily Loss | 5% | Halt at 4.2% |
-| Max Total DD | 10% | Emergency at 7% |
-| Step 1 Target | 8% | ~18 days expected |
-| Step 2 Target | 5% | ~10 days expected |
-| Min Profitable Days | 3 | ~68 trades/month |
-| Risk per Trade | 0.6% | $360 per R (60K) |
+| Rule | Limit |
+|------|-------|
+| Max Total Drawdown | 10% below starting balance |
+| Daily Drawdown | None (5ers doesn't track) |
+| Step 1 Target | 8% |
+| Step 2 Target | 5% |
+| Min Profitable Days | 3 |
 
 ---
 
-**Last Updated**: 2025-12-31
+## Recent History
+
+### January 4, 2026
+- **REVERTED** to 5-TP system (3-TP removal broke exit logic)
+- H1 realistic validator added
+- Validation confirmed: +696R (D1), +274R (H1 realistic)
+
+### What NOT to Do
+1. ❌ Remove TP4/TP5 - breaks exit calculations
+2. ❌ Change exit logic without full validation
+3. ❌ Hardcode parameters in source files
+4. ❌ Use outdated `atr_tp_multiplier` naming (use actual field names)
+
+---
+
+## Quick Reference
+
+### Validation Run: val_2023_2025_007
+- D1 Backtest: 1,779 trades, +696.03R, 45.5% WR
+- H1 Realistic: 1,673 trades, +274.71R, 71.8% WR, $1.16M final
+
+### Key Commits
+- `61bdcac` - REVERT: Restore 5-TP system
+- `2d1979c` - H1 validator results added
+
+---
+
+**Last Updated**: January 4, 2026
