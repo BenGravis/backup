@@ -54,6 +54,7 @@ from ftmo_config import FTMO_CONFIG, FTMO10KConfig, get_pip_size, get_sl_limits
 from config import FOREX_PAIRS, METALS, INDICES, CRYPTO_ASSETS
 from tradr.risk.position_sizing import calculate_lot_size, get_contract_specs
 from params.params_loader import save_optimized_params
+from params.defaults import PARAMETER_DEFAULTS, merge_with_defaults
 
 # Professional Quant Suite Integration
 from professional_quant_suite import (
@@ -2158,69 +2159,36 @@ class OptunaOptimizer:
             else:
                 print(f"  {k}: {v}")
         
-        # FIXED: Save ALL Optuna parameters, not just a subset
-        # Start with a copy of all best_params from Optuna
-        params_to_save = dict(self.best_params)
-
+        # FIXED: Use params/defaults.py as SINGLE SOURCE OF TRUTH
+        # This ensures ALL parameters are saved with correct defaults
+        
+        # Start with Optuna best_params
+        optuna_params = dict(self.best_params)
+        
         # Apply necessary key mappings (Optuna name -> StrategyParams name)
         key_mappings = {
-            'min_confluence': 'min_confluence',
             'atr_vol_ratio_range': 'atr_volatility_ratio',
         }
-
         for optuna_key, strategy_key in key_mappings.items():
-            if optuna_key in params_to_save:
-                params_to_save[strategy_key] = params_to_save.pop(optuna_key)
-
-        # Ensure all critical parameters have defaults if not present
-        defaults = {
-            'min_confluence': 5,
-            'min_quality_factors': 2,
-            'risk_per_trade_pct': 0.5,
-            'atr_min_percentile': 50.0,
-            'trail_activation_r': 2.2,
-            'december_atr_multiplier': 1.5,
-            'volatile_asset_boost': 1.5,
-            'adx_trend_threshold': 25.0,
-            'adx_range_threshold': 20.0,
-            'trend_min_confluence': 5,
-            'range_min_confluence': 3,
-            'rsi_oversold_range': 25.0,
-            'rsi_overbought_range': 75.0,
-            'atr_volatility_ratio': 0.8,
-            'atr_trail_multiplier': 1.5,
-            'partial_exit_at_1r': True,
-            'partial_exit_pct': 0.5,
-            'use_adx_slope_rising': False,
-            # TP parameters
-            'tp1_close_pct': 0.35,
-            'tp2_close_pct': 0.20,
-            'tp3_close_pct': 0.25,
-            'tp1_r_multiple': 1.75,
-            'tp2_r_multiple': 3.0,
-            'tp3_r_multiple': 5.5,
-            # Filter toggles
-            'use_htf_filter': False,
-            'use_structure_filter': False,
-            'use_confirmation_filter': False,
-            'use_fib_filter': False,
-            'use_displacement_filter': False,
-            'use_candle_rejection': False,
-            # FTMO compliance
-            'daily_loss_halt_pct': 4.0,
-            'max_total_dd_warning': 8.0,
-            'consecutive_loss_halt': 999,
-        }
-
-        for key, default_val in defaults.items():
-            if key not in params_to_save:
-                params_to_save[key] = default_val
+            if optuna_key in optuna_params:
+                optuna_params[strategy_key] = optuna_params.pop(optuna_key)
+        
+        # Merge with defaults from params/defaults.py (SINGLE SOURCE OF TRUTH)
+        # This ensures ALL parameters are present, using defaults for any not optimized
+        params_to_save = merge_with_defaults(optuna_params)
+        
+        # Log what was merged
+        optuna_keys = set(optuna_params.keys())
+        default_keys = set(PARAMETER_DEFAULTS.keys()) - optuna_keys
+        print(f"\n📋 Parameter merge:")
+        print(f"   From Optuna: {len(optuna_keys)} params")
+        print(f"   From defaults: {len(default_keys)} params")
         
         try:
             save_optimized_params(params_to_save, backup=True)
-            print(f"\nOptimized parameters saved to params/current_params.json")
+            print(f"\n✅ Saved {len(params_to_save)} parameters to params/current_params.json")
         except Exception as e:
-            print(f"Failed to save params: {e}")
+            print(f"❌ Failed to save params: {e}")
         
         return {
             'best_params': self.best_params,

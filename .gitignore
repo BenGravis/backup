@@ -48,6 +48,9 @@ _archive/
 data/sr_cache/
 data/sr_levels/
 
+# H1 data files (too large for git, can be regenerated)
+data/ohlcv/*_H1_*.csv
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

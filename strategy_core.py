@@ -187,12 +187,19 @@ class StrategyParams:
     cooldown_bars: int = 0
     max_open_trades: int = 3
     
+    # TP R-Multiples (NEW - from Optuna optimization)
+    # These define WHERE each TP level is placed in R-multiples
+    tp1_r_multiple: float = 1.7   # TP1 at 1.7R profit
+    tp2_r_multiple: float = 2.7   # TP2 at 2.7R profit
+    tp3_r_multiple: float = 6.0   # TP3 at 6.0R profit
+    
     # Partial take-profit percentages (must sum to 1.0)
-    tp1_close_pct: float = 0.10  # Close 10% at TP1
-    tp2_close_pct: float = 0.10  # Close 10% at TP2
-    tp3_close_pct: float = 0.15  # Close 15% at TP3
-    tp4_close_pct: float = 0.20  # Close 20% at TP4
-    tp5_close_pct: float = 0.45  # Close 45% at TP5
+    # These define WHAT PERCENTAGE of position closes at each TP level
+    tp1_close_pct: float = 0.34   # Close 34% at TP1
+    tp2_close_pct: float = 0.16   # Close 16% at TP2
+    tp3_close_pct: float = 0.35   # Close 35% at TP3
+    tp4_close_pct: float = 0.20   # Close 20% at TP4 (legacy)
+    tp5_close_pct: float = 0.45   # Close 45% at TP5 (legacy)
     
     # Quantitative enhancement filters - DISABLED for baseline testing
     use_atr_regime_filter: bool = False
@@ -287,6 +294,14 @@ class StrategyParams:
     tier2_dd_pct: float = 3.5  # Tier 2: Cancel pending at this daily DD%
     tier3_dd_pct: float = 4.5  # Tier 3: Emergency close at this daily DD%
     
+    # ============================================================================
+    # FTMO COMPLIANCE PARAMETERS (from optimization)
+    # Used by optimizer and compliance tracker for drawdown protection
+    # ============================================================================
+    daily_loss_halt_pct: float = 4.1    # Halt trading at this daily DD%
+    max_total_dd_warning: float = 7.9   # Warning at this total DD%
+    consecutive_loss_halt: int = 9      # Halt after this many consecutive losses
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert parameters to dictionary."""
         return {
@@ -310,6 +325,11 @@ class StrategyParams:
             "risk_per_trade_pct": self.risk_per_trade_pct,
             "cooldown_bars": self.cooldown_bars,
             "max_open_trades": self.max_open_trades,
+            # TP R-Multiples (NEW)
+            "tp1_r_multiple": self.tp1_r_multiple,
+            "tp2_r_multiple": self.tp2_r_multiple,
+            "tp3_r_multiple": self.tp3_r_multiple,
+            # TP Close Percentages
             "tp1_close_pct": self.tp1_close_pct,
             "tp2_close_pct": self.tp2_close_pct,
             "tp3_close_pct": self.tp3_close_pct,
@@ -361,6 +381,10 @@ class StrategyParams:
             "tier1_risk_factor": self.tier1_risk_factor,
             "tier2_dd_pct": self.tier2_dd_pct,
             "tier3_dd_pct": self.tier3_dd_pct,
+            # FTMO COMPLIANCE PARAMETERS
+            "daily_loss_halt_pct": self.daily_loss_halt_pct,
+            "max_total_dd_warning": self.max_total_dd_warning,
+            "consecutive_loss_halt": self.consecutive_loss_halt,
         }
     
     @classmethod
