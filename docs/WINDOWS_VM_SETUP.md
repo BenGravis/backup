@@ -8,7 +8,7 @@ Bot laten draaien 24/7 op Windows VM, ook als je RDP sessie sluit.
 ## 📥 Stap 1: Pull Project
 
 ```cmd
-cd C:\Users\YourName\botcreativehub
+cd C:\Users\TheTradrBot\botcreativehub
 git pull origin main
 ```
 
@@ -55,7 +55,7 @@ Dit script:
 **Dan kopieer je de commands naar Command Prompt (als Administrator):**
 
 ```cmd
-cd /d "C:\Users\YourName\botcreativehub"
+cd /d "C:\Users\TheTradrBot\botcreativehub"
 schtasks /Create /XML "trading_bot_task.xml" /TN "ForexComDemoTradingBot"
 ```
 
@@ -127,7 +127,7 @@ OF: Gewoon RDP window sluiten (X knop)
 ## 📁 File Locaties
 
 ```
-C:\Users\YourName\botcreativehub\
+C:\Users\TheTradrBot\botcreativehub\
 ├── .env                          # Je credentials (MAAK AAN!)
 ├── main_live_bot.py              # Main bot script
 ├── start_bot.bat                 # ✅ NIEUW - Quick start script
@@ -180,7 +180,7 @@ Of gebruik **Notepad++** / **VS Code** om logs te volgen.
 ## ⚡ Quick Start Commands (Copy-Paste)
 
 ```cmd
-cd C:\Users\YourName\botcreativehub
+cd C:\Users\TheTradrBot\botcreativehub
 git pull origin main
 pip install -r requirements.txt
 copy .env.forexcom_demo .env
