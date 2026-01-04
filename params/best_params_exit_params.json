@@ -1,0 +1,21 @@
+{
+  "tp1_r_multiple": 1.7,
+  "tp2_r_multiple": 2.6999999999999997,
+  "tp3_r_multiple": 6.0,
+  "atr_tp1_multiplier": 0.6,
+  "atr_tp2_multiplier": 1.2,
+  "atr_tp3_multiplier": 2.0,
+  "tp4_fixed_r": 2.5,
+  "tp5_fixed_r": 3.5,
+  "tp1_close_pct": 0.34,
+  "tp2_close_pct": 0.16,
+  "tp3_close_pct": 0.35,
+  "tp4_close_pct": 0.2,
+  "tp5_close_pct": 0.45,
+  "trail_activation_r": 0.65,
+  "atr_trail_multiplier": 1.5999999999999999,
+  "partial_exit_at_1r": true,
+  "partial_exit_pct": 0.75,
+  "atr_sl_multiplier": 1.5,
+  "structure_sl_lookback": 35
+}
