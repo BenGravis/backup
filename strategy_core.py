@@ -160,11 +160,17 @@ class StrategyParams:
     min_quality_factors: int = 3
     
     atr_sl_multiplier: float = 1.5
-    atr_tp1_multiplier: float = 0.6
-    atr_tp2_multiplier: float = 1.2
-    atr_tp3_multiplier: float = 2.0
-    atr_tp4_multiplier: float = 3.0
-    atr_tp5_multiplier: float = 4.0
+    
+    # ════════════════════════════════════════════════════════════════════════
+    # DEPRECATED: atr_tp_multiplier - DO NOT USE
+    # These are kept for backward compatibility with old params files.
+    # The actual TP calculation uses tp_r_multiple (see below).
+    # ════════════════════════════════════════════════════════════════════════
+    atr_tp1_multiplier: float = 1.7  # DEPRECATED - use tp1_r_multiple
+    atr_tp2_multiplier: float = 2.7  # DEPRECATED - use tp2_r_multiple
+    atr_tp3_multiplier: float = 6.0  # DEPRECATED - use tp3_r_multiple
+    atr_tp4_multiplier: float = 7.0  # DEPRECATED
+    atr_tp5_multiplier: float = 8.0  # DEPRECATED
     
     fib_low: float = 0.382
     fib_high: float = 0.886
@@ -2319,11 +2325,12 @@ def compute_trade_levels(
                 risk = entry - sl
                 
                 if risk > 0:
-                    tp1 = entry + risk * params.atr_tp1_multiplier
-                    tp2 = entry + risk * params.atr_tp2_multiplier
-                    tp3 = entry + risk * params.atr_tp3_multiplier
-                    tp4 = entry + risk * 2.5
-                    tp5 = entry + risk * 3.5
+                    # Use tp_r_multiple from Optuna optimization (not atr_tp_multiplier)
+                    tp1 = entry + risk * params.tp1_r_multiple
+                    tp2 = entry + risk * params.tp2_r_multiple
+                    tp3 = entry + risk * params.tp3_r_multiple
+                    tp4 = entry + risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
+                    tp5 = entry + risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
                     
                     note = f"R/R: Entry near {entry:.5f}, SL at {sl:.5f}"
                     return note, True, entry, sl, tp1, tp2, tp3, tp4, tp5
@@ -2340,11 +2347,12 @@ def compute_trade_levels(
                 risk = sl - entry
                 
                 if risk > 0:
-                    tp1 = entry - risk * params.atr_tp1_multiplier
-                    tp2 = entry - risk * params.atr_tp2_multiplier
-                    tp3 = entry - risk * params.atr_tp3_multiplier
-                    tp4 = entry - risk * 2.5
-                    tp5 = entry - risk * 3.5
+                    # Use tp_r_multiple from Optuna optimization (not atr_tp_multiplier)
+                    tp1 = entry - risk * params.tp1_r_multiple
+                    tp2 = entry - risk * params.tp2_r_multiple
+                    tp3 = entry - risk * params.tp3_r_multiple
+                    tp4 = entry - risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
+                    tp5 = entry - risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
                     
                     note = f"R/R: Entry near {entry:.5f}, SL at {sl:.5f}"
                     return note, True, entry, sl, tp1, tp2, tp3, tp4, tp5
@@ -2358,22 +2366,24 @@ def compute_trade_levels(
         else:
             sl = entry - atr * sl_mult
         risk = entry - sl
-        tp1 = entry + risk * params.atr_tp1_multiplier
-        tp2 = entry + risk * params.atr_tp2_multiplier
-        tp3 = entry + risk * params.atr_tp3_multiplier
-        tp4 = entry + risk * 2.5
-        tp5 = entry + risk * 3.5
+        # Use tp_r_multiple from Optuna optimization (not atr_tp_multiplier)
+        tp1 = entry + risk * params.tp1_r_multiple
+        tp2 = entry + risk * params.tp2_r_multiple
+        tp3 = entry + risk * params.tp3_r_multiple
+        tp4 = entry + risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
+        tp5 = entry + risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
     else:
         if structure_sl is not None:
             sl = max(entry + atr * sl_mult, structure_sl + atr * 0.4)
         else:
             sl = entry + atr * sl_mult
         risk = sl - entry
-        tp1 = entry - risk * params.atr_tp1_multiplier
-        tp2 = entry - risk * params.atr_tp2_multiplier
-        tp3 = entry - risk * params.atr_tp3_multiplier
-        tp4 = entry - risk * 2.5
-        tp5 = entry - risk * 3.5
+        # Use tp_r_multiple from Optuna optimization (not atr_tp_multiplier)
+        tp1 = entry - risk * params.tp1_r_multiple
+        tp2 = entry - risk * params.tp2_r_multiple
+        tp3 = entry - risk * params.tp3_r_multiple
+        tp4 = entry - risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
+        tp5 = entry - risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
     
     note = f"R/R: ATR+structure levels"
     return note, True, entry, sl, tp1, tp2, tp3, tp4, tp5

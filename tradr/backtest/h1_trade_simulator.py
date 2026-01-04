@@ -27,26 +27,57 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# CONSTANTS - EXACT MATCH WITH strategy_core.py
+# LOAD PARAMS FROM current_params.json (ALIGNED with strategy_core.py)
 # ═══════════════════════════════════════════════════════════════════════════
 
-# TP R-multiples (from atr_tp_multiplier defaults + hardcoded)
-TP1_R = 0.6   # atr_tp1_multiplier default
-TP2_R = 1.2   # atr_tp2_multiplier default
-TP3_R = 2.0   # atr_tp3_multiplier default
-TP4_R = 2.5   # hardcoded in strategy_core.py
-TP5_R = 3.5   # hardcoded in strategy_core.py
+def _load_tp_params():
+    """Load TP parameters from current_params.json."""
+    params_file = Path(__file__).parent.parent.parent / "params" / "current_params.json"
+    
+    if params_file.exists():
+        with open(params_file) as f:
+            data = json.load(f)
+        
+        # Handle nested structure
+        if "parameters" in data:
+            if isinstance(data["parameters"], dict) and "parameters" in data["parameters"]:
+                params = data["parameters"]["parameters"]
+            else:
+                params = data["parameters"]
+        else:
+            params = data
+        
+        return params
+    else:
+        # Fallback defaults
+        return {
+            "tp1_r_multiple": 1.7,
+            "tp2_r_multiple": 2.7,
+            "tp3_r_multiple": 6.0,
+            "tp1_close_pct": 0.34,
+            "tp2_close_pct": 0.16,
+            "tp3_close_pct": 0.35,
+            "trail_activation_r": 0.65,
+        }
+
+_PARAMS = _load_tp_params()
+
+# TP R-multiples (from current_params.json - ALIGNED with optimizer)
+TP1_R = _PARAMS.get("tp1_r_multiple", 1.7)
+TP2_R = _PARAMS.get("tp2_r_multiple", 2.7)
+TP3_R = _PARAMS.get("tp3_r_multiple", 6.0)
+TP4_R = TP3_R + 1.0  # TP3 + 1R (legacy support)
+TP5_R = TP3_R + 2.0  # TP3 + 2R (legacy support)
 
 # Close percentages (weights for RR calculation)
-# From run009 best_params + defaults
-TP1_CLOSE_PCT = 0.34
-TP2_CLOSE_PCT = 0.16
-TP3_CLOSE_PCT = 0.35
-TP4_CLOSE_PCT = 0.20  # default
-TP5_CLOSE_PCT = 0.45  # default
+TP1_CLOSE_PCT = _PARAMS.get("tp1_close_pct", 0.34)
+TP2_CLOSE_PCT = _PARAMS.get("tp2_close_pct", 0.16)
+TP3_CLOSE_PCT = _PARAMS.get("tp3_close_pct", 0.35)
+TP4_CLOSE_PCT = 0.15  # legacy (for trades that reach TP4)
+TP5_CLOSE_PCT = 0.00  # legacy
 
 # Trailing activation
-TRAIL_ACTIVATION_R = 0.65
+TRAIL_ACTIVATION_R = _PARAMS.get("trail_activation_r", 0.65)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

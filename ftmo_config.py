@@ -58,19 +58,23 @@ class Fiveers60KConfig:
     min_confluence_score: int = 4  # OPTIMIZED: Lowered from 6 to 4 for 2-3x more trade opportunities (allows 4/7 setups)
     min_quality_factors: int = 2  # OPTIMIZED: Lowered from 3 to 2 for easier entry triggers
 
-    # === TAKE PROFIT SETTINGS ===
-    tp1_r_multiple: float = 1.5  # TP1 at 1.5R
-    tp2_r_multiple: float = 3.0  # TP2 at 3.0R
-    tp3_r_multiple: float = 5.0  # TP3 at 5.0R
-    tp4_r_multiple: float = 7.0  # TP4 at 7.0R
-    tp5_r_multiple: float = 10.0  # TP5 at 10.0R
+    # ════════════════════════════════════════════════════════════════════════
+    # DEPRECATED: TP SETTINGS - NOW LOADED FROM current_params.json
+    # These are only used as FALLBACK if params are missing.
+    # Live bot and optimizer now use tp_r_multiple from params/current_params.json
+    # ════════════════════════════════════════════════════════════════════════
+    tp1_r_multiple: float = 1.7  # DEPRECATED - use current_params.json
+    tp2_r_multiple: float = 2.7  # DEPRECATED - use current_params.json
+    tp3_r_multiple: float = 6.0  # DEPRECATED - use current_params.json
+    tp4_r_multiple: float = 7.0  # DEPRECATED - legacy
+    tp5_r_multiple: float = 8.0  # DEPRECATED - legacy
 
-    # === PARTIAL CLOSE PERCENTAGES ===
-    tp1_close_pct: float = 0.10  # OPTIMIZED: Lowered from 25% to 10% - keep 90% running (catch bigger moves)
-    tp2_close_pct: float = 0.10  # OPTIMIZED: Lowered from 25% to 10% - keep 80% running by TP2
-    tp3_close_pct: float = 0.15  # OPTIMIZED: Reduced from 20% to 15% - keep 65% running to TP4+
-    tp4_close_pct: float = 0.30  # INCREASED from 15% to 30% - TP4 is major profit level
-    tp5_close_pct: float = 0.35  # INCREASED from 15% to 35% - trail final 35% for maximum runners
+    # DEPRECATED: PARTIAL CLOSE PERCENTAGES - NOW FROM current_params.json
+    tp1_close_pct: float = 0.34  # DEPRECATED - use current_params.json
+    tp2_close_pct: float = 0.16  # DEPRECATED - use current_params.json
+    tp3_close_pct: float = 0.35  # DEPRECATED - use current_params.json
+    tp4_close_pct: float = 0.15  # DEPRECATED - legacy
+    tp5_close_pct: float = 0.00  # DEPRECATED - legacy
 
     # === TRAILING STOP SETTINGS (Moderate Progressive) ===
     trail_after_tp1: bool = True  # Move SL to breakeven after TP1

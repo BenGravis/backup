@@ -467,9 +467,10 @@ class LiveTradingBot:
                     max_cumulative_risk_pct=FIVEERS_CONFIG.max_cumulative_risk_pct,
                     max_concurrent_trades=FIVEERS_CONFIG.max_concurrent_trades,
                     max_pending_orders=FIVEERS_CONFIG.max_pending_orders,
-                    tp1_close_pct=FIVEERS_CONFIG.tp1_close_pct,
-                    tp2_close_pct=FIVEERS_CONFIG.tp2_close_pct,
-                    tp3_close_pct=FIVEERS_CONFIG.tp3_close_pct,
+                    # ALIGNED: Use tp_close_pct from current_params.json (self.params)
+                    tp1_close_pct=self.params.tp1_close_pct,
+                    tp2_close_pct=self.params.tp2_close_pct,
+                    tp3_close_pct=self.params.tp3_close_pct,
                     daily_loss_warning_pct=FIVEERS_CONFIG.daily_loss_warning_pct,
                     daily_loss_reduce_pct=FIVEERS_CONFIG.daily_loss_reduce_pct,
                     daily_loss_halt_pct=FIVEERS_CONFIG.daily_loss_halt_pct,
@@ -714,20 +715,23 @@ class LiveTradingBot:
                 risk = abs(entry - sl)
                 log.info(f"[{symbol}] SL adjusted to {FIVEERS_CONFIG.min_sl_atr_ratio} ATR: {sl:.5f}")
             
-        # Calculate TPs using EXACT same R multiples as backtest (including TP4 and TP5)
+        # ════════════════════════════════════════════════════════════════════════
+        # ALIGNED: Use tp_r_multiple from current_params.json (self.params)
+        # This ensures live trading uses SAME TP levels as optimizer/backtest
+        # ════════════════════════════════════════════════════════════════════════
         risk = abs(entry - sl)
         if direction == "bullish":
-            tp1 = entry + (risk * FIVEERS_CONFIG.tp1_r_multiple)
-            tp2 = entry + (risk * FIVEERS_CONFIG.tp2_r_multiple)
-            tp3 = entry + (risk * FIVEERS_CONFIG.tp3_r_multiple)
-            tp4 = entry + (risk * FIVEERS_CONFIG.tp4_r_multiple)
-            tp5 = entry + (risk * FIVEERS_CONFIG.tp5_r_multiple)
+            tp1 = entry + (risk * self.params.tp1_r_multiple)
+            tp2 = entry + (risk * self.params.tp2_r_multiple)
+            tp3 = entry + (risk * self.params.tp3_r_multiple)
+            tp4 = entry + (risk * (self.params.tp3_r_multiple + 1.0))  # TP3 + 1R
+            tp5 = entry + (risk * (self.params.tp3_r_multiple + 2.0))  # TP3 + 2R
         else:
-            tp1 = entry - (risk * FIVEERS_CONFIG.tp1_r_multiple)
-            tp2 = entry - (risk * FIVEERS_CONFIG.tp2_r_multiple)
-            tp3 = entry - (risk * FIVEERS_CONFIG.tp3_r_multiple)
-            tp4 = entry - (risk * FIVEERS_CONFIG.tp4_r_multiple)
-            tp5 = entry - (risk * FIVEERS_CONFIG.tp5_r_multiple)
+            tp1 = entry - (risk * self.params.tp1_r_multiple)
+            tp2 = entry - (risk * self.params.tp2_r_multiple)
+            tp3 = entry - (risk * self.params.tp3_r_multiple)
+            tp4 = entry - (risk * (self.params.tp3_r_multiple + 1.0))  # TP3 + 1R
+            tp5 = entry - (risk * (self.params.tp3_r_multiple + 2.0))  # TP3 + 2R
         
         if direction == "bullish":
             if current_price <= sl:
@@ -744,11 +748,11 @@ class LiveTradingBot:
         log.info(f"  Current Price: {current_price:.5f}")
         log.info(f"  Entry: {entry:.5f} ({entry_distance_r:.2f}R away)")
         log.info(f"  SL: {sl:.5f} ({sl_pips:.1f} pips)")
-        log.info(f"  TP1: {tp1:.5f} ({FIVEERS_CONFIG.tp1_r_multiple}R)")
-        log.info(f"  TP2: {tp2:.5f} ({FIVEERS_CONFIG.tp2_r_multiple}R)")
-        log.info(f"  TP3: {tp3:.5f} ({FIVEERS_CONFIG.tp3_r_multiple}R)")
-        log.info(f"  TP4: {tp4:.5f} ({FIVEERS_CONFIG.tp4_r_multiple}R)")
-        log.info(f"  TP5: {tp5:.5f} ({FIVEERS_CONFIG.tp5_r_multiple}R)")
+        log.info(f"  TP1: {tp1:.5f} ({self.params.tp1_r_multiple}R)")
+        log.info(f"  TP2: {tp2:.5f} ({self.params.tp2_r_multiple}R)")
+        log.info(f"  TP3: {tp3:.5f} ({self.params.tp3_r_multiple}R)")
+        log.info(f"  TP4: {tp4:.5f} ({self.params.tp3_r_multiple + 1.0}R)")
+        log.info(f"  TP5: {tp5:.5f} ({self.params.tp3_r_multiple + 2.0}R)")
         
         return {
             "symbol": symbol,
@@ -1519,10 +1523,10 @@ class LiveTradingBot:
             if CHALLENGE_MODE and self.challenge_manager:
                 tp1_vol, tp2_vol, tp3_vol = self.challenge_manager.get_partial_close_volumes(original_volume)
             else:
-                # Match backtest: 45% TP1, 30% TP2, 25% TP3
-                tp1_vol = round(original_volume * FIVEERS_CONFIG.tp1_close_pct, 2)
-                tp2_vol = round(original_volume * FIVEERS_CONFIG.tp2_close_pct, 2)
-                tp3_vol = round(original_volume * FIVEERS_CONFIG.tp3_close_pct, 2)
+                # ALIGNED: Use tp_close_pct from current_params.json (self.params)
+                tp1_vol = round(original_volume * self.params.tp1_close_pct, 2)
+                tp2_vol = round(original_volume * self.params.tp2_close_pct, 2)
+                tp3_vol = round(original_volume * self.params.tp3_close_pct, 2)
             
             tp1_vol = max(0.01, tp1_vol)
             tp2_vol = max(0.01, tp2_vol)
