@@ -198,32 +198,33 @@ TIMEFRAME_CONFIG = {
     }
 }
 
-# Warm-start anchor params (from current_params.json) and tight search space around them
+# Warm-start anchor params - WERKELIJKE RUN009 PARAMETERS (wat de code DAADWERKELIJK deed)
+# Deze parameters werden gebruikt door de pre-alignment code (atr_tp_multiplier = 0.6/1.2/2.0)
 RUN_006_PARAMS = {
-    'risk_per_trade_pct': 0.6,
+    'risk_per_trade_pct': 0.65,
     'min_confluence': 2,
     'min_quality_factors': 3,
-    'adx_trend_threshold': 22.0,
-    'adx_range_threshold': 11.0,
+    'adx_trend_threshold': 20.0,
+    'adx_range_threshold': 13.0,
     'trend_min_confluence': 6,
-    'range_min_confluence': 2,
+    'range_min_confluence': 3,
     'atr_min_percentile': 42.0,
     'atr_trail_multiplier': 1.6,
-    'atr_vol_ratio_range': 0.95,
-    'trail_activation_r': 0.8,
-    'tp1_r_multiple': 1.7,
-    'tp2_r_multiple': 2.6,
-    'tp3_r_multiple': 5.4,
-    'tp1_close_pct': 0.38,
+    'atr_vol_ratio_range': 0.9,
+    'trail_activation_r': 0.65,
+    'tp1_r_multiple': 0.6,
+    'tp2_r_multiple': 1.2,
+    'tp3_r_multiple': 2.0,
+    'tp1_close_pct': 0.34,
     'tp2_close_pct': 0.16,
-    'tp3_close_pct': 0.30,
-    'partial_exit_at_1r': True,
-    'partial_exit_pct': 0.70,
-    'december_atr_multiplier': 1.65,
+    'tp3_close_pct': 0.35,
+    'partial_exit_at_1r': False,
+    'partial_exit_pct': 0.75,
+    'december_atr_multiplier': 1.7,
     'volatile_asset_boost': 1.35,
-    'daily_loss_halt_pct': 3.8,
+    'daily_loss_halt_pct': 4.1,
     'max_total_dd_warning': 7.9,
-    'consecutive_loss_halt': 10,
+    'consecutive_loss_halt': 9,
     'use_htf_filter': False,
     'use_structure_filter': False,
     'use_confirmation_filter': False,
@@ -2041,9 +2042,9 @@ class OptunaOptimizer:
             except (ValueError, AttributeError) as e:
                 print(f"No valid completed trials yet: {e}")
         
-        # Warm-start: enqueue run_006 parameters as the first trial when requested
+        # Warm-start: enqueue werkelijke run009 parameters as the first trial when requested
         if self.use_warm_start:
-            print("Warm-start enabled: enqueueing run_006 baseline parameters as Trial #0")
+            print("Warm-start enabled: enqueueing run009 baseline (0.6R/1.2R/2.0R) as Trial #0")
             study.enqueue_trial(RUN_006_PARAMS)
 
         # Store best value before optimization starts for comparison
@@ -2140,6 +2141,32 @@ class OptunaOptimizer:
                     ftmo_dd_pct=max_ftmo_dd,
                     ftmo_challenge_passed=challenge_passed,
                 )
+            
+            # Save best_params.json in TPE folder when new best is found
+            if is_new_best:
+                from params.defaults import DEFAULT_STRATEGY_PARAMS
+                import json
+                from pathlib import Path
+                
+                # Merge trial params with defaults
+                best_params_full = {**DEFAULT_STRATEGY_PARAMS, **trial.params}
+                
+                # Add metadata
+                best_params_with_meta = {
+                    "optimization_mode": self.tf_config['mode'],
+                    "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "trial_number": trial.number,
+                    "best_score": trial.value,
+                    "parameters": best_params_full
+                }
+                
+                # Save to TPE folder (main location - always up to date)
+                tpe_folder = Path(output_mgr.output_folder)
+                best_params_path = tpe_folder / "best_params.json"
+                with open(best_params_path, 'w') as f:
+                    json.dump(best_params_with_meta, f, indent=2)
+                
+                print(f"💾 Saved best_params.json (Trial #{trial.number}, Score={trial.value:.0f})")
             
             print(f"{'─'*70}\n")
         
