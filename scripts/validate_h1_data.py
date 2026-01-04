@@ -28,14 +28,12 @@ PRICE_TOLERANCE_PCT = 0.5  # 0.5% tolerance for rounding differences
 
 def load_data(symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
     """Load OHLCV data for a symbol and timeframe."""
-    # Convert OANDA format (EUR_USD) to MT5 format (EURUSD)
+    # Convert OANDA format (EUR_USD) to MT5 format (EURUSD) if needed
+    # All data files use MT5 naming (no underscores)
     mt5_symbol = symbol.replace('_', '')
     
-    # Try different filename patterns for both formats
+    # Try different filename patterns (all use MT5 format now)
     patterns = [
-        f"{symbol}_{timeframe}_2014_2025.csv",
-        f"{symbol}_{timeframe}_2003_2025.csv",
-        f"{symbol}_{timeframe}.csv",
         f"{mt5_symbol}_{timeframe}_2014_2025.csv",
         f"{mt5_symbol}_{timeframe}_2003_2025.csv",
         f"{mt5_symbol}_{timeframe}.csv",
@@ -46,12 +44,11 @@ def load_data(symbol: str, timeframe: str) -> Optional[pd.DataFrame]:
         if filepath.exists():
             df = pd.read_csv(filepath)
             
-            # Normalize column names
-            # Rename 'time' to 'timestamp' if present
+            # Normalize column names (MT5 uses 'time' and capitalized OHLCV)
             if 'time' in df.columns:
                 df = df.rename(columns={'time': 'timestamp'})
             
-            # Lowercase OHLCV columns
+            # Lowercase OHLCV columns for internal consistency
             rename_map = {
                 'Open': 'open',
                 'High': 'high',

@@ -425,7 +425,9 @@ def download_all_h1_data(
     print(f"{'='*70}\n")
     
     for asset in tqdm(assets, desc="Downloading"):
-        output_file = output_dir / f"{asset}_H1_2014_2025.csv"
+        # Convert to MT5 format (remove underscores) for consistency with D1/H4 files
+        mt5_symbol = asset.replace('_', '')
+        output_file = output_dir / f"{mt5_symbol}_H1_2014_2025.csv"
         
         # Skip if already exists (unless force redownload)
         if output_file.exists() and not force_redownload:
@@ -467,8 +469,18 @@ def download_all_h1_data(
         
         # Save result
         if df is not None and len(df) > 0:
+            # Rename columns to MT5 format for consistency with D1/H4 files
+            df = df.rename(columns={
+                'timestamp': 'time',
+                'open': 'Open',
+                'high': 'High',
+                'low': 'Low',
+                'close': 'Close',
+                'volume': 'Volume'
+            })
+            
             # Ensure columns are in correct order
-            df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']]
+            df = df[['time', 'Open', 'High', 'Low', 'Close', 'Volume']]
             df.to_csv(output_file, index=False)
             
             print(f"✅ {asset} - {len(df):,} candles saved ({source})")

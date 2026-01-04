@@ -146,20 +146,18 @@ The bot's confluence detection has >1% price margins built-in.
 ### Data Format
 
 ```python
-# CSV columns
-timestamp,open,high,low,close,volume
+# CSV columns (MT5 format - consistent with D1/H4)
+time,Open,High,Low,Close,Volume
 
-# Naming convention
-{SYMBOL}_H1_2014_2025.csv  # OANDA format (EUR_USD)
+# Naming convention (MT5 format - no underscores)
+{SYMBOL}_H1_2014_2025.csv  # e.g., EURUSD_H1_2014_2025.csv
 
-# Existing data
-{SYMBOL}_D1_2003_2025.csv  # MT5 format (EURUSD)
+# Same format as existing data
+{SYMBOL}_D1_2003_2025.csv  # e.g., EURUSD_D1_2003_2025.csv
+{SYMBOL}_H4_2003_2025.csv  # e.g., EURUSD_H4_2003_2025.csv
 ```
 
-### Symbol Mapping
-
-H1 files use OANDA naming (`EUR_USD`) while D1/H4 use MT5 naming (`EURUSD`).
-Validation script handles both formats automatically.
+**Note**: All H1 files were converted from OANDA naming (`EUR_USD`) to MT5 naming (`EURUSD`) for consistency with existing D1/H4 data.
 
 ## Next Steps
 
