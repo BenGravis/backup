@@ -198,84 +198,39 @@ TIMEFRAME_CONFIG = {
     }
 }
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# TRIAL #42 BASELINE - EXACT PARAMETERS (Score 274.98)
-# These are the EXACT parameters from the best trial, used for warm-start
-# ═══════════════════════════════════════════════════════════════════════════════
-TRIAL_42_BASELINE = {
-    "min_confluence": 2,
-    "min_quality_factors": 3,
-    "risk_per_trade_pct": 0.6,
-    "max_open_trades": 3,
-    "cooldown_bars": 0,
-    "min_rr_ratio": 1.0,
-    "atr_sl_multiplier": 1.5,
-    "structure_sl_lookback": 35,
-    "tp1_r_multiple": 1.0,
-    "tp2_r_multiple": 1.5,
-    "tp3_r_multiple": 3.5,
-    "atr_tp1_multiplier": 0.6,
-    "atr_tp2_multiplier": 1.2,
-    "atr_tp3_multiplier": 2.0,
-    "tp1_close_pct": 0.35,
-    "tp2_close_pct": 0.30,
-    "tp3_close_pct": 0.35,
-    "partial_exit_at_1r": False,
-    "partial_exit_pct": 0.9,
-    "trail_activation_r": 0.7,
-    "atr_trail_multiplier": 1.4,
-    "use_atr_trailing": True,
-    "fib_low": 0.382,
-    "fib_high": 0.886,
-    "fib_range_target": 0.786,
-    "fib_zone_type": "golden_only",
-    "use_fib_filter": False,
-    "use_fib_0786_only": False,
-    "adx_trend_threshold": 21.0,
-    "adx_range_threshold": 14.0,
-    "trend_min_confluence": 6,
-    "range_min_confluence": 4,
-    "use_adx_regime_filter": False,
-    "use_adx_slope_rising": False,
-    "atr_min_percentile": 35.0,
-    "atr_volatility_ratio": 0.9,
-    "atr_vol_ratio_range": 0.8,
-    "december_atr_multiplier": 1.8,
-    "volatile_asset_boost": 1.3,
-    "use_volatility_sizing_boost": False,
-    "use_htf_filter": False,
-    "use_structure_filter": False,
-    "use_confirmation_filter": False,
-    "use_displacement_filter": False,
-    "use_candle_rejection": False,
-    "use_atr_regime_filter": False,
-    "use_zscore_filter": False,
-    "zscore_threshold": 1.5,
-    "use_pattern_filter": False,
-    "use_momentum_filter": False,
-    "momentum_lookback": 10,
-    "use_mean_reversion": False,
-    "use_mitigated_sr": False,
-    "use_structural_framework": False,
-    "use_market_structure_bos_only": False,
-    "sr_proximity_pct": 0.02,
-    "displacement_atr_mult": 1.5,
-    "candle_pattern_strictness": "moderate",
-    "ml_min_prob": 0.6,
-    "require_htf_alignment": False,
-    "require_confirmation_for_active": False,
-    "require_rr_for_active": False,
-    "use_session_filter": True,
-    "session_start_utc": 8,
-    "session_end_utc": 22,
-    "use_graduated_risk": True,
-    "tier1_dd_pct": 2.0,
-    "tier1_risk_factor": 0.67,
-    "tier2_dd_pct": 3.5,
-    "tier3_dd_pct": 4.5,
-    # 5ers compliance (NO daily DD limit!)
-    "max_total_dd_warning": 9.0,
-    "consecutive_loss_halt": 10,
+# Warm-start anchor params - WERKELIJKE RUN009 PARAMETERS (wat de code DAADWERKELIJK deed)
+# Deze parameters werden gebruikt door de pre-alignment code (atr_tp_multiplier = 0.6/1.2/2.0)
+RUN_006_PARAMS = {
+    'risk_per_trade_pct': 0.65,
+    'min_confluence': 2,
+    'min_quality_factors': 3,
+    'adx_trend_threshold': 20.0,
+    'adx_range_threshold': 13.0,
+    'trend_min_confluence': 6,
+    'range_min_confluence': 3,
+    'atr_min_percentile': 42.0,
+    'atr_trail_multiplier': 1.6,
+    'atr_vol_ratio_range': 0.9,
+    'trail_activation_r': 0.65,
+    'tp1_r_multiple': 0.6,
+    'tp2_r_multiple': 1.2,
+    'tp3_r_multiple': 2.0,
+    'tp1_close_pct': 0.34,
+    'tp2_close_pct': 0.16,
+    'tp3_close_pct': 0.35,
+    'partial_exit_at_1r': False,
+    'partial_exit_pct': 0.75,
+    'december_atr_multiplier': 1.7,
+    'volatile_asset_boost': 1.35,
+    # Note: 5ers has NO daily DD limit - removed daily_loss_halt_pct
+    'max_total_dd_warning': 7.9,  # Informational only, not for trade filtering
+    'consecutive_loss_halt': 999,  # Disabled
+    'use_htf_filter': False,
+    'use_structure_filter': False,
+    'use_confirmation_filter': False,
+    'use_fib_filter': False,
+    'use_displacement_filter': False,
+    'use_candle_rejection': False,
 }
 
 # Tight search space around current_params.json (±10-15% of current values)
@@ -784,11 +739,15 @@ class BacktestTrade:
     tp1_price: float
     tp2_price: Optional[float]
     tp3_price: Optional[float]
+    tp4_price: Optional[float]
+    tp5_price: Optional[float]
     exit_date: Any
     exit_price: float
     tp1_hit: bool
     tp2_hit: bool
     tp3_hit: bool
+    tp4_hit: bool
+    tp5_hit: bool
     sl_hit: bool
     exit_reason: str
     r_multiple: float
@@ -812,11 +771,15 @@ class BacktestTrade:
             "TP1 Price": self.tp1_price,
             "TP2 Price": self.tp2_price or "",
             "TP3 Price": self.tp3_price or "",
+            "TP4 Price": self.tp4_price or "",
+            "TP5 Price": self.tp5_price or "",
             "Exit Date": str(self.exit_date) if self.exit_date else "",
             "Exit Price": self.exit_price,
             "TP1 Hit?": "Yes" if self.tp1_hit else "No",
             "TP2 Hit?": "Yes" if self.tp2_hit else "No",
             "TP3 Hit?": "Yes" if self.tp3_hit else "No",
+            "TP4 Hit?": "Yes" if self.tp4_hit else "No",
+            "TP5 Hit?": "Yes" if self.tp5_hit else "No",
             "SL Hit?": "Yes" if self.sl_hit else "No",
             "Final Exit Reason": self.exit_reason,
             "R Multiple": round(self.r_multiple, 2),
@@ -1386,9 +1349,11 @@ def convert_to_backtest_trade(
     profit_usd = trade.rr * risk_usd
     
     exit_reason = trade.exit_reason or ""
-    tp1_hit = "TP1" in exit_reason or "TP2" in exit_reason or "TP3" in exit_reason
-    tp2_hit = "TP2" in exit_reason or "TP3" in exit_reason
-    tp3_hit = "TP3" in exit_reason
+    tp1_hit = "TP1" in exit_reason or "TP2" in exit_reason or "TP3" in exit_reason or "TP4" in exit_reason or "TP5" in exit_reason
+    tp2_hit = "TP2" in exit_reason or "TP3" in exit_reason or "TP4" in exit_reason or "TP5" in exit_reason
+    tp3_hit = "TP3" in exit_reason or "TP4" in exit_reason or "TP5" in exit_reason
+    tp4_hit = "TP4" in exit_reason or "TP5" in exit_reason
+    tp5_hit = "TP5" in exit_reason
     sl_hit = exit_reason == "SL"
     
     sizing_result = calculate_lot_size(
@@ -1416,11 +1381,15 @@ def convert_to_backtest_trade(
         tp1_price=trade.tp1 or 0.0,
         tp2_price=trade.tp2,
         tp3_price=trade.tp3,
+        tp4_price=trade.tp4,
+        tp5_price=trade.tp5,
         exit_date=exit_dt,
         exit_price=trade.exit_price,
         tp1_hit=tp1_hit,
         tp2_hit=tp2_hit,
         tp3_hit=tp3_hit,
+        tp4_hit=tp4_hit,
+        tp5_hit=tp5_hit,
         sl_hit=sl_hit,
         exit_reason=exit_reason,
         r_multiple=trade.rr,
@@ -2097,10 +2066,10 @@ class OptunaOptimizer:
             except (ValueError, AttributeError) as e:
                 print(f"No valid completed trials yet: {e}")
         
-        # Warm-start: enqueue Trial #42 parameters as the first trial
+        # Warm-start: enqueue werkelijke run009 parameters as the first trial when requested
         if self.use_warm_start:
-            print("Warm-start enabled: enqueueing TRIAL #42 BASELINE (Score 274.98) as Trial #0")
-            study.enqueue_trial(TRIAL_42_BASELINE)
+            print("Warm-start enabled: enqueueing run009 baseline (0.6R/1.2R/2.0R) as Trial #0")
+            study.enqueue_trial(RUN_006_PARAMS)
 
         # Store best value before optimization starts for comparison
         best_value_before_run = previous_best_value
@@ -2429,17 +2398,8 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
         
         print(f"    Validation: {val_trades} trades, {val_r:+.1f}R, {val_wr:.1f}% WR")
     
-    # Filter out trials with invalid training scores (0 trades during training = -999999)
-    # These are unreliable even if they happen to generate trades in validation
-    INVALID_TRAINING_SCORE = -999999
-    valid_results = [r for r in validation_results if r['training_score'] > INVALID_TRAINING_SCORE]
-    invalid_results = [r for r in validation_results if r['training_score'] <= INVALID_TRAINING_SCORE]
-    
-    # Sort valid results by validation R (best OOS performance)
-    valid_results.sort(key=lambda x: x['validation_r'], reverse=True)
-    # Append invalid results at the end (sorted by validation R for display)
-    invalid_results.sort(key=lambda x: x['validation_r'], reverse=True)
-    validation_results = valid_results + invalid_results
+    # Sort by validation R (best OOS performance)
+    validation_results.sort(key=lambda x: x['validation_r'], reverse=True)
     
     # Print comparison table
     print(f"\n{'='*70}")
@@ -2449,26 +2409,16 @@ def validate_top_trials(study, top_n: int = 5) -> List[Dict]:
     print(f"{'-'*70}")
     
     for rank, result in enumerate(validation_results, 1):
-        is_best_valid = (rank == 1 and result['training_score'] > INVALID_TRAINING_SCORE)
-        is_invalid = result['training_score'] <= INVALID_TRAINING_SCORE
-        marker = " ★" if is_best_valid else (" ⚠️" if is_invalid else "")
+        marker = " ★" if rank == 1 else ""
         print(f"{rank:<6} #{result['trial_number']:<7} {result['training_score']:>12,.0f} {result['validation_trades']:>12} {result['validation_r']:>+10.1f} {result['validation_wr']:>9.1f}%{marker}")
     
     print(f"{'-'*70}")
-    if invalid_results:
-        print(f"⚠️  Trials with training score -999,999 (0 trades) are excluded from selection")
     
-    # Select best from VALID results only
-    if valid_results:
-        best = valid_results[0]
+    if validation_results:
+        best = validation_results[0]
         print(f"\n🏆 BEST OOS PERFORMER: Trial #{best['trial_number']}")
         print(f"   Training Score: {best['training_score']:,.0f}")
         print(f"   Validation: {best['validation_r']:+.1f}R ({best['validation_trades']} trades, {best['validation_wr']:.1f}% WR)")
-    elif validation_results:
-        # Fallback to first result if no valid ones (shouldn't happen normally)
-        best = validation_results[0]
-        print(f"\n⚠️  WARNING: No trials with valid training scores!")
-        print(f"   Using Trial #{best['trial_number']} (training score: {best['training_score']:,.0f})")
     
     return validation_results
 
@@ -3815,8 +3765,7 @@ def main():
     # ============================================================================
     # MULTI-OBJECTIVE OR SINGLE-OBJECTIVE OPTIMIZATION
     # ============================================================================
-    # ALWAYS use warm-start for TPE to enqueue Trial #42 baseline
-    warm_start_enabled = not use_multi_objective  # Always true for TPE
+    warm_start_enabled = bool(args.warm_start and not use_multi_objective)
     if warm_start_enabled:
         OPTUNA_DB_PATH = "sqlite:///regime_adaptive_v2_clean_warm.db"
         OPTUNA_STUDY_NAME = "regime_adaptive_v2_clean_warm"
@@ -3844,23 +3793,12 @@ def main():
         top_5_results = validate_top_trials(study, top_n=5)
         
         if top_5_results:
-            # Use the best validation performer with a VALID training score
-            # (validate_top_trials already sorts valid results first)
-            INVALID_TRAINING_SCORE = -999999
-            valid_results = [r for r in top_5_results if r['training_score'] > INVALID_TRAINING_SCORE]
+            # Use the best validation performer (not just best training score)
+            best_oos = top_5_results[0]
+            best_params = best_oos['params']
+            validation_trades = best_oos['validation_trade_objects']
             
-            if valid_results:
-                best_oos = valid_results[0]
-                best_params = best_oos['params']
-                validation_trades = best_oos['validation_trade_objects']
-                print(f"\n✅ Selected Trial #{best_oos['trial_number']} as FINAL (best OOS performance)")
-            else:
-                # All trials had 0 trades in training - this is a problem!
-                print(f"\n⚠️  WARNING: No trials with valid training scores!")
-                best_oos = top_5_results[0]
-                best_params = best_oos['params']
-                validation_trades = best_oos['validation_trade_objects']
-                print(f"   Falling back to Trial #{best_oos['trial_number']} (may be unreliable)")
+            print(f"\n✅ Selected Trial #{best_oos['trial_number']} as FINAL (best OOS performance)")
         else:
             # Fallback to best training params
             best_params = results['best_params']
@@ -4045,18 +3983,8 @@ def main():
     except Exception as e:
         print(f"  [!] Report generation failed: {e}")
     
-    # Generate summary BEFORE archiving so it gets included
-    summary_file = generate_summary_txt(
-        results=results,
-        training_trades=training_trades,
-        validation_trades=validation_trades,
-        full_year_trades=full_year_trades,
-        best_params=best_params
-    )
-    print(f"\nSummary saved to: {summary_file}")
-    
     # ============================================================================
-    # ARCHIVE THIS RUN TO HISTORY (after all reports generated)
+    # ARCHIVE THIS RUN TO HISTORY
     # ============================================================================
     output_mgr = get_output_manager()
     output_mgr.archive_current_run()
@@ -4081,6 +4009,16 @@ def main():
     print(f"  - ftmo_optimization_progress.txt (progress log)")
     
     print(f"\n✅ Optimization complete and archived to history/")
+
+    
+    summary_file = generate_summary_txt(
+        results=results,
+        training_trades=training_trades,
+        validation_trades=validation_trades,
+        full_year_trades=full_year_trades,
+        best_params=best_params
+    )
+    print(f"\nSummary saved to: {summary_file}")
 
 
 if __name__ == "__main__":
