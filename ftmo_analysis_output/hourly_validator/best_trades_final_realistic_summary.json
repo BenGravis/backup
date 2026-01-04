@@ -1,0 +1,16 @@
+{
+  "total_trades": 1673,
+  "winners": 1201,
+  "losers": 472,
+  "win_rate": 71.78720860729229,
+  "total_r": 274.7141846243002,
+  "gross_pnl": 1117298.5968038666,
+  "total_commissions": 16836.96,
+  "net_pnl": 1100461.6368038666,
+  "daily_dd_breaches": 22,
+  "total_dd_breached": false,
+  "safety_close_count": 364,
+  "safety_close_pnl": 113012.03345386592,
+  "final_balance": 1160461.6368038666,
+  "return_pct": 1834.1027280064445
+}
