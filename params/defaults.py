@@ -61,18 +61,15 @@ PARAMETER_DEFAULTS: Dict[str, Any] = {
     'atr_tp1_multiplier': 0.6,        # ATR multiplier for TP1
     'atr_tp2_multiplier': 1.2,        # ATR multiplier for TP2
     'atr_tp3_multiplier': 2.0,        # ATR multiplier for TP3
-    'atr_tp4_multiplier': 3.0,        # ATR multiplier for TP4
-    'atr_tp5_multiplier': 4.0,        # ATR multiplier for TP5
     
     # ═══════════════════════════════════════════════════════════════════════════
     # TAKE PROFIT POSITION SIZING
     # These define WHAT PERCENTAGE of position closes at each TP level
+    # TP3 closes ALL remaining position (simplified 3-TP exit strategy)
     # ═══════════════════════════════════════════════════════════════════════════
-    'tp1_close_pct': 0.34,            # Close 34% at TP1
-    'tp2_close_pct': 0.16,            # Close 16% at TP2
-    'tp3_close_pct': 0.35,            # Close 35% at TP3
-    'tp4_close_pct': 0.20,            # Close 20% at TP4 (legacy)
-    'tp5_close_pct': 0.45,            # Close 45% at TP5 (legacy)
+    'tp1_close_pct': 0.35,            # Close 35% at TP1
+    'tp2_close_pct': 0.30,            # Close 30% at TP2
+    'tp3_close_pct': 0.35,            # Close 35% at TP3 (closes all remaining)
     
     # ═══════════════════════════════════════════════════════════════════════════
     # PARTIAL EXIT & TRAILING STOP
@@ -157,19 +154,19 @@ PARAMETER_DEFAULTS: Dict[str, Any] = {
     # ═══════════════════════════════════════════════════════════════════════════
     # GRADUATED RISK MANAGEMENT (for FTMO drawdown protection)
     # ═══════════════════════════════════════════════════════════════════════════
-    'use_graduated_risk': True,       # Enable graduated risk
-    'tier1_dd_pct': 2.0,              # Reduce risk at this daily DD%
-    'tier1_risk_factor': 0.67,        # Risk multiplier (0.6% -> 0.4%)
-    'tier2_dd_pct': 3.5,              # Cancel pending at this daily DD%
-    'tier3_dd_pct': 4.5,              # Emergency close at this daily DD%
+    'use_graduated_risk': False,      # Disabled - 5ers has no daily DD
+    'tier1_dd_pct': 2.0,              # Not used (5ers has no daily DD)
+    'tier1_risk_factor': 0.67,        # Not used
+    'tier2_dd_pct': 3.5,              # Not used
+    'tier3_dd_pct': 4.5,              # Not used
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # FTMO COMPLIANCE PARAMETERS (NEW)
-    # These are used by the optimizer and compliance tracker
+    # 5ERS COMPLIANCE PARAMETERS (NO DAILY DD!)
+    # 5ers only has total DD: stop-out at $54,000 (90% of $60K start)
     # ═══════════════════════════════════════════════════════════════════════════
-    'daily_loss_halt_pct': 4.1,       # Halt trading at this daily DD%
-    'max_total_dd_warning': 7.9,      # Warning at this total DD%
-    'consecutive_loss_halt': 9,       # Halt after this many consecutive losses
+    # Note: daily_loss_halt_pct REMOVED - 5ers has no daily DD limit!
+    'max_total_dd_warning': 9.0,      # Informational warning only
+    'consecutive_loss_halt': 999,     # Disabled
 }
 
 

@@ -40,6 +40,14 @@ data/ohlcv/{SYMBOL}_{TF}_2003_2025.csv  (historical data)
 
 ## Critical Conventions
 
+### Simplified Exit Strategy (Jan 2026)
+**IMPORTANT**: Reduced from 5 TPs to 3 TPs for simplicity:
+- **TP1**: 0.6R - closes 35% of position
+- **TP2**: 1.2R - closes 30% of position  
+- **TP3**: 2.0R - closes ALL remaining (35%)
+- After TP1/TP2, trailing stop is activated
+- TP4/TP5 have been completely removed from codebase
+
 ### Multi-Broker Symbol Mapping (Dec 31, 2025)
 Symbol mapping is now broker-aware:
 ```python
@@ -57,7 +65,7 @@ broker_sym = get_broker_symbol("SPX500_USD", "forexcom")  # -> "US500"
 1. **ComplianceTracker**: Implemented compliance tracking class with daily DD (4.5%), total DD (9%), streak halt (999)
    - Metrics-only mode for backtesting (no trade filtering)
    - Returns (trades, compliance_report) tuple from run_full_period_backtest
-   - Hard constraints: TP ordering (tp1<tp2<tp3), close-sum ≤85%, ADX threshold ordering
+   - Hard constraints: TP ordering (tp1<tp2<tp3), close-sum ≤100%, ADX threshold ordering
 2. **Parameter expansion**: Expanded search space from 17→25+ parameters:
    - TP scaling: tp1/2/3_r_multiple (1.0-6.0R) and tp1/2/3_close_pct (0.15-0.40)
    - Filter toggles: 6 new filters (HTF, structure, Fibonacci, confirmation, displacement, candle rejection)

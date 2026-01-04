@@ -106,8 +106,8 @@ python main_live_bot.py
 
 The optimizer uses professional quant best practices:
 
-- **TRAINING PERIOD**: January 1, 2023 – September 30, 2024 (21 months in-sample)
-- **VALIDATION PERIOD**: October 1, 2024 – December 26, 2025 (15 months out-of-sample)
+- **TRAINING PERIOD**: January 1, 2024 – September 30, 2024 (in-sample optimization)
+- **VALIDATION PERIOD**: October 1, 2024 – December 31, 2024 (out-of-sample test)
 - **FINAL BACKTEST**: Full year 2024 (December fully open for trading)
 - **ADX > 25 trend-strength filter** applied to avoid ranging markets.
 

@@ -66,15 +66,11 @@ _PARAMS = _load_tp_params()
 TP1_R = _PARAMS.get("tp1_r_multiple", 1.7)
 TP2_R = _PARAMS.get("tp2_r_multiple", 2.7)
 TP3_R = _PARAMS.get("tp3_r_multiple", 6.0)
-TP4_R = TP3_R + 1.0  # TP3 + 1R (legacy support)
-TP5_R = TP3_R + 2.0  # TP3 + 2R (legacy support)
 
 # Close percentages (weights for RR calculation)
-TP1_CLOSE_PCT = _PARAMS.get("tp1_close_pct", 0.34)
-TP2_CLOSE_PCT = _PARAMS.get("tp2_close_pct", 0.16)
+TP1_CLOSE_PCT = _PARAMS.get("tp1_close_pct", 0.35)
+TP2_CLOSE_PCT = _PARAMS.get("tp2_close_pct", 0.30)
 TP3_CLOSE_PCT = _PARAMS.get("tp3_close_pct", 0.35)
-TP4_CLOSE_PCT = 0.15  # legacy (for trades that reach TP4)
-TP5_CLOSE_PCT = 0.00  # legacy
 
 # Trailing activation
 TRAIL_ACTIVATION_R = _PARAMS.get("trail_activation_r", 0.65)
@@ -101,8 +97,6 @@ class TradeSetup:
     tp1: float = 0.0
     tp2: float = 0.0
     tp3: float = 0.0
-    tp4: float = 0.0
-    tp5: float = 0.0
     
     # For tracking
     trade_id: str = ""
@@ -115,14 +109,10 @@ class TradeSetup:
             self.tp1 = self.entry_price + self.risk * TP1_R
             self.tp2 = self.entry_price + self.risk * TP2_R
             self.tp3 = self.entry_price + self.risk * TP3_R
-            self.tp4 = self.entry_price + self.risk * TP4_R
-            self.tp5 = self.entry_price + self.risk * TP5_R
         else:  # bearish
             self.tp1 = self.entry_price - self.risk * TP1_R
             self.tp2 = self.entry_price - self.risk * TP2_R
             self.tp3 = self.entry_price - self.risk * TP3_R
-            self.tp4 = self.entry_price - self.risk * TP4_R
-            self.tp5 = self.entry_price - self.risk * TP5_R
 
 
 @dataclass
@@ -141,7 +131,7 @@ class TradeResult:
     # Exit info
     exit_time: Optional[datetime] = None
     exit_price: float = 0.0
-    exit_reason: str = ""  # 'SL', 'TP1+Trail', 'TP2+Trail', etc., 'TP5'
+    exit_reason: str = ""  # 'SL', 'TP1+Trail', 'TP2+Trail', 'TP3'
     
     # Result
     rr: float = 0.0  # Risk/Reward ratio
@@ -151,8 +141,6 @@ class TradeResult:
     tp1_hit: bool = False
     tp2_hit: bool = False
     tp3_hit: bool = False
-    tp4_hit: bool = False
-    tp5_hit: bool = False
     
     # Stats
     hours_in_trade: int = 0
@@ -176,8 +164,6 @@ class TradeResult:
             'tp1_hit': self.tp1_hit,
             'tp2_hit': self.tp2_hit,
             'tp3_hit': self.tp3_hit,
-            'tp4_hit': self.tp4_hit,
-            'tp5_hit': self.tp5_hit,
             'hours_in_trade': self.hours_in_trade,
             'max_favorable_r': round(self.max_favorable_r, 4),
             'max_adverse_r': round(self.max_adverse_r, 4),
@@ -200,7 +186,7 @@ class H1TradeSimulator:
         self._h1_cache: Dict[str, pd.DataFrame] = {}
         
         logger.info("H1TradeSimulator initialized")
-        logger.info(f"  TP levels: {TP1_R}R, {TP2_R}R, {TP3_R}R, {TP4_R}R, {TP5_R}R")
+        logger.info(f"  TP levels: {TP1_R}R, {TP2_R}R, {TP3_R}R")
         logger.info(f"  Trail activation: {TRAIL_ACTIVATION_R}R")
     
     def load_h1_data(self, symbol: str) -> Optional[pd.DataFrame]:
@@ -305,8 +291,6 @@ class H1TradeSimulator:
         tp1_hit = False
         tp2_hit = False
         tp3_hit = False
-        tp4_hit = False
-        tp5_hit = False
         
         trade_closed = False
         exit_time = None
@@ -320,11 +304,9 @@ class H1TradeSimulator:
         hours_count = 0
         
         # R-multiples for each TP (for RR calculation)
-        tp1_rr = TP1_R  # 0.6
-        tp2_rr = TP2_R  # 1.2
-        tp3_rr = TP3_R  # 2.0
-        tp4_rr = TP4_R  # 2.5
-        tp5_rr = TP5_R  # 3.5
+        tp1_rr = TP1_R
+        tp2_rr = TP2_R
+        tp3_rr = TP3_R
         
         # ═══════════════════════════════════════════════════════════════════
         # SIMULATE HOUR BY HOUR
@@ -365,31 +347,15 @@ class H1TradeSimulator:
                     # Calculate RR based on TPs hit
                     trail_rr = (trailing_sl - setup.entry_price) / setup.risk
                     
-                    if tp4_hit:
-                        remaining_pct = TP5_CLOSE_PCT
-                        rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
-                              TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr +
-                              remaining_pct * trail_rr)
-                        exit_reason = "TP4+Trail"
-                        is_winner = True
-                    
-                    elif tp3_hit:
-                        remaining_pct = TP4_CLOSE_PCT + TP5_CLOSE_PCT
-                        rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
-                              TP3_CLOSE_PCT * tp3_rr + remaining_pct * trail_rr)
-                        exit_reason = "TP3+Trail"
-                        is_winner = True
-                    
-                    elif tp2_hit:
-                        remaining_pct = TP3_CLOSE_PCT + TP4_CLOSE_PCT + TP5_CLOSE_PCT
+                    if tp2_hit:
+                        remaining_pct = TP3_CLOSE_PCT
                         rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
                               remaining_pct * trail_rr)
                         exit_reason = "TP2+Trail"
                         is_winner = (rr >= 0)
                     
                     elif tp1_hit:
-                        remaining_pct = (TP2_CLOSE_PCT + TP3_CLOSE_PCT + 
-                                        TP4_CLOSE_PCT + TP5_CLOSE_PCT)
+                        remaining_pct = TP2_CLOSE_PCT + TP3_CLOSE_PCT
                         rr = TP1_CLOSE_PCT * tp1_rr + remaining_pct * trail_rr
                         exit_reason = "TP1+Trail"
                         is_winner = (rr >= 0)
@@ -415,26 +381,15 @@ class H1TradeSimulator:
                         trailing_sl = setup.tp1 + 0.5 * setup.risk
                         trailing_activated = True
                 
-                # [CHECK 4] TP3
+                # [CHECK 4] TP3 - CLOSES ALL REMAINING POSITION
                 if tp2_hit and not tp3_hit and bar_high >= setup.tp3:
                     tp3_hit = True
-                    trailing_sl = setup.tp2 + 0.5 * setup.risk
-                
-                # [CHECK 5] TP4
-                if tp3_hit and not tp4_hit and bar_high >= setup.tp4:
-                    tp4_hit = True
-                    trailing_sl = setup.tp3 + 0.5 * setup.risk
-                
-                # [CHECK 6] TP5 - Full exit
-                if tp4_hit and not tp5_hit and bar_high >= setup.tp5:
-                    tp5_hit = True
                     trade_closed = True
                     exit_time = bar_time
-                    exit_price = setup.tp5
-                    exit_reason = "TP5"
+                    exit_price = setup.tp3
+                    exit_reason = "TP3"
                     rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
-                          TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr +
-                          TP5_CLOSE_PCT * tp5_rr)
+                          TP3_CLOSE_PCT * tp3_rr)
                     is_winner = True
             
             # ═══════════════════════════════════════════════════════════════
@@ -452,31 +407,15 @@ class H1TradeSimulator:
                     # Calculate RR based on TPs hit
                     trail_rr = (setup.entry_price - trailing_sl) / setup.risk
                     
-                    if tp4_hit:
-                        remaining_pct = TP5_CLOSE_PCT
-                        rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
-                              TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr +
-                              remaining_pct * trail_rr)
-                        exit_reason = "TP4+Trail"
-                        is_winner = True
-                    
-                    elif tp3_hit:
-                        remaining_pct = TP4_CLOSE_PCT + TP5_CLOSE_PCT
-                        rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
-                              TP3_CLOSE_PCT * tp3_rr + remaining_pct * trail_rr)
-                        exit_reason = "TP3+Trail"
-                        is_winner = True
-                    
-                    elif tp2_hit:
-                        remaining_pct = TP3_CLOSE_PCT + TP4_CLOSE_PCT + TP5_CLOSE_PCT
+                    if tp2_hit:
+                        remaining_pct = TP3_CLOSE_PCT
                         rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
                               remaining_pct * trail_rr)
                         exit_reason = "TP2+Trail"
                         is_winner = (rr >= 0)
                     
                     elif tp1_hit:
-                        remaining_pct = (TP2_CLOSE_PCT + TP3_CLOSE_PCT + 
-                                        TP4_CLOSE_PCT + TP5_CLOSE_PCT)
+                        remaining_pct = TP2_CLOSE_PCT + TP3_CLOSE_PCT
                         rr = TP1_CLOSE_PCT * tp1_rr + remaining_pct * trail_rr
                         exit_reason = "TP1+Trail"
                         is_winner = (rr >= 0)
@@ -502,26 +441,15 @@ class H1TradeSimulator:
                         trailing_sl = setup.tp1 - 0.5 * setup.risk
                         trailing_activated = True
                 
-                # [CHECK 4] TP3
+                # [CHECK 4] TP3 - CLOSES ALL REMAINING POSITION
                 if tp2_hit and not tp3_hit and bar_low <= setup.tp3:
                     tp3_hit = True
-                    trailing_sl = setup.tp2 - 0.5 * setup.risk
-                
-                # [CHECK 5] TP4
-                if tp3_hit and not tp4_hit and bar_low <= setup.tp4:
-                    tp4_hit = True
-                    trailing_sl = setup.tp3 - 0.5 * setup.risk
-                
-                # [CHECK 6] TP5
-                if tp4_hit and not tp5_hit and bar_low <= setup.tp5:
-                    tp5_hit = True
                     trade_closed = True
                     exit_time = bar_time
-                    exit_price = setup.tp5
-                    exit_reason = "TP5"
+                    exit_price = setup.tp3
+                    exit_reason = "TP3"
                     rr = (TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr +
-                          TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr +
-                          TP5_CLOSE_PCT * tp5_rr)
+                          TP3_CLOSE_PCT * tp3_rr)
                     is_winner = True
         
         # If trade never closed (ran out of H1 data), mark as still open
@@ -546,8 +474,6 @@ class H1TradeSimulator:
             tp1_hit=tp1_hit,
             tp2_hit=tp2_hit,
             tp3_hit=tp3_hit,
-            tp4_hit=tp4_hit,
-            tp5_hit=tp5_hit,
             hours_in_trade=hours_count,
             max_favorable_r=max_favorable_r,
             max_adverse_r=max_adverse_r,
@@ -619,8 +545,8 @@ if __name__ == '__main__':
     print("=" * 60)
     print("H1 TRADE SIMULATOR - TEST")
     print("=" * 60)
-    print(f"\nTP Levels: {TP1_R}R, {TP2_R}R, {TP3_R}R, {TP4_R}R, {TP5_R}R")
-    print(f"Close %: {TP1_CLOSE_PCT}, {TP2_CLOSE_PCT}, {TP3_CLOSE_PCT}, {TP4_CLOSE_PCT}, {TP5_CLOSE_PCT}")
+    print(f"\nTP Levels: {TP1_R}R, {TP2_R}R, {TP3_R}R")
+    print(f"Close %: {TP1_CLOSE_PCT}, {TP2_CLOSE_PCT}, {TP3_CLOSE_PCT}")
     print(f"Trail activation: {TRAIL_ACTIVATION_R}R")
     
     # Test setup
@@ -640,8 +566,6 @@ if __name__ == '__main__':
     print(f"  TP1: {setup.tp1} ({TP1_R}R)")
     print(f"  TP2: {setup.tp2} ({TP2_R}R)")
     print(f"  TP3: {setup.tp3} ({TP3_R}R)")
-    print(f"  TP4: {setup.tp4} ({TP4_R}R)")
-    print(f"  TP5: {setup.tp5} ({TP5_R}R)")
     
     # Would need H1 data to actually simulate
     print("\n(Actual simulation requires H1 data in data/ohlcv/)")

@@ -150,7 +150,7 @@ def compare_results(original_df: pd.DataFrame, h1_df: pd.DataFrame) -> dict:
     
     # TP hit distribution
     print(f"\n📊 TP HIT DISTRIBUTION (H1):")
-    for tp_level in ['tp1', 'tp2', 'tp3', 'tp4', 'tp5']:
+    for tp_level in ['tp1', 'tp2', 'tp3']:
         col = f'{tp_level}_hit'
         if col in h1_df.columns:
             hit_count = h1_df[col].sum()

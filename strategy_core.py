@@ -49,8 +49,6 @@ class ScanResult:
     tp1: Optional[float] = None
     tp2: Optional[float] = None
     tp3: Optional[float] = None
-    tp4: Optional[float] = None
-    tp5: Optional[float] = None
     setup_type: str = ""
     what_to_look_for: str = ""
 
@@ -169,8 +167,6 @@ class StrategyParams:
     atr_tp1_multiplier: float = 1.7  # DEPRECATED - use tp1_r_multiple
     atr_tp2_multiplier: float = 2.7  # DEPRECATED - use tp2_r_multiple
     atr_tp3_multiplier: float = 6.0  # DEPRECATED - use tp3_r_multiple
-    atr_tp4_multiplier: float = 7.0  # DEPRECATED
-    atr_tp5_multiplier: float = 8.0  # DEPRECATED
     
     fib_low: float = 0.382
     fib_high: float = 0.886
@@ -201,11 +197,10 @@ class StrategyParams:
     
     # Partial take-profit percentages (must sum to 1.0)
     # These define WHAT PERCENTAGE of position closes at each TP level
-    tp1_close_pct: float = 0.34   # Close 34% at TP1
-    tp2_close_pct: float = 0.16   # Close 16% at TP2
-    tp3_close_pct: float = 0.35   # Close 35% at TP3
-    tp4_close_pct: float = 0.20   # Close 20% at TP4 (legacy)
-    tp5_close_pct: float = 0.45   # Close 45% at TP5 (legacy)
+    # TP3 closes ALL remaining position
+    tp1_close_pct: float = 0.35   # Close 35% at TP1
+    tp2_close_pct: float = 0.30   # Close 30% at TP2
+    tp3_close_pct: float = 0.35   # Close 35% at TP3 (closes all remaining)
     
     # Quantitative enhancement filters - DISABLED for baseline testing
     use_atr_regime_filter: bool = False
@@ -339,8 +334,6 @@ class StrategyParams:
             "tp1_close_pct": self.tp1_close_pct,
             "tp2_close_pct": self.tp2_close_pct,
             "tp3_close_pct": self.tp3_close_pct,
-            "tp4_close_pct": self.tp4_close_pct,
-            "tp5_close_pct": self.tp5_close_pct,
             "use_atr_regime_filter": self.use_atr_regime_filter,
             "atr_min_percentile": self.atr_min_percentile,
             "use_zscore_filter": self.use_zscore_filter,
@@ -415,8 +408,6 @@ class Signal:
     tp1: Optional[float] = None
     tp2: Optional[float] = None
     tp3: Optional[float] = None
-    tp4: Optional[float] = None
-    tp5: Optional[float] = None
     
     is_active: bool = False
     is_watching: bool = False
@@ -438,8 +429,6 @@ class Trade:
     tp1: Optional[float] = None
     tp2: Optional[float] = None
     tp3: Optional[float] = None
-    tp4: Optional[float] = None
-    tp5: Optional[float] = None
     
     risk: float = 0.0
     reward: float = 0.0
@@ -463,8 +452,6 @@ class Trade:
             "tp1": self.tp1,
             "tp2": self.tp2,
             "tp3": self.tp3,
-            "tp4": self.tp4,
-            "tp5": self.tp5,
             "risk": self.risk,
             "reward": self.reward,
             "rr": self.rr,
@@ -2228,7 +2215,7 @@ def compute_confluence(
     else:
         momentum_ok, momentum_note = True, "Momentum filter disabled"
     
-    rr_note, rr_ok, entry, sl, tp1, tp2, tp3, tp4, tp5 = compute_trade_levels(
+    rr_note, rr_ok, entry, sl, tp1, tp2, tp3 = compute_trade_levels(
         daily_candles, direction, params, h4_candles
     )
     
@@ -2268,7 +2255,7 @@ def compute_confluence(
         "momentum": momentum_note,
     }
     
-    trade_levels = (entry, sl, tp1, tp2, tp3, tp4, tp5)
+    trade_levels = (entry, sl, tp1, tp2, tp3)
     return flags, notes, trade_levels
 
 
@@ -2277,7 +2264,7 @@ def compute_trade_levels(
     direction: str,
     params: Optional[StrategyParams] = None,
     h4_candles: Optional[List[Dict]] = None,
-) -> Tuple[str, bool, Optional[float], Optional[float], Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]:
+) -> Tuple[str, bool, Optional[float], Optional[float], Optional[float], Optional[float], Optional[float]]:
     """
     Compute entry, SL, and TP levels using parameterized logic.
     
@@ -2288,19 +2275,19 @@ def compute_trade_levels(
         h4_candles: 4H OHLCV data for tighter SL calculation
     
     Returns:
-        Tuple of (note, is_valid, entry, sl, tp1, tp2, tp3, tp4, tp5)
+        Tuple of (note, is_valid, entry, sl, tp1, tp2, tp3)
     """
     if params is None:
         params = StrategyParams()
     
     if not daily_candles:
-        return "R/R: no data.", False, None, None, None, None, None, None, None
+        return "R/R: no data.", False, None, None, None, None, None
     
     current = daily_candles[-1]["close"]
     atr = _atr(daily_candles, 14)
     
     if atr <= 0:
-        return "R/R: ATR too small.", False, None, None, None, None, None, None, None
+        return "R/R: ATR too small.", False, None, None, None, None, None
     
     leg = _find_last_swing_leg_for_fib(daily_candles, direction)
     
@@ -2329,11 +2316,9 @@ def compute_trade_levels(
                     tp1 = entry + risk * params.tp1_r_multiple
                     tp2 = entry + risk * params.tp2_r_multiple
                     tp3 = entry + risk * params.tp3_r_multiple
-                    tp4 = entry + risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
-                    tp5 = entry + risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
                     
                     note = f"R/R: Entry near {entry:.5f}, SL at {sl:.5f}"
-                    return note, True, entry, sl, tp1, tp2, tp3, tp4, tp5
+                    return note, True, entry, sl, tp1, tp2, tp3
             else:
                 gp_mid = lo + span * 0.618
                 entry = current if abs(current - gp_mid) < atr * 0.3 else gp_mid
@@ -2351,11 +2336,9 @@ def compute_trade_levels(
                     tp1 = entry - risk * params.tp1_r_multiple
                     tp2 = entry - risk * params.tp2_r_multiple
                     tp3 = entry - risk * params.tp3_r_multiple
-                    tp4 = entry - risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
-                    tp5 = entry - risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
                     
                     note = f"R/R: Entry near {entry:.5f}, SL at {sl:.5f}"
-                    return note, True, entry, sl, tp1, tp2, tp3, tp4, tp5
+                    return note, True, entry, sl, tp1, tp2, tp3
     
     entry = current
     sl_mult = params.atr_sl_multiplier
@@ -2370,8 +2353,6 @@ def compute_trade_levels(
         tp1 = entry + risk * params.tp1_r_multiple
         tp2 = entry + risk * params.tp2_r_multiple
         tp3 = entry + risk * params.tp3_r_multiple
-        tp4 = entry + risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
-        tp5 = entry + risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
     else:
         if structure_sl is not None:
             sl = max(entry + atr * sl_mult, structure_sl + atr * 0.4)
@@ -2382,11 +2363,9 @@ def compute_trade_levels(
         tp1 = entry - risk * params.tp1_r_multiple
         tp2 = entry - risk * params.tp2_r_multiple
         tp3 = entry - risk * params.tp3_r_multiple
-        tp4 = entry - risk * (params.tp3_r_multiple + 1.0)  # TP3 + 1R
-        tp5 = entry - risk * (params.tp3_r_multiple + 2.0)  # TP3 + 2R
     
     note = f"R/R: ATR+structure levels"
-    return note, True, entry, sl, tp1, tp2, tp3, tp4, tp5
+    return note, True, entry, sl, tp1, tp2, tp3
 
 
 def generate_signals(
@@ -2454,7 +2433,7 @@ def generate_signals(
         except Exception:
             continue
         
-        entry, sl, tp1, tp2, tp3, tp4, tp5 = trade_levels
+        entry, sl, tp1, tp2, tp3 = trade_levels
         
         confluence_score = sum(1 for v in flags.values() if v)
         
@@ -2502,8 +2481,6 @@ def generate_signals(
                 tp1=tp1,
                 tp2=tp2,
                 tp3=tp3,
-                tp4=tp4,
-                tp5=tp5,
                 is_active=is_active,
                 is_watching=is_watching,
                 flags=flags,
@@ -2636,8 +2613,6 @@ def simulate_trades(
     TP1_CLOSE_PCT = params.tp1_close_pct
     TP2_CLOSE_PCT = params.tp2_close_pct
     TP3_CLOSE_PCT = params.tp3_close_pct
-    TP4_CLOSE_PCT = params.tp4_close_pct
-    TP5_CLOSE_PCT = params.tp5_close_pct
     
     signal_to_pending_entry = {}
     for sig in active_signals:
@@ -2670,19 +2645,13 @@ def simulate_trades(
             tp1 = ot["tp1"]
             tp2 = ot["tp2"]
             tp3 = ot["tp3"]
-            tp4 = ot["tp4"]
-            tp5 = ot["tp5"]
             tp1_hit = ot["tp1_hit"]
             tp2_hit = ot["tp2_hit"]
             tp3_hit = ot["tp3_hit"]
-            tp4_hit = ot["tp4_hit"]
-            tp5_hit = ot["tp5_hit"]
             
             tp1_rr = ot["tp1_rr"]
             tp2_rr = ot["tp2_rr"]
             tp3_rr = ot["tp3_rr"]
-            tp4_rr = ot["tp4_rr"]
-            tp5_rr = ot["tp5_rr"]
             
             trade_closed = False
             rr = 0.0
@@ -2691,25 +2660,17 @@ def simulate_trades(
             reward = 0.0
             
             if direction == "bullish":
+                # Check SL/trailing stop hit first
                 if low <= trailing_sl:
                     trail_rr = (trailing_sl - entry_price) / risk
-                    if tp4_hit:
-                        remaining_pct = TP5_CLOSE_PCT
-                        rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr + remaining_pct * trail_rr
-                        exit_reason = "TP4+Trail"
-                        is_winner = True
-                    elif tp3_hit:
-                        remaining_pct = TP4_CLOSE_PCT + TP5_CLOSE_PCT
-                        rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr + remaining_pct * trail_rr
-                        exit_reason = "TP3+Trail"
-                        is_winner = True
-                    elif tp2_hit:
-                        remaining_pct = TP3_CLOSE_PCT + TP4_CLOSE_PCT + TP5_CLOSE_PCT
+                    if tp2_hit:
+                        # TP3 closes all remaining (35%), calculate partial R
+                        remaining_pct = TP3_CLOSE_PCT
                         rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + remaining_pct * trail_rr
                         exit_reason = "TP2+Trail"
                         is_winner = rr >= 0
                     elif tp1_hit:
-                        remaining_pct = TP2_CLOSE_PCT + TP3_CLOSE_PCT + TP4_CLOSE_PCT + TP5_CLOSE_PCT
+                        remaining_pct = TP2_CLOSE_PCT + TP3_CLOSE_PCT
                         rr = TP1_CLOSE_PCT * tp1_rr + remaining_pct * trail_rr
                         exit_reason = "TP1+Trail"
                         is_winner = rr >= 0
@@ -2720,63 +2681,42 @@ def simulate_trades(
                     reward = rr * risk
                     trade_closed = True
                 
+                # Check TP1 hit
                 if not trade_closed and tp1 is not None and high >= tp1 and not tp1_hit:
                     ot["tp1_hit"] = True
                     tp1_hit = True
-                    # Delay trailing activation until trail_activation_r is reached
                     if tp1_rr >= params.trail_activation_r:
                         ot["trailing_sl"] = entry_price
                         ot["trailing_activated"] = True
                 
+                # Check TP2 hit
                 if not trade_closed and tp1_hit and tp2 is not None and high >= tp2 and not tp2_hit:
                     ot["tp2_hit"] = True
                     tp2_hit = True
-                    # Only activate trailing if we've reached trail_activation_r
                     if tp2_rr >= params.trail_activation_r and tp1 is not None:
                         ot["trailing_sl"] = tp1 + 0.5 * risk
                         ot["trailing_activated"] = True
                 
+                # Check TP3 hit - CLOSES ALL REMAINING POSITION
                 if not trade_closed and tp2_hit and tp3 is not None and high >= tp3 and not tp3_hit:
                     ot["tp3_hit"] = True
-                    tp3_hit = True
-                    # Only activate trailing if we've reached trail_activation_r
-                    if tp3_rr >= params.trail_activation_r and tp2 is not None:
-                        ot["trailing_sl"] = tp2 + 0.5 * risk
-                        ot["trailing_activated"] = True
-                
-                if not trade_closed and tp3_hit and tp4 is not None and high >= tp4 and not tp4_hit:
-                    ot["tp4_hit"] = True
-                    tp4_hit = True
-                    if tp3 is not None:
-                        ot["trailing_sl"] = tp3 + 0.5 * risk
-                
-                if not trade_closed and tp4_hit and tp5 is not None and high >= tp5 and not tp5_hit:
-                    ot["tp5_hit"] = True
-                    rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr + TP5_CLOSE_PCT * tp5_rr
+                    # TP3 closes everything - full R calculation
+                    rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr
                     reward = rr * risk
-                    exit_reason = "TP5"
+                    exit_reason = "TP3"
                     is_winner = True
                     trade_closed = True
             else:
+                # Bearish: Check SL/trailing stop hit first
                 if high >= trailing_sl:
                     trail_rr = (entry_price - trailing_sl) / risk
-                    if tp4_hit:
-                        remaining_pct = TP5_CLOSE_PCT
-                        rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr + remaining_pct * trail_rr
-                        exit_reason = "TP4+Trail"
-                        is_winner = True
-                    elif tp3_hit:
-                        remaining_pct = TP4_CLOSE_PCT + TP5_CLOSE_PCT
-                        rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr + remaining_pct * trail_rr
-                        exit_reason = "TP3+Trail"
-                        is_winner = True
-                    elif tp2_hit:
-                        remaining_pct = TP3_CLOSE_PCT + TP4_CLOSE_PCT + TP5_CLOSE_PCT
+                    if tp2_hit:
+                        remaining_pct = TP3_CLOSE_PCT
                         rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + remaining_pct * trail_rr
                         exit_reason = "TP2+Trail"
                         is_winner = rr >= 0
                     elif tp1_hit:
-                        remaining_pct = TP2_CLOSE_PCT + TP3_CLOSE_PCT + TP4_CLOSE_PCT + TP5_CLOSE_PCT
+                        remaining_pct = TP2_CLOSE_PCT + TP3_CLOSE_PCT
                         rr = TP1_CLOSE_PCT * tp1_rr + remaining_pct * trail_rr
                         exit_reason = "TP1+Trail"
                         is_winner = rr >= 0
@@ -2787,41 +2727,28 @@ def simulate_trades(
                     reward = rr * risk
                     trade_closed = True
                 
+                # Check TP1 hit
                 if not trade_closed and tp1 is not None and low <= tp1 and not tp1_hit:
                     ot["tp1_hit"] = True
                     tp1_hit = True
-                    # Delay trailing activation until trail_activation_r is reached
                     if tp1_rr >= params.trail_activation_r:
                         ot["trailing_sl"] = entry_price
                         ot["trailing_activated"] = True
                 
+                # Check TP2 hit
                 if not trade_closed and tp1_hit and tp2 is not None and low <= tp2 and not tp2_hit:
                     ot["tp2_hit"] = True
                     tp2_hit = True
-                    # Only activate trailing if we've reached trail_activation_r
                     if tp2_rr >= params.trail_activation_r and tp1 is not None:
                         ot["trailing_sl"] = tp1 - 0.5 * risk
                         ot["trailing_activated"] = True
                 
+                # Check TP3 hit - CLOSES ALL REMAINING POSITION
                 if not trade_closed and tp2_hit and tp3 is not None and low <= tp3 and not tp3_hit:
                     ot["tp3_hit"] = True
-                    tp3_hit = True
-                    # Only activate trailing if we've reached trail_activation_r
-                    if tp3_rr >= params.trail_activation_r and tp2 is not None:
-                        ot["trailing_sl"] = tp2 - 0.5 * risk
-                        ot["trailing_activated"] = True
-                
-                if not trade_closed and tp3_hit and tp4 is not None and low <= tp4 and not tp4_hit:
-                    ot["tp4_hit"] = True
-                    tp4_hit = True
-                    if tp3 is not None:
-                        ot["trailing_sl"] = tp3 - 0.5 * risk
-                
-                if not trade_closed and tp4_hit and tp5 is not None and low <= tp5 and not tp5_hit:
-                    ot["tp5_hit"] = True
-                    rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr + TP4_CLOSE_PCT * tp4_rr + TP5_CLOSE_PCT * tp5_rr
+                    rr = TP1_CLOSE_PCT * tp1_rr + TP2_CLOSE_PCT * tp2_rr + TP3_CLOSE_PCT * tp3_rr
                     reward = rr * risk
-                    exit_reason = "TP5"
+                    exit_reason = "TP3"
                     is_winner = True
                     trade_closed = True
             
@@ -2842,8 +2769,6 @@ def simulate_trades(
                     tp1=tp1,
                     tp2=tp2,
                     tp3=tp3,
-                    tp4=tp4,
-                    tp5=tp5,
                     risk=risk,
                     reward=adjusted_reward,
                     rr=adjusted_rr,
@@ -2904,8 +2829,6 @@ def simulate_trades(
                 tp1 = sig.tp1
                 tp2 = sig.tp2
                 tp3 = sig.tp3
-                tp4 = sig.tp4
-                tp5 = sig.tp5
                 risk = abs(entry_price - sl)
                 
                 if risk <= 0:
@@ -2937,8 +2860,6 @@ def simulate_trades(
                 tp1_rr = (tp1 - entry_price) / risk if tp1 and direction == "bullish" else ((entry_price - tp1) / risk if tp1 else 0)
                 tp2_rr = (tp2 - entry_price) / risk if tp2 and direction == "bullish" else ((entry_price - tp2) / risk if tp2 else 0)
                 tp3_rr = (tp3 - entry_price) / risk if tp3 and direction == "bullish" else ((entry_price - tp3) / risk if tp3 else 0)
-                tp4_rr = (tp4 - entry_price) / risk if tp4 and direction == "bullish" else ((entry_price - tp4) / risk if tp4 else 0)
-                tp5_rr = (tp5 - entry_price) / risk if tp5 and direction == "bullish" else ((entry_price - tp5) / risk if tp5 else 0)
                 
                 cost_as_r = transaction_cost_price / risk if risk > 0 else 0.0
                 
@@ -2958,23 +2879,17 @@ def simulate_trades(
                     "entry_timestamp": bar_timestamp,
                     "sl": sl,
                     "trailing_sl": sl,
-                    "trailing_activated": False,  # Flag to track when trail_activation_r threshold is reached
+                    "trailing_activated": False,
                     "tp1": tp1,
                     "tp2": tp2,
                     "tp3": tp3,
-                    "tp4": tp4,
-                    "tp5": tp5,
                     "risk": risk,
                     "tp1_hit": False,
                     "tp2_hit": False,
                     "tp3_hit": False,
-                    "tp4_hit": False,
-                    "tp5_hit": False,
                     "tp1_rr": tp1_rr,
                     "tp2_rr": tp2_rr,
                     "tp3_rr": tp3_rr,
-                    "tp4_rr": tp4_rr,
-                    "tp5_rr": tp5_rr,
                     "confluence_score": boosted_confluence,
                     "transaction_cost_r": cost_as_r,
                 })
@@ -2994,8 +2909,6 @@ def get_default_params() -> StrategyParams:
         atr_tp1_multiplier=0.6,
         atr_tp2_multiplier=1.2,
         atr_tp3_multiplier=2.0,
-        atr_tp4_multiplier=3.0,
-        atr_tp5_multiplier=4.0,
     )
 
 
@@ -3010,8 +2923,6 @@ def get_aggressive_params() -> StrategyParams:
         atr_tp1_multiplier=1.0,
         atr_tp2_multiplier=2.0,
         atr_tp3_multiplier=3.0,
-        atr_tp4_multiplier=4.0,
-        atr_tp5_multiplier=5.0,
     )
 
 
@@ -3027,8 +2938,6 @@ def get_conservative_params() -> StrategyParams:
         atr_tp1_multiplier=1.0,
         atr_tp2_multiplier=2.0,
         atr_tp3_multiplier=3.0,
-        atr_tp4_multiplier=4.0,
-        atr_tp5_multiplier=5.0,
     )
 
 

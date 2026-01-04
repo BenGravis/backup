@@ -66,21 +66,17 @@ class Fiveers60KConfig:
     tp1_r_multiple: float = 1.7  # DEPRECATED - use current_params.json
     tp2_r_multiple: float = 2.7  # DEPRECATED - use current_params.json
     tp3_r_multiple: float = 6.0  # DEPRECATED - use current_params.json
-    tp4_r_multiple: float = 7.0  # DEPRECATED - legacy
-    tp5_r_multiple: float = 8.0  # DEPRECATED - legacy
 
     # DEPRECATED: PARTIAL CLOSE PERCENTAGES - NOW FROM current_params.json
-    tp1_close_pct: float = 0.34  # DEPRECATED - use current_params.json
-    tp2_close_pct: float = 0.16  # DEPRECATED - use current_params.json
+    # TP3 now closes ALL remaining position (simplified 3-TP exit)
+    tp1_close_pct: float = 0.35  # DEPRECATED - use current_params.json
+    tp2_close_pct: float = 0.30  # DEPRECATED - use current_params.json
     tp3_close_pct: float = 0.35  # DEPRECATED - use current_params.json
-    tp4_close_pct: float = 0.15  # DEPRECATED - legacy
-    tp5_close_pct: float = 0.00  # DEPRECATED - legacy
 
     # === TRAILING STOP SETTINGS (Moderate Progressive) ===
     trail_after_tp1: bool = True  # Move SL to breakeven after TP1
     trail_after_tp2: bool = True  # Move SL to TP1 after TP2
-    trail_after_tp3: bool = True  # Move SL to TP2 after TP3
-    trail_after_tp4: bool = True  # Move SL to TP3 after TP4
+    trail_after_tp3: bool = True  # Move SL to TP2 after TP3 (final exit)
 
     # === BREAKEVEN SETTINGS ===
     breakeven_trigger_r: float = 1.0  # Move to BE after 1R profit

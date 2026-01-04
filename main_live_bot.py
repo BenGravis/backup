@@ -82,8 +82,6 @@ class PendingSetup:
     tp1: float
     tp2: Optional[float]
     tp3: Optional[float]
-    tp4: Optional[float] = None
-    tp5: Optional[float] = None
     confluence: int = 0
     confluence_score: int = 0
     quality_factors: int = 0
@@ -97,7 +95,6 @@ class PendingSetup:
     tp1_hit: bool = False
     tp2_hit: bool = False
     tp3_hit: bool = False
-    tp4_hit: bool = False
     
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -626,7 +623,7 @@ class LiveTradingBot:
             historical_sr,
         )
         
-        entry, sl, tp1, tp2, tp3, tp4, tp5 = trade_levels
+        entry, sl, tp1, tp2, tp3 = trade_levels
         
         confluence_score = sum(1 for v in flags.values() if v)
         
@@ -718,20 +715,17 @@ class LiveTradingBot:
         # ════════════════════════════════════════════════════════════════════════
         # ALIGNED: Use tp_r_multiple from current_params.json (self.params)
         # This ensures live trading uses SAME TP levels as optimizer/backtest
+        # TP3 closes ALL remaining position (simplified exit strategy)
         # ════════════════════════════════════════════════════════════════════════
         risk = abs(entry - sl)
         if direction == "bullish":
             tp1 = entry + (risk * self.params.tp1_r_multiple)
             tp2 = entry + (risk * self.params.tp2_r_multiple)
             tp3 = entry + (risk * self.params.tp3_r_multiple)
-            tp4 = entry + (risk * (self.params.tp3_r_multiple + 1.0))  # TP3 + 1R
-            tp5 = entry + (risk * (self.params.tp3_r_multiple + 2.0))  # TP3 + 2R
         else:
             tp1 = entry - (risk * self.params.tp1_r_multiple)
             tp2 = entry - (risk * self.params.tp2_r_multiple)
             tp3 = entry - (risk * self.params.tp3_r_multiple)
-            tp4 = entry - (risk * (self.params.tp3_r_multiple + 1.0))  # TP3 + 1R
-            tp5 = entry - (risk * (self.params.tp3_r_multiple + 2.0))  # TP3 + 2R
         
         if direction == "bullish":
             if current_price <= sl:
@@ -750,9 +744,7 @@ class LiveTradingBot:
         log.info(f"  SL: {sl:.5f} ({sl_pips:.1f} pips)")
         log.info(f"  TP1: {tp1:.5f} ({self.params.tp1_r_multiple}R)")
         log.info(f"  TP2: {tp2:.5f} ({self.params.tp2_r_multiple}R)")
-        log.info(f"  TP3: {tp3:.5f} ({self.params.tp3_r_multiple}R)")
-        log.info(f"  TP4: {tp4:.5f} ({self.params.tp3_r_multiple + 1.0}R)")
-        log.info(f"  TP5: {tp5:.5f} ({self.params.tp3_r_multiple + 2.0}R)")
+        log.info(f"  TP3: {tp3:.5f} ({self.params.tp3_r_multiple}R) - closes ALL remaining")
         
         return {
             "symbol": symbol,
@@ -766,8 +758,6 @@ class LiveTradingBot:
             "tp1": tp1,
             "tp2": tp2,
             "tp3": tp3,
-            "tp4": tp4,
-            "tp5": tp5,
             "entry_distance_r": entry_distance_r,
             "sl_pips": sl_pips,
             "flags": flags,
@@ -866,8 +856,6 @@ class LiveTradingBot:
         tp1 = setup["tp1"]
         tp2 = setup.get("tp2")
         tp3 = setup.get("tp3")
-        tp4 = setup.get("tp4")
-        tp5 = setup.get("tp5")
         confluence = setup["confluence"]
         quality_factors = setup["quality_factors"]
         entry_distance_r = setup.get("entry_distance_r", 0)
@@ -1065,8 +1053,6 @@ class LiveTradingBot:
                 tp1=tp1,
                 tp2=tp2,
                 tp3=tp3,
-                tp4=tp4,
-                tp5=tp5,
                 confluence=confluence,
                 confluence_score=confluence,
                 quality_factors=quality_factors,
@@ -1085,7 +1071,7 @@ class LiveTradingBot:
             log.info(f"  Entry Level: {entry:.5f}")
             log.info(f"  SL: {sl:.5f}")
             log.info(f"  TP1: {tp1:.5f}")
-            log.info(f"  TP5: {tp5:.5f}" if tp5 else "  TP5: N/A")
+            log.info(f"  TP3: {tp3:.5f} (closes ALL remaining)" if tp3 else "  TP3: N/A")
             log.info(f"  Lot Size: {lot_size}")
             log.info(f"  Expiration: {FIVEERS_CONFIG.pending_order_expiry_hours} hours")
             
@@ -1116,8 +1102,6 @@ class LiveTradingBot:
                 tp1=tp1,
                 tp2=tp2,
                 tp3=tp3,
-                tp4=tp4,
-                tp5=tp5,
                 confluence=confluence,
                 confluence_score=confluence,
                 quality_factors=quality_factors,

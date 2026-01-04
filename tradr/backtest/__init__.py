@@ -2,6 +2,7 @@
 Backtest module for tradr.
 
 Provides H1-based trade simulation that matches strategy_core.py logic.
+Simplified exit strategy: TP1, TP2, TP3 (closes ALL remaining).
 """
 
 from .h1_trade_simulator import (
@@ -9,8 +10,8 @@ from .h1_trade_simulator import (
     TradeSetup,
     TradeResult,
     simulate_trades_with_h1,
-    TP1_R, TP2_R, TP3_R, TP4_R, TP5_R,
-    TP1_CLOSE_PCT, TP2_CLOSE_PCT, TP3_CLOSE_PCT, TP4_CLOSE_PCT, TP5_CLOSE_PCT,
+    TP1_R, TP2_R, TP3_R,
+    TP1_CLOSE_PCT, TP2_CLOSE_PCT, TP3_CLOSE_PCT,
     TRAIL_ACTIVATION_R,
 )
 
@@ -19,7 +20,7 @@ __all__ = [
     'TradeSetup',
     'TradeResult',
     'simulate_trades_with_h1',
-    'TP1_R', 'TP2_R', 'TP3_R', 'TP4_R', 'TP5_R',
-    'TP1_CLOSE_PCT', 'TP2_CLOSE_PCT', 'TP3_CLOSE_PCT', 'TP4_CLOSE_PCT', 'TP5_CLOSE_PCT',
+    'TP1_R', 'TP2_R', 'TP3_R',
+    'TP1_CLOSE_PCT', 'TP2_CLOSE_PCT', 'TP3_CLOSE_PCT',
     'TRAIL_ACTIVATION_R',
 ]

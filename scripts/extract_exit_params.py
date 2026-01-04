@@ -57,15 +57,11 @@ def extract_exit_params(params_file: str) -> dict:
         "atr_tp1_multiplier": params.get("atr_tp1_multiplier", 0.6),
         "atr_tp2_multiplier": params.get("atr_tp2_multiplier", 1.2),
         "atr_tp3_multiplier": params.get("atr_tp3_multiplier", 2.0),
-        "tp4_fixed_r": 2.5,  # Hardcoded in strategy_core.py
-        "tp5_fixed_r": 3.5,  # Hardcoded in strategy_core.py
         
         "# TP CLOSE PERCENTAGES (position sizing per TP level)": "",
-        "tp1_close_pct": params.get("tp1_close_pct", 0.34),
-        "tp2_close_pct": params.get("tp2_close_pct", 0.16),
+        "tp1_close_pct": params.get("tp1_close_pct", 0.35),
+        "tp2_close_pct": params.get("tp2_close_pct", 0.30),
         "tp3_close_pct": params.get("tp3_close_pct", 0.35),
-        "tp4_close_pct": params.get("tp4_close_pct", 0.20),
-        "tp5_close_pct": params.get("tp5_close_pct", 0.45),
         
         "# TRAILING STOP": "",
         "trail_activation_r": params.get("trail_activation_r", 0.65),
@@ -90,11 +86,10 @@ def validate_close_pcts(params: dict) -> tuple[bool, float]:
     Returns:
         (is_valid, total_sum)
     """
-    close_keys = ["tp1_close_pct", "tp2_close_pct", "tp3_close_pct", 
-                  "tp4_close_pct", "tp5_close_pct"]
+    close_keys = ["tp1_close_pct", "tp2_close_pct", "tp3_close_pct"]
     total = sum(params.get(k, 0) for k in close_keys)
     # Should be close to 1.0 but can be slightly off
-    is_valid = 0.8 <= total <= 1.5
+    is_valid = 0.8 <= total <= 1.2
     return is_valid, total
 
 
@@ -133,25 +128,21 @@ def main():
     if not is_valid:
         print("  ⚠️  Warning: Close percentages may not sum to expected 1.0")
     
-    # Calculate example RR for full TP5 exit
+    # Calculate example RR for full TP3 exit (3-TP simplified strategy)
     tp_close = [
         exit_params["tp1_close_pct"],
         exit_params["tp2_close_pct"],
         exit_params["tp3_close_pct"],
-        exit_params["tp4_close_pct"],
-        exit_params["tp5_close_pct"],
     ]
     tp_r = [
         exit_params["atr_tp1_multiplier"],
         exit_params["atr_tp2_multiplier"],
         exit_params.get("atr_tp3_multiplier", 2.0),
-        exit_params["tp4_fixed_r"],
-        exit_params["tp5_fixed_r"],
     ]
     
     full_rr = sum(c * r for c, r in zip(tp_close, tp_r))
     print(f"\n📈 EXAMPLE CALCULATIONS:")
-    print(f"  Full TP5 exit RR: {full_rr:.3f}R")
+    print(f"  Full TP3 exit RR: {full_rr:.3f}R")
     print(f"  (assuming all TP levels hit at ATR multiplier values)")
     
     # Export as JSON for H1 backtester
