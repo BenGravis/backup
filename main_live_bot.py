@@ -37,6 +37,12 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Dict, Optional
 from dataclasses import dataclass, asdict
+from zoneinfo import ZoneInfo  # Python 3.9+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MT5/5ERS SERVER TIMEZONE - UTC+2/+3 (EET/EEST)
+# ═══════════════════════════════════════════════════════════════════════════════
+SERVER_TZ = ZoneInfo("Europe/Helsinki")  # UTC+2/+3 (EET/EEST)
 
 try:
     from dotenv import load_dotenv
@@ -82,6 +88,8 @@ class PendingSetup:
     tp1: float
     tp2: Optional[float]
     tp3: Optional[float]
+    tp4: Optional[float] = None  # Added for 5-TP system
+    tp5: Optional[float] = None  # Added for 5-TP system
     confluence: int = 0
     confluence_score: int = 0
     quality_factors: int = 0
@@ -90,11 +98,13 @@ class PendingSetup:
     order_ticket: Optional[int] = None
     status: str = "pending"
     lot_size: float = 0.0
-    partial_closes: int = 0
+    partial_closes: int = 0  # 0=none, 1=TP1, 2=TP2, 3=TP3, 4=TP4, 5=TP5
     trailing_sl: Optional[float] = None
     tp1_hit: bool = False
     tp2_hit: bool = False
     tp3_hit: bool = False
+    tp4_hit: bool = False  # Added for 5-TP system
+    tp5_hit: bool = False  # Added for 5-TP system
     
     def to_dict(self) -> Dict:
         return asdict(self)
@@ -135,6 +145,152 @@ TRADABLE_SYMBOLS = BROKER_CONFIG.get_tradable_symbols()
 
 log = setup_logger("tradr", log_file="logs/tradr_live.log")
 running = True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TIMEZONE HELPERS - MT5/5ERS SERVER TIME
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def get_server_time() -> datetime:
+    """Get current time in MT5 server timezone (UTC+2/+3)."""
+    return datetime.now(SERVER_TZ)
+
+
+def get_server_date() -> datetime.date:
+    """Get current date in MT5 server timezone."""
+    return get_server_time().date()
+
+
+def get_next_daily_close() -> datetime:
+    """
+    Get next daily close time (00:00 server time).
+    Daily candle closes at midnight server time.
+    """
+    server_now = get_server_time()
+    
+    # Daily close is at 00:00 server time
+    today_close = server_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    if server_now >= today_close:
+        # Today's close has passed, next one is tomorrow
+        next_close = today_close + timedelta(days=1)
+    else:
+        next_close = today_close
+    
+    return next_close
+
+
+def get_next_scan_time() -> datetime:
+    """
+    Get next scheduled scan time (10 min after daily close).
+    Returns datetime in UTC for comparison.
+    """
+    next_close = get_next_daily_close()
+    scan_time = next_close + timedelta(minutes=10)  # 00:10 server time
+    
+    # Skip weekends (Saturday = 5, Sunday = 6)
+    while scan_time.weekday() >= 5:
+        scan_time += timedelta(days=1)
+    
+    return scan_time.astimezone(timezone.utc)
+
+
+def is_market_open() -> bool:
+    """
+    Check if forex market is open (not weekend).
+    Forex: Opens Sunday 22:00 UTC, closes Friday 22:00 UTC.
+    """
+    now = datetime.now(timezone.utc)
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    hour = now.hour
+    
+    # Weekend = Saturday whole day + Sunday before 22:00 UTC
+    if weekday == 5:  # Saturday
+        return False
+    if weekday == 6 and hour < 22:  # Sunday before 22:00 UTC
+        return False
+    # Friday after 22:00 UTC
+    if weekday == 4 and hour >= 22:
+        return False
+    
+    return True
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 5ERS DRAWDOWN MONITOR - CRITICAL: Different from FTMO!
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@dataclass
+class DrawdownMonitor:
+    """
+    5ers-compliant drawdown monitoring.
+    
+    CRITICAL 5ERS DIFFERENCES:
+    - Total DD = 10% van STARTBALANS (constant, niet trailing!)
+    - GEEN daily DD limiet bij 5ers (unlike FTMO's 5%)
+    - Stop-out level = $54,000 (voor 60K account) - CONSTANT
+    
+    Dit is NIET hetzelfde als FTMO waar daily DD wel geldt!
+    """
+    
+    initial_balance: float = 60000.0
+    
+    def __post_init__(self):
+        self.stop_out_level = self.initial_balance * 0.90  # $54,000
+        self.warning_level = self.initial_balance * 0.93   # $55,800 (7% DD)
+        self.caution_level = self.initial_balance * 0.95   # $57,000 (5% DD)
+        
+        # Tracking
+        self.high_water_mark = self.initial_balance
+        self.current_equity = self.initial_balance
+        self.total_dd_pct = 0.0
+    
+    def update(self, current_equity: float) -> Dict:
+        """Update equity and calculate drawdown."""
+        self.current_equity = current_equity
+        
+        # Update HWM (for profit tracking, not DD calculation)
+        if current_equity > self.high_water_mark:
+            self.high_water_mark = current_equity
+        
+        # 5ERS: Calculate total DD from INITIAL balance (not HWM!)
+        if current_equity < self.initial_balance:
+            self.total_dd_pct = ((self.initial_balance - current_equity) / self.initial_balance) * 100
+        else:
+            self.total_dd_pct = 0.0
+        
+        return self.get_status()
+    
+    def get_status(self) -> Dict:
+        """Get current drawdown status."""
+        return {
+            "initial_balance": self.initial_balance,
+            "current_equity": self.current_equity,
+            "high_water_mark": self.high_water_mark,
+            "stop_out_level": self.stop_out_level,
+            "total_dd_pct": self.total_dd_pct,
+            "distance_to_stopout": self.current_equity - self.stop_out_level,
+            "distance_to_stopout_pct": ((self.current_equity - self.stop_out_level) / self.initial_balance) * 100,
+            "is_warning": self.current_equity <= self.warning_level,
+            "is_caution": self.current_equity <= self.caution_level,
+            "is_stopped_out": self.current_equity <= self.stop_out_level,
+        }
+    
+    def should_halt_trading(self) -> bool:
+        """Check if trading should be halted (stop-out reached)."""
+        return self.current_equity <= self.stop_out_level
+    
+    def should_reduce_risk(self) -> bool:
+        """Check if risk should be reduced (warning level reached)."""
+        return self.current_equity <= self.warning_level
+    
+    def get_risk_multiplier(self) -> float:
+        """Get risk multiplier based on drawdown level."""
+        if self.current_equity <= self.caution_level:
+            return 0.5  # 50% of normal risk
+        if self.current_equity <= self.warning_level:
+            return 0.7  # 70% of normal risk
+        return 1.0  # Normal risk
 
 # Print broker config on startup
 log.info("=" * 70)
@@ -197,18 +353,31 @@ sig_module.signal(sig_module.SIGTERM, signal_handler)
 
 class LiveTradingBot:
     """
-    Main live trading bot.
+    Main live trading bot for 5ers 60K High Stakes Challenge.
     
     Uses the EXACT SAME strategy logic as backtest.py for perfect parity.
     Now uses pending orders to match backtest entry behavior exactly.
+    
+    KEY FEATURES (5ers Compliant):
+    - 5-TP Exit System: 5 take profit levels (0.6R to 3.5R)
+    - Immediate scan on first run after restart/weekend
+    - Daily scan 10 min after daily close (00:10 server time)
+    - Spread & volume checks before entry
+    - Weekend gap protection
+    - Total DD monitoring (no daily DD for 5ers!)
     """
     
     PENDING_SETUPS_FILE = "pending_setups.json"
     TRADING_DAYS_FILE = "trading_days.json"
+    FIRST_RUN_FLAG_FILE = "first_run_complete.flag"
+    AWAITING_SPREAD_FILE = "awaiting_spread.json"
     VALIDATE_INTERVAL_MINUTES = 10
     MAIN_LOOP_INTERVAL_SECONDS = 10
+    SPREAD_CHECK_INTERVAL_MINUTES = 10
+    MAX_SPREAD_WAIT_HOURS = 12
+    WEEKEND_GAP_THRESHOLD_PCT = 1.0  # 1% gap threshold
     
-    def __init__(self):
+    def __init__(self, immediate_scan: bool = False):
         self.mt5 = MT5Client(
             server=MT5_SERVER,
             login=MT5_LOGIN,
@@ -222,21 +391,361 @@ class LiveTradingBot:
         
         self.last_scan_time: Optional[datetime] = None
         self.last_validate_time: Optional[datetime] = None
+        self.last_spread_check_time: Optional[datetime] = None
         self.scan_count = 0
         self.pending_setups: Dict[str, PendingSetup] = {}
         self.symbol_map: Dict[str, str] = {}  # our_symbol -> broker_symbol
         
         self.challenge_manager: Optional[ChallengeRiskManager] = None
         
-        # Trading days tracking for FTMO minimum trading days requirement
+        # First run detection
+        self.immediate_scan_requested = immediate_scan
+        self.first_run_complete = self._check_first_run_complete()
+        
+        # 5ers DD Monitor (no daily DD, only total DD from start balance!)
+        self.dd_monitor = DrawdownMonitor(initial_balance=ACCOUNT_SIZE)
+        
+        # Trading days tracking for 5ers minimum trading days requirement
         self.trading_days: set = set()
         self.challenge_start_date: Optional[datetime] = None
         self.challenge_end_date: Optional[datetime] = None
         
         self._load_pending_setups()
         self._load_trading_days()
+        self._load_awaiting_spread()
         self._auto_start_challenge()
     
+    # ═══════════════════════════════════════════════════════════════════════════
+    # FIRST RUN DETECTION - Scan immediately after restart/weekend
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _check_first_run_complete(self) -> bool:
+        """Check of eerste scan al gedaan is sinds laatste restart."""
+        flag_file = Path(self.FIRST_RUN_FLAG_FILE)
+        if flag_file.exists():
+            # Check of flag file recent is (binnen 24 uur)
+            mtime = flag_file.stat().st_mtime
+            age_hours = (time.time() - mtime) / 3600
+            return age_hours < 24
+        return False
+    
+    def _mark_first_run_complete(self):
+        """Markeer dat eerste scan voltooid is."""
+        Path(self.FIRST_RUN_FLAG_FILE).touch()
+    
+    def should_do_immediate_scan(self) -> bool:
+        """Bepaal of we direct moeten scannen (na restart of weekend)."""
+        # 1. Expliciet gevraagd via --first-run
+        if self.immediate_scan_requested:
+            return True
+        
+        # 2. Eerste run na restart en markt is open
+        if not self.first_run_complete and is_market_open():
+            return True
+        
+        return False
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # SPREAD QUEUE - Track signals waiting for better spread
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _load_awaiting_spread(self):
+        """Load signals waiting for better spread."""
+        self.awaiting_spread: Dict = {}
+        try:
+            if Path(self.AWAITING_SPREAD_FILE).exists():
+                with open(self.AWAITING_SPREAD_FILE, 'r') as f:
+                    self.awaiting_spread = json.load(f)
+                if self.awaiting_spread:
+                    log.info(f"Loaded {len(self.awaiting_spread)} signals awaiting spread improvement")
+        except Exception as e:
+            log.error(f"Error loading awaiting_spread: {e}")
+            self.awaiting_spread = {}
+    
+    def _save_awaiting_spread(self):
+        """Save signals waiting for better spread."""
+        try:
+            with open(self.AWAITING_SPREAD_FILE, 'w') as f:
+                json.dump(self.awaiting_spread, f, indent=2, default=str)
+        except Exception as e:
+            log.error(f"Error saving awaiting_spread: {e}")
+    
+    def add_to_awaiting_spread(self, setup: Dict):
+        """Add setup to awaiting spread queue."""
+        symbol = setup["symbol"]
+        self.awaiting_spread[symbol] = {
+            **setup,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_check": datetime.now(timezone.utc).isoformat(),
+            "check_count": 0,
+        }
+        self._save_awaiting_spread()
+        log.info(f"[{symbol}] Added to spread queue - waiting for better conditions")
+    
+    def check_awaiting_spread_signals(self):
+        """
+        Check signals waiting for better spread.
+        Called every SPREAD_CHECK_INTERVAL_MINUTES.
+        """
+        if not self.awaiting_spread:
+            return
+        
+        now = datetime.now(timezone.utc)
+        signals_to_remove = []
+        
+        log.info(f"Checking {len(self.awaiting_spread)} signals waiting for spread improvement...")
+        
+        for symbol, setup in list(self.awaiting_spread.items()):
+            # Check age - expire after MAX_SPREAD_WAIT_HOURS
+            created_at_str = setup.get("created_at", "")
+            if created_at_str:
+                try:
+                    created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+                    age_hours = (now - created_at).total_seconds() / 3600
+                    
+                    if age_hours > self.MAX_SPREAD_WAIT_HOURS:
+                        log.info(f"[{symbol}] Signal expired after {age_hours:.1f} hours")
+                        signals_to_remove.append(symbol)
+                        continue
+                except ValueError:
+                    pass
+            
+            # Check if entry price is still reachable
+            broker_symbol = self.symbol_map.get(symbol, symbol)
+            tick = self.mt5.get_tick(broker_symbol)
+            if not tick:
+                continue
+            
+            entry = setup.get("entry", 0)
+            sl = setup.get("stop_loss", 0)
+            risk = abs(entry - sl) if entry and sl else 0
+            
+            if risk > 0:
+                current_price = tick.bid if setup.get("direction") == "bullish" else tick.ask
+                entry_distance_r = abs(current_price - entry) / risk
+                
+                if entry_distance_r > FIVEERS_CONFIG.max_entry_distance_r:
+                    log.info(f"[{symbol}] Entry too far now ({entry_distance_r:.2f}R), removing")
+                    signals_to_remove.append(symbol)
+                    continue
+            
+            # Check market conditions
+            conditions = self.check_market_conditions(symbol)
+            
+            if conditions["spread_ok"] and conditions["volume_ok"]:
+                log.info(f"[{symbol}] ✅ Spread now OK ({conditions['spread_pips']:.1f} pips)")
+                log.info(f"[{symbol}] Executing trade!")
+                
+                # Execute trade
+                if self.place_setup_order(setup, check_spread=False):
+                    signals_to_remove.append(symbol)
+            else:
+                log.debug(f"[{symbol}] Still waiting - {conditions['reason']}")
+                setup["check_count"] = setup.get("check_count", 0) + 1
+                setup["last_check"] = now.isoformat()
+        
+        # Remove processed signals
+        for symbol in signals_to_remove:
+            if symbol in self.awaiting_spread:
+                del self.awaiting_spread[symbol]
+        
+        self._save_awaiting_spread()
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # MARKET CONDITIONS CHECK - Spread & Volume
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def check_market_conditions(self, symbol: str) -> Dict:
+        """
+        Check volume en spread voor een symbol.
+        
+        Returns:
+            Dict met: spread_ok, volume_ok, spread_pips, reason
+        """
+        broker_symbol = self.symbol_map.get(symbol, symbol)
+        
+        tick = self.mt5.get_tick(broker_symbol)
+        if not tick:
+            return {
+                "spread_ok": False,
+                "volume_ok": False,
+                "spread_pips": 999,
+                "reason": "Cannot get tick data"
+            }
+        
+        # Calculate spread in pips
+        from ftmo_config import get_pip_size
+        pip_size = get_pip_size(symbol)
+        spread_pips = tick.spread / pip_size if pip_size > 0 else tick.spread
+        
+        # Get max allowed spread
+        max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
+        spread_ok = spread_pips <= max_spread
+        
+        # Volume check - basic tick volume check
+        candles = self.mt5.get_ohlcv(broker_symbol, "M1", 5)
+        if candles:
+            recent_volume = sum(c.get("volume", 0) for c in candles[-3:]) / 3
+            volume_ok = recent_volume > 0
+        else:
+            volume_ok = True  # Default to OK if we can't check
+        
+        reason = ""
+        if not spread_ok:
+            reason = f"Spread too wide: {spread_pips:.1f} > {max_spread:.1f} pips"
+        if not volume_ok:
+            reason = f"Low volume detected"
+        
+        return {
+            "spread_ok": spread_ok,
+            "volume_ok": volume_ok,
+            "spread_pips": spread_pips,
+            "max_spread": max_spread,
+            "reason": reason
+        }
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # WEEKEND GAP PROTECTION
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def check_weekend_gap(self, symbol: str) -> Optional[Dict]:
+        """
+        Check voor weekend gap en return gap info.
+        
+        Returns:
+            Dict met gap_pct, direction, is_significant OF None als geen gap
+        """
+        broker_symbol = self.symbol_map.get(symbol, symbol)
+        
+        # Get recent D1 candles
+        candles = self.mt5.get_ohlcv(broker_symbol, "D1", 5)
+        if not candles or len(candles) < 2:
+            return None
+        
+        friday_close = candles[-2]["close"]  # Voorlaatste candle = vrijdag
+        current_candle = candles[-1]
+        monday_open = current_candle["open"]
+        
+        gap_pct = ((monday_open - friday_close) / friday_close) * 100
+        
+        return {
+            "friday_close": friday_close,
+            "monday_open": monday_open,
+            "gap_pct": gap_pct,
+            "gap_direction": "up" if gap_pct > 0 else "down",
+            "is_significant": abs(gap_pct) >= self.WEEKEND_GAP_THRESHOLD_PCT,
+        }
+    
+    def handle_weekend_gap_positions(self):
+        """
+        Handle bestaande posities na weekend gap.
+        
+        Actions:
+        - Als SL door gap heen is gesprongen: sluit direct
+        - Log significant gaps voor monitoring
+        """
+        positions = self.mt5.get_my_positions()
+        if not positions:
+            return
+        
+        server_now = get_server_time()
+        
+        # Alleen uitvoeren op maandagochtend
+        if server_now.weekday() != 0:  # Niet maandag
+            return
+        if server_now.hour > 2:  # Na eerste 2 uur van maandag
+            return
+        
+        log.info("=" * 70)
+        log.info("🔍 WEEKEND GAP CHECK - Analyzing positions after weekend")
+        log.info("=" * 70)
+        
+        for pos in positions:
+            internal_symbol = get_internal_symbol(pos.symbol)
+            gap_info = self.check_weekend_gap(internal_symbol)
+            
+            if not gap_info:
+                continue
+            
+            tick = self.mt5.get_tick(pos.symbol)
+            if not tick:
+                continue
+            
+            current_price = tick.bid if pos.type == 0 else tick.ask  # 0=BUY
+            
+            # Check of SL is gapped
+            if pos.type == 0:  # Long position
+                if current_price <= pos.sl:
+                    log.warning(f"[{pos.symbol}] ⚠️ SL GAPPED! Price {current_price:.5f} <= SL {pos.sl:.5f}")
+                    log.warning(f"  Weekend gap: {gap_info['gap_pct']:.2f}%")
+                    log.warning(f"  Closing position immediately!")
+                    self.mt5.close_position(pos.ticket)
+            else:  # Short position
+                if current_price >= pos.sl:
+                    log.warning(f"[{pos.symbol}] ⚠️ SL GAPPED! Price {current_price:.5f} >= SL {pos.sl:.5f}")
+                    log.warning(f"  Weekend gap: {gap_info['gap_pct']:.2f}%")
+                    log.warning(f"  Closing position immediately!")
+                    self.mt5.close_position(pos.ticket)
+            
+            if gap_info["is_significant"]:
+                log.info(f"[{pos.symbol}] Significant gap detected: {gap_info['gap_pct']:.2f}%")
+                log.info(f"  Friday close: {gap_info['friday_close']:.5f}")
+                log.info(f"  Monday open: {gap_info['monday_open']:.5f}")
+                log.info(f"  Position P/L: ${pos.profit:.2f}")
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # 5ERS DRAWDOWN MONITORING (No daily DD limit!)
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def monitor_5ers_drawdown(self) -> bool:
+        """
+        Monitor drawdown levels (5ers compliant - NO daily DD limit!).
+        
+        CRITICAL: 5ers only tracks total DD from START BALANCE.
+        Stop-out = $54,000 for 60K account (constant, not trailing).
+        
+        Returns:
+            True if stop-out triggered (halt trading), False otherwise
+        """
+        account = self.mt5.get_account_info()
+        if not account:
+            return False
+        
+        equity = account.get("equity", 0)
+        status = self.dd_monitor.update(equity)
+        
+        # Log warning levels
+        if status["is_warning"]:
+            log.warning("=" * 70)
+            log.warning("⚠️ 5ERS DRAWDOWN WARNING")
+            log.warning(f"  Equity: ${equity:,.2f}")
+            log.warning(f"  Total DD: {status['total_dd_pct']:.2f}% (from ${status['initial_balance']:,.0f})")
+            log.warning(f"  Distance to stop-out: ${status['distance_to_stopout']:,.2f}")
+            log.warning(f"  Stop-out level: ${status['stop_out_level']:,.2f}")
+            log.warning("=" * 70)
+        
+        if status["is_stopped_out"]:
+            log.error("=" * 70)
+            log.error("🛑 5ERS STOP-OUT TRIGGERED!")
+            log.error(f"  Equity: ${equity:,.2f}")
+            log.error(f"  Stop-out level: ${status['stop_out_level']:,.2f}")
+            log.error("  Total DD = 10% from start balance - ACCOUNT BREACHED")
+            log.error("  CLOSING ALL POSITIONS!")
+            log.error("=" * 70)
+            
+            # Close all positions
+            positions = self.mt5.get_my_positions()
+            for pos in positions:
+                result = self.mt5.close_position(pos.ticket)
+                if result.success:
+                    log.info(f"  ✓ Closed {pos.symbol}")
+                else:
+                    log.error(f"  ✗ Failed to close {pos.symbol}: {result.error}")
+            
+            return True  # Stop-out triggered
+        
+        return False
+
     def _load_pending_setups(self):
         """Load pending setups from file."""
         try:
@@ -713,19 +1222,23 @@ class LiveTradingBot:
                 log.info(f"[{symbol}] SL adjusted to {FIVEERS_CONFIG.min_sl_atr_ratio} ATR: {sl:.5f}")
             
         # ════════════════════════════════════════════════════════════════════════
-        # ALIGNED: Use tp_r_multiple from current_params.json (self.params)
+        # 5-TP SYSTEM: Use atr_tp*_multiplier from current_params.json
         # This ensures live trading uses SAME TP levels as optimizer/backtest
-        # TP3 closes ALL remaining position (simplified exit strategy)
+        # TP5 closes ALL remaining position (45%)
         # ════════════════════════════════════════════════════════════════════════
         risk = abs(entry - sl)
         if direction == "bullish":
-            tp1 = entry + (risk * self.params.tp1_r_multiple)
-            tp2 = entry + (risk * self.params.tp2_r_multiple)
-            tp3 = entry + (risk * self.params.tp3_r_multiple)
+            tp1 = entry + (risk * self.params.atr_tp1_multiplier)
+            tp2 = entry + (risk * self.params.atr_tp2_multiplier)
+            tp3 = entry + (risk * self.params.atr_tp3_multiplier)
+            tp4 = entry + (risk * self.params.atr_tp4_multiplier)
+            tp5 = entry + (risk * self.params.atr_tp5_multiplier)
         else:
-            tp1 = entry - (risk * self.params.tp1_r_multiple)
-            tp2 = entry - (risk * self.params.tp2_r_multiple)
-            tp3 = entry - (risk * self.params.tp3_r_multiple)
+            tp1 = entry - (risk * self.params.atr_tp1_multiplier)
+            tp2 = entry - (risk * self.params.atr_tp2_multiplier)
+            tp3 = entry - (risk * self.params.atr_tp3_multiplier)
+            tp4 = entry - (risk * self.params.atr_tp4_multiplier)
+            tp5 = entry - (risk * self.params.atr_tp5_multiplier)
         
         if direction == "bullish":
             if current_price <= sl:
@@ -742,9 +1255,11 @@ class LiveTradingBot:
         log.info(f"  Current Price: {current_price:.5f}")
         log.info(f"  Entry: {entry:.5f} ({entry_distance_r:.2f}R away)")
         log.info(f"  SL: {sl:.5f} ({sl_pips:.1f} pips)")
-        log.info(f"  TP1: {tp1:.5f} ({self.params.tp1_r_multiple}R)")
-        log.info(f"  TP2: {tp2:.5f} ({self.params.tp2_r_multiple}R)")
-        log.info(f"  TP3: {tp3:.5f} ({self.params.tp3_r_multiple}R) - closes ALL remaining")
+        log.info(f"  TP1: {tp1:.5f} ({self.params.atr_tp1_multiplier}R) -> {self.params.tp1_close_pct*100:.0f}%")
+        log.info(f"  TP2: {tp2:.5f} ({self.params.atr_tp2_multiplier}R) -> {self.params.tp2_close_pct*100:.0f}%")
+        log.info(f"  TP3: {tp3:.5f} ({self.params.atr_tp3_multiplier}R) -> {self.params.tp3_close_pct*100:.0f}%")
+        log.info(f"  TP4: {tp4:.5f} ({self.params.atr_tp4_multiplier}R) -> {self.params.tp4_close_pct*100:.0f}%")
+        log.info(f"  TP5: {tp5:.5f} ({self.params.atr_tp5_multiplier}R) -> {self.params.tp5_close_pct*100:.0f}% (ALL remaining)")
         
         return {
             "symbol": symbol,
@@ -758,6 +1273,8 @@ class LiveTradingBot:
             "tp1": tp1,
             "tp2": tp2,
             "tp3": tp3,
+            "tp4": tp4,
+            "tp5": tp5,
             "entry_distance_r": entry_distance_r,
             "sl_pips": sl_pips,
             "flags": flags,
@@ -835,7 +1352,7 @@ class LiveTradingBot:
         log.info(f"[{new_symbol}] New setup (score: {new_score:.2f}) not better than worst pending (score: {worst_score:.2f})")
         return False
     
-    def place_setup_order(self, setup: Dict) -> bool:
+    def place_setup_order(self, setup: Dict, check_spread: bool = True) -> bool:
         """
         Place order for a validated setup.
         
@@ -844,6 +1361,11 @@ class LiveTradingBot:
         - Uses pending order when price is near but not at entry
         - Validates all risk limits before placing
         - Calculates proper lot size for 60K account
+        - Spread check: If spread too wide, adds to awaiting_spread queue
+        
+        Args:
+            setup: Trade setup dict
+            check_spread: If True, check spread and add to queue if too wide
         """
         from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
         
@@ -856,9 +1378,25 @@ class LiveTradingBot:
         tp1 = setup["tp1"]
         tp2 = setup.get("tp2")
         tp3 = setup.get("tp3")
+        tp4 = setup.get("tp4")  # 5-TP system
+        tp5 = setup.get("tp5")  # 5-TP system
         confluence = setup["confluence"]
         quality_factors = setup["quality_factors"]
         entry_distance_r = setup.get("entry_distance_r", 0)
+        
+        # ═══════════════════════════════════════════════════════════════
+        # SPREAD & VOLUME CHECK (if enabled)
+        # ═══════════════════════════════════════════════════════════════
+        if check_spread:
+            conditions = self.check_market_conditions(symbol)
+            
+            if not conditions["spread_ok"] or not conditions["volume_ok"]:
+                log.warning(f"[{symbol}] Market conditions not ideal: {conditions['reason']}")
+                log.warning(f"[{symbol}] Adding to spread queue for retry every {self.SPREAD_CHECK_INTERVAL_MINUTES} min")
+                self.add_to_awaiting_spread(setup)
+                return False
+            
+            log.info(f"[{symbol}] Market conditions OK - Spread: {conditions['spread_pips']:.1f} pips")
         
         if FIVEERS_CONFIG.min_spread_check:
             tick = self.mt5.get_tick(broker_symbol)
@@ -1448,125 +1986,209 @@ class LiveTradingBot:
         """
         Manage partial take profits for active positions.
         
-        Challenge Mode Strategy (FTMO Optimized):
-        - TP1 hit: Close 45% of position volume at +0.8-1R
-        - TP2 hit: Close 30% at +2R
-        - TP3 hit: Close remaining 25% at +3-4R or trailing
-        - Move SL to breakeven + buffer after TP1
+        5-TP SYSTEM (from current_params.json):
+        - TP1: Close tp1_close_pct (10%) at atr_tp1_multiplier (0.6R)
+        - TP2: Close tp2_close_pct (10%) at atr_tp2_multiplier (1.2R)
+        - TP3: Close tp3_close_pct (15%) at atr_tp3_multiplier (2.0R)
+        - TP4: Close tp4_close_pct (20%) at atr_tp4_multiplier (2.5R)
+        - TP5: Close tp5_close_pct (45%) at atr_tp5_multiplier (3.5R) - ALL REMAINING
         
-        Standard Mode:
-        - TP1 hit: Close 33% of position volume
-        - TP2 hit: Close 50% of remaining
-        - TP3 hit: Close remainder
+        All closes via MARKET ORDERS with position=ticket!
+        Trailing SL moves after each TP hit.
         
-        Tracks partial close state in pending_setups.
+        Tracks partial close state in pending_setups.partial_closes (0-5).
         """
         positions = self.mt5.get_my_positions()
         if not positions:
             return
         
         for pos in positions:
-            symbol = pos.symbol
+            # Find matching setup - try broker symbol first, then internal symbol
+            setup = None
+            broker_symbol = pos.symbol
             
-            if symbol not in self.pending_setups:
+            # Try to find by broker symbol or internal symbol
+            for sym, s in self.pending_setups.items():
+                if s.order_ticket == pos.ticket:
+                    setup = s
+                    break
+                mapped_broker = self.symbol_map.get(sym, sym)
+                if mapped_broker == broker_symbol:
+                    setup = s
+                    break
+            
+            if not setup or setup.status != "filled":
                 continue
             
-            setup = self.pending_setups[symbol]
-            if setup.status != "filled":
-                continue
-            
-            tick = self.mt5.get_tick(symbol)
+            tick = self.mt5.get_tick(broker_symbol)
             if not tick:
                 continue
             
             current_price = tick.bid if setup.direction == "bullish" else tick.ask
+            entry = setup.entry_price
+            risk = abs(entry - setup.stop_loss)
             
-            tp1 = setup.tp1
-            tp2 = setup.tp2
-            tp3 = setup.tp3
+            if risk <= 0:
+                continue
             
-            partial_state = getattr(setup, 'partial_closes', 0) if hasattr(setup, 'partial_closes') else 0
-            
-            tp1_hit = False
-            tp2_hit = False
-            tp3_hit = False
-            
+            # Calculate current R
             if setup.direction == "bullish":
-                tp1_hit = current_price >= tp1 if tp1 else False
-                tp2_hit = current_price >= tp2 if tp2 else False
-                tp3_hit = current_price >= tp3 if tp3 else False
+                current_r = (current_price - entry) / risk
             else:
-                tp1_hit = current_price <= tp1 if tp1 else False
-                tp2_hit = current_price <= tp2 if tp2 else False
-                tp3_hit = current_price <= tp3 if tp3 else False
+                current_r = (entry - current_price) / risk
+            
+            # Get TP levels from params (5-TP system)
+            tp1_r = self.params.atr_tp1_multiplier  # 0.6R
+            tp2_r = self.params.atr_tp2_multiplier  # 1.2R
+            tp3_r = self.params.atr_tp3_multiplier  # 2.0R
+            tp4_r = self.params.atr_tp4_multiplier  # 2.5R
+            tp5_r = self.params.atr_tp5_multiplier  # 3.5R
             
             original_volume = setup.lot_size
             current_volume = pos.volume
+            partial_state = setup.partial_closes if hasattr(setup, 'partial_closes') else 0
             
-            # EXACT same partial close volumes as backtest_live_bot.py
-            if CHALLENGE_MODE and self.challenge_manager:
-                tp1_vol, tp2_vol, tp3_vol = self.challenge_manager.get_partial_close_volumes(original_volume)
-            else:
-                # ALIGNED: Use tp_close_pct from current_params.json (self.params)
-                tp1_vol = round(original_volume * self.params.tp1_close_pct, 2)
-                tp2_vol = round(original_volume * self.params.tp2_close_pct, 2)
-                tp3_vol = round(original_volume * self.params.tp3_close_pct, 2)
-            
-            tp1_vol = max(0.01, tp1_vol)
-            tp2_vol = max(0.01, tp2_vol)
-            tp3_vol = max(0.01, tp3_vol)
-            
-            if tp1_hit and partial_state == 0:
-                close_volume = min(tp1_vol, current_volume)
+            # ═══════════════════════════════════════════════════════════════
+            # TP1 HIT - Close 10% (tp1_close_pct)
+            # ═══════════════════════════════════════════════════════════════
+            if current_r >= tp1_r and partial_state == 0:
+                close_pct = self.params.tp1_close_pct  # 0.10
+                close_volume = max(0.01, round(original_volume * close_pct, 2))
+                close_volume = min(close_volume, current_volume)
                 
-                if close_volume >= 0.01:
-                    pct_display = int((tp1_vol / original_volume) * 100) if original_volume > 0 else 0
-                    log.info(f"[{symbol}] TP1 HIT! Closing {pct_display}% ({close_volume} lots) of position")
-                    result = self.mt5.partial_close(pos.ticket, close_volume)
-                    if result.success:
-                        log.info(f"[{symbol}] Partial close successful at {result.price}")
-                        setup.partial_closes = 1
-                        self._save_pending_setups()
-                        
-                        be_buffer = abs(setup.entry_price - setup.stop_loss) * 0.1
-                        if setup.direction == "bullish":
-                            new_sl = setup.entry_price + be_buffer
-                        else:
-                            new_sl = setup.entry_price - be_buffer
-                        
-                        self.mt5.modify_sl_tp(pos.ticket, sl=new_sl, tp=tp2 if tp2 else tp1)
-                        log.info(f"[{symbol}] SL moved to BE+buffer ({new_sl:.5f}), TP updated to TP2: {tp2 if tp2 else 'N/A'}")
-                    else:
-                        log.error(f"[{symbol}] Partial close failed: {result.error}")
-            
-            elif tp2_hit and partial_state == 1:
-                remaining_volume = current_volume
-                close_volume = min(tp2_vol, remaining_volume)
-                if close_volume >= 0.01:
-                    pct_display = int((tp2_vol / original_volume) * 100) if original_volume > 0 else 0
-                    log.info(f"[{symbol}] TP2 HIT! Closing {pct_display}% ({close_volume} lots)")
-                    result = self.mt5.partial_close(pos.ticket, close_volume)
-                    if result.success:
-                        log.info(f"[{symbol}] Partial close successful at {result.price}")
-                        setup.partial_closes = 2
-                        self._save_pending_setups()
-                        
-                        if tp3:
-                            self.mt5.modify_sl_tp(pos.ticket, tp=tp3)
-                            log.info(f"[{symbol}] TP updated to TP3: {tp3}")
-                    else:
-                        log.error(f"[{symbol}] Partial close failed: {result.error}")
-            
-            elif tp3_hit and partial_state == 2:
-                log.info(f"[{symbol}] TP3 HIT! Closing remainder of position")
-                result = self.mt5.close_position(pos.ticket)
+                log.info(f"[{broker_symbol}] TP1 HIT at {current_r:.2f}R! Closing {close_pct*100:.0f}%")
+                
+                result = self.mt5.partial_close(pos.ticket, close_volume)
                 if result.success:
-                    log.info(f"[{symbol}] Position fully closed at {result.price}")
-                    setup.status = "closed"
-                    setup.partial_closes = 3
+                    log.info(f"[{broker_symbol}] ✅ Partial close at {result.price}")
+                    setup.partial_closes = 1
+                    setup.tp1_hit = True
+                    
+                    # Move SL to breakeven + buffer
+                    be_buffer = risk * 0.1  # 10% of risk as buffer
+                    if setup.direction == "bullish":
+                        new_sl = entry + be_buffer
+                    else:
+                        new_sl = entry - be_buffer
+                    
+                    self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
+                    log.info(f"[{broker_symbol}] SL moved to BE+buffer: {new_sl:.5f}")
+                    
                     self._save_pending_setups()
                 else:
-                    log.error(f"[{symbol}] Failed to close position: {result.error}")
+                    log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
+            
+            # ═══════════════════════════════════════════════════════════════
+            # TP2 HIT - Close 10% (tp2_close_pct)
+            # ═══════════════════════════════════════════════════════════════
+            elif current_r >= tp2_r and partial_state == 1:
+                close_pct = self.params.tp2_close_pct  # 0.10
+                close_volume = max(0.01, round(original_volume * close_pct, 2))
+                close_volume = min(close_volume, current_volume)
+                
+                log.info(f"[{broker_symbol}] TP2 HIT at {current_r:.2f}R! Closing {close_pct*100:.0f}%")
+                
+                result = self.mt5.partial_close(pos.ticket, close_volume)
+                if result.success:
+                    log.info(f"[{broker_symbol}] ✅ Partial close at {result.price}")
+                    setup.partial_closes = 2
+                    setup.tp2_hit = True
+                    
+                    # Trail SL to TP1 level
+                    if setup.direction == "bullish":
+                        new_sl = entry + (risk * tp1_r)
+                    else:
+                        new_sl = entry - (risk * tp1_r)
+                    
+                    self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
+                    log.info(f"[{broker_symbol}] SL trailed to TP1: {new_sl:.5f}")
+                    
+                    self._save_pending_setups()
+                else:
+                    log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
+            
+            # ═══════════════════════════════════════════════════════════════
+            # TP3 HIT - Close 15% (tp3_close_pct)
+            # ═══════════════════════════════════════════════════════════════
+            elif current_r >= tp3_r and partial_state == 2:
+                close_pct = self.params.tp3_close_pct  # 0.15
+                close_volume = max(0.01, round(original_volume * close_pct, 2))
+                close_volume = min(close_volume, current_volume)
+                
+                log.info(f"[{broker_symbol}] TP3 HIT at {current_r:.2f}R! Closing {close_pct*100:.0f}%")
+                
+                result = self.mt5.partial_close(pos.ticket, close_volume)
+                if result.success:
+                    log.info(f"[{broker_symbol}] ✅ Partial close at {result.price}")
+                    setup.partial_closes = 3
+                    setup.tp3_hit = True
+                    
+                    # Trail SL to TP2 level
+                    if setup.direction == "bullish":
+                        new_sl = entry + (risk * tp2_r)
+                    else:
+                        new_sl = entry - (risk * tp2_r)
+                    
+                    self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
+                    log.info(f"[{broker_symbol}] SL trailed to TP2: {new_sl:.5f}")
+                    
+                    self._save_pending_setups()
+                else:
+                    log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
+            
+            # ═══════════════════════════════════════════════════════════════
+            # TP4 HIT - Close 20% (tp4_close_pct)
+            # ═══════════════════════════════════════════════════════════════
+            elif current_r >= tp4_r and partial_state == 3:
+                close_pct = self.params.tp4_close_pct  # 0.20
+                close_volume = max(0.01, round(original_volume * close_pct, 2))
+                close_volume = min(close_volume, current_volume)
+                
+                log.info(f"[{broker_symbol}] TP4 HIT at {current_r:.2f}R! Closing {close_pct*100:.0f}%")
+                
+                result = self.mt5.partial_close(pos.ticket, close_volume)
+                if result.success:
+                    log.info(f"[{broker_symbol}] ✅ Partial close at {result.price}")
+                    setup.partial_closes = 4
+                    setup.tp4_hit = True if hasattr(setup, 'tp4_hit') else None
+                    
+                    # Trail SL to TP3 level
+                    if setup.direction == "bullish":
+                        new_sl = entry + (risk * tp3_r)
+                    else:
+                        new_sl = entry - (risk * tp3_r)
+                    
+                    self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
+                    log.info(f"[{broker_symbol}] SL trailed to TP3: {new_sl:.5f}")
+                    
+                    self._save_pending_setups()
+                else:
+                    log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
+            
+            # ═══════════════════════════════════════════════════════════════
+            # TP5 HIT - Close remaining 45% (tp5_close_pct) - ALL REMAINING
+            # ═══════════════════════════════════════════════════════════════
+            elif current_r >= tp5_r and partial_state == 4:
+                log.info(f"[{broker_symbol}] TP5 HIT at {current_r:.2f}R! Closing ALL remaining")
+                
+                result = self.mt5.close_position(pos.ticket)
+                if result.success:
+                    log.info(f"[{broker_symbol}] ✅ Position FULLY CLOSED at {result.price}")
+                    setup.partial_closes = 5
+                    setup.tp5_hit = True if hasattr(setup, 'tp5_hit') else None
+                    setup.status = "closed"
+                    
+                    # Calculate total R for this trade
+                    total_r = (tp1_r * self.params.tp1_close_pct +
+                              tp2_r * self.params.tp2_close_pct +
+                              tp3_r * self.params.tp3_close_pct +
+                              tp4_r * self.params.tp4_close_pct +
+                              tp5_r * self.params.tp5_close_pct)
+                    log.info(f"[{broker_symbol}] Total R: ~{total_r:.2f}R (perfect 5-TP exit)")
+                    
+                    self._save_pending_setups()
+                else:
+                    log.error(f"[{broker_symbol}] Failed to close position: {result.error}")
     
     def execute_protection_actions(self) -> bool:
         """
@@ -1738,41 +2360,43 @@ class LiveTradingBot:
     
     def run(self):
         """
-        Main trading loop - runs 24/7.
+        Main trading loop - runs 24/7 for 5ers 60K High Stakes Challenge.
         
-        Schedule:
-        - Every 30 seconds: execute_protection_actions() (challenge mode) or monitor_live_pnl()
-        - Every 30 seconds: manage_partial_takes() for partial TP management
-        - Every minute: check_pending_orders() and check_position_updates()
-        - Every 15 min: validate_all_setups() to ensure pending orders are still valid
-        - Every 4 hours: scan_all_symbols() for new setups
+        5ERS-SPECIFIC FEATURES:
+        - First run: Immediate scan after restart/weekend (if --first-run or flag missing)
+        - Scheduled scan: 10 min after daily close (00:10 server time)
+        - Weekend gap protection: Check positions on Monday morning
+        - Spread queue: Retry trades when spread improves
+        - 5-TP partial close system: 10/10/15/20/45% at 0.6R/1.2R/2.0R/2.5R/3.5R
+        - DD monitoring: Total DD only (5ers has NO daily DD limit!)
         
-        CHALLENGE MODE ELITE PROTECTION:
-        - Global Risk Controller: Real-time P/L tracking every 30s via execute_protection_actions()
-        - Smart Position Sizing: 0.75% risk per trade, adaptive to DD
-        - Concurrent Trade Limit: Max 5 positions, auto-cancel excess pending
-        - Partial Takes: 45% TP1, 30% TP2, 25% TP3 with BE+buffer (via get_partial_close_volumes)
-        - Emergency Close: 4.5% daily loss or 8% total DD triggers halt
-        - Risk Modes: Aggressive/Normal/Conservative/Ultra-Safe based on DD
-        - Action Types: CLOSE_ALL, CANCEL_PENDING, MOVE_SL_BREAKEVEN, CLOSE_WORST, HALT_TRADING
+        SCHEDULE:
+        - Every 10 seconds: Protection checks, 5-TP management
+        - Every 10 minutes: Spread queue check, validate setups
+        - 00:10 server time: Daily market scan
+        - Monday 00:00-02:00: Weekend gap protection
         """
         log.info("=" * 70)
-        log.info("TRADR BOT - LIVE TRADING (FTMO COMPLIANT)")
-        if CHALLENGE_MODE:
-            log.info("*** CHALLENGE MODE: ELITE PROTECTION ENABLED ***")
+        log.info("TRADR BOT - 5ERS 60K HIGH STAKES CHALLENGE")
         log.info("=" * 70)
-        log.info(f"Using SAME strategy as backtests (strategy_core.py)")
-        log.info(f"FTMO Risk Limits:")
-        log.info(f"  - Max single trade risk: 0.75% (Challenge Mode)")
-        log.info(f"  - Max cumulative risk: {FIVEERS_CONFIG.max_cumulative_risk_pct}%")
-        log.info(f"  - Emergency close at: 4.5% daily loss / 8% drawdown")
-        log.info(f"  - Partial TPs: 45% TP1, 30% TP2, 25% TP3 (Challenge Mode)")
+        log.info(f"KRITIEKE 5ERS REGELS:")
+        log.info(f"  - Account: ${ACCOUNT_SIZE:,.0f}")
+        log.info(f"  - Total DD: 10% = ${ACCOUNT_SIZE * 0.10:,.0f} (stop-out: ${ACCOUNT_SIZE * 0.90:,.0f})")
+        log.info(f"  - Daily DD: ❌ GEEN LIMIET (unlike FTMO!)")
+        log.info(f"  - Step 1: 8% profit = ${ACCOUNT_SIZE * 0.08:,.0f}")
+        log.info(f"  - Step 2: 5% profit = ${ACCOUNT_SIZE * 0.05:,.0f}")
+        log.info(f"  - Min Trading Days: 3")
+        log.info("=" * 70)
+        log.info(f"5-TP EXIT SYSTEM:")
+        log.info(f"  - TP1: {self.params.atr_tp1_multiplier}R -> {self.params.tp1_close_pct*100:.0f}%")
+        log.info(f"  - TP2: {self.params.atr_tp2_multiplier}R -> {self.params.tp2_close_pct*100:.0f}%")
+        log.info(f"  - TP3: {self.params.atr_tp3_multiplier}R -> {self.params.tp3_close_pct*100:.0f}%")
+        log.info(f"  - TP4: {self.params.atr_tp4_multiplier}R -> {self.params.tp4_close_pct*100:.0f}%")
+        log.info(f"  - TP5: {self.params.atr_tp5_multiplier}R -> {self.params.tp5_close_pct*100:.0f}%")
+        log.info("=" * 70)
         log.info(f"Server: {MT5_SERVER}")
         log.info(f"Login: {MT5_LOGIN}")
-        log.info(f"Scan Interval: {SCAN_INTERVAL_HOURS} hours")
-        log.info(f"Validate Interval: {self.VALIDATE_INTERVAL_MINUTES} minutes")
-        log.info(f"P/L Monitor Interval: {self.MAIN_LOOP_INTERVAL_SECONDS} seconds (elite protection)")
-        log.info(f"Strategy Mode: {SIGNAL_MODE}")
+        log.info(f"Demo: {'YES ⚠️' if IS_DEMO else 'NO (LIVE)'}")
         log.info(f"Min Confluence: {MIN_CONFLUENCE}/7")
         log.info(f"Symbols: {len(TRADABLE_SYMBOLS)}")
         log.info("=" * 70)
@@ -1786,8 +2410,25 @@ class LiveTradingBot:
         
         global running
         
-        self.scan_all_symbols()
+        # ═══════════════════════════════════════════════════════════════════
+        # FIRST RUN CHECK - Immediate scan if needed
+        # ═══════════════════════════════════════════════════════════════════
+        if self.should_do_immediate_scan():
+            log.info("=" * 70)
+            log.info("🚀 IMMEDIATE SCAN - First run after restart/weekend")
+            log.info("=" * 70)
+            self.scan_all_symbols()
+            self._mark_first_run_complete()
+        else:
+            next_scan = get_next_scan_time()
+            log.info(f"Skipping immediate scan - next scheduled: {next_scan.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+            self.last_scan_time = datetime.now(timezone.utc)
+        
+        # Weekend gap check (only on Monday morning)
+        self.handle_weekend_gap_positions()
+        
         self.last_validate_time = datetime.now(timezone.utc)
+        self.last_spread_check_time = datetime.now(timezone.utc)
         last_protection_check = datetime.now(timezone.utc)
         emergency_triggered = False
         
@@ -1795,6 +2436,15 @@ class LiveTradingBot:
             try:
                 now = datetime.now(timezone.utc)
                 
+                # ═══════════════════════════════════════════════════════════════
+                # 5ERS DD MONITORING (no daily DD limit!)
+                # ═══════════════════════════════════════════════════════════════
+                if self.monitor_5ers_drawdown():
+                    emergency_triggered = True
+                    log.error("5ERS STOP-OUT TRIGGERED - halting all trading")
+                    continue
+                
+                # Emergency halt check
                 if CHALLENGE_MODE and self.challenge_manager and self.challenge_manager.halted:
                     if not emergency_triggered:
                         emergency_triggered = True
@@ -1803,6 +2453,7 @@ class LiveTradingBot:
                 if not emergency_triggered:
                     time_since_protection_check = (now - last_protection_check).total_seconds()
                     if time_since_protection_check >= self.MAIN_LOOP_INTERVAL_SECONDS:
+                        # Protection checks
                         if CHALLENGE_MODE and self.challenge_manager:
                             if self.execute_protection_actions():
                                 emergency_triggered = True
@@ -1814,6 +2465,7 @@ class LiveTradingBot:
                                 log.error("Emergency close triggered - halting all trading")
                                 continue
                         
+                        # 5-TP partial close management
                         self.manage_partial_takes()
                         last_protection_check = now
                 
@@ -1821,19 +2473,41 @@ class LiveTradingBot:
                     time.sleep(60)
                     continue
                 
+                # ═══════════════════════════════════════════════════════════════
+                # SPREAD QUEUE CHECK - Every SPREAD_CHECK_INTERVAL_MINUTES
+                # ═══════════════════════════════════════════════════════════════
+                if self.last_spread_check_time:
+                    time_since_spread = (now - self.last_spread_check_time).total_seconds() / 60
+                    if time_since_spread >= self.SPREAD_CHECK_INTERVAL_MINUTES:
+                        self.check_awaiting_spread_signals()
+                        self.last_spread_check_time = now
+                
+                # Pending orders and position updates
                 self.check_pending_orders()
                 self.check_position_updates()
                 
+                # Validate setups
                 if self.last_validate_time:
                     next_validate = self.last_validate_time + timedelta(minutes=self.VALIDATE_INTERVAL_MINUTES)
                     if now >= next_validate:
                         self.validate_all_setups()
                 
-                if self.last_scan_time:
-                    next_scan = self.last_scan_time + timedelta(hours=SCAN_INTERVAL_HOURS)
-                    if now >= next_scan:
+                # ═══════════════════════════════════════════════════════════════
+                # DAILY SCAN - 10 min after daily close (00:10 server time)
+                # ═══════════════════════════════════════════════════════════════
+                next_scan = get_next_scan_time()
+                if self.last_scan_time and now >= next_scan:
+                    if is_market_open():
+                        log.info("=" * 70)
+                        log.info(f"📊 DAILY SCAN - {get_server_time().strftime('%Y-%m-%d %H:%M')} Server Time")
+                        log.info("=" * 70)
                         self.scan_all_symbols()
+                    else:
+                        log.info("Market closed (weekend), skipping scan")
+                        # Move last_scan_time forward to avoid repeated checks
+                        self.last_scan_time = now
                 
+                # Reconnection handling
                 if not self.mt5.connected:
                     log.warning("MT5 connection lost, attempting reconnect...")
                     if self.connect():
@@ -1856,12 +2530,24 @@ class LiveTradingBot:
         log.info("Shutting down...")
         
         self._save_pending_setups()
+        self._save_awaiting_spread()
         self.disconnect()
         log.info("Bot stopped")
 
 
 def main():
-    """Entry point."""
+    """Entry point with command line arguments."""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Tradr Bot - 5ers 60K High Stakes Challenge')
+    parser.add_argument('--demo', action='store_true', help='Force demo mode')
+    parser.add_argument('--dry-run', action='store_true', help='Run without executing trades')
+    parser.add_argument('--validate-symbols', action='store_true', help='Validate symbol mapping only')
+    parser.add_argument('--first-run', action='store_true', 
+                        help='Force immediate market scan (use after weekend/restart)')
+    
+    args = parser.parse_args()
+    
     Path("logs").mkdir(exist_ok=True)
     
     if not MT5_LOGIN or not MT5_PASSWORD:
@@ -1872,16 +2558,14 @@ def main():
         print("ERROR: MT5 credentials not configured!")
         print("")
         print("Create a .env file with:")
+        print("  BROKER_TYPE=forexcom_demo or fiveers_live")
         print("  MT5_SERVER=YourBrokerServer")
         print("  MT5_LOGIN=12345678")
         print("  MT5_PASSWORD=YourPassword")
         print("")
-        print("Optional Discord monitoring:")
-        print("  DISCORD_BOT_TOKEN=your_token")
-        print("")
         sys.exit(1)
     
-    bot = LiveTradingBot()
+    bot = LiveTradingBot(immediate_scan=args.first_run)
     bot.run()
 
 

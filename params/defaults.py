@@ -61,18 +61,18 @@ PARAMETER_DEFAULTS: Dict[str, Any] = {
     'atr_tp1_multiplier': 0.6,        # ATR multiplier for TP1
     'atr_tp2_multiplier': 1.2,        # ATR multiplier for TP2
     'atr_tp3_multiplier': 2.0,        # ATR multiplier for TP3
-    'atr_tp4_multiplier': 3.0,        # ATR multiplier for TP4
-    'atr_tp5_multiplier': 4.0,        # ATR multiplier for TP5
+    'atr_tp4_multiplier': 2.5,        # ATR multiplier for TP4
+    'atr_tp5_multiplier': 3.5,        # ATR multiplier for TP5
     
     # ═══════════════════════════════════════════════════════════════════════════
-    # TAKE PROFIT POSITION SIZING
+    # TAKE PROFIT POSITION SIZING (5-TP SYSTEM - MUST SUM TO 100%!)
     # These define WHAT PERCENTAGE of position closes at each TP level
     # ═══════════════════════════════════════════════════════════════════════════
-    'tp1_close_pct': 0.34,            # Close 34% at TP1
-    'tp2_close_pct': 0.16,            # Close 16% at TP2
-    'tp3_close_pct': 0.35,            # Close 35% at TP3
-    'tp4_close_pct': 0.20,            # Close 20% at TP4 (legacy)
-    'tp5_close_pct': 0.45,            # Close 45% at TP5 (legacy)
+    'tp1_close_pct': 0.10,            # Close 10% at TP1 (0.6R)
+    'tp2_close_pct': 0.10,            # Close 10% at TP2 (1.2R)
+    'tp3_close_pct': 0.15,            # Close 15% at TP3 (2.0R)
+    'tp4_close_pct': 0.20,            # Close 20% at TP4 (2.5R)
+    'tp5_close_pct': 0.45,            # Close 45% at TP5 (3.5R) - ALL remaining
     
     # ═══════════════════════════════════════════════════════════════════════════
     # PARTIAL EXIT & TRAILING STOP
