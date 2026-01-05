@@ -374,7 +374,7 @@ class LiveTradingBot:
     VALIDATE_INTERVAL_MINUTES = 10
     MAIN_LOOP_INTERVAL_SECONDS = 10
     SPREAD_CHECK_INTERVAL_MINUTES = 10
-    MAX_SPREAD_WAIT_HOURS = 12
+    MAX_SPREAD_WAIT_HOURS = 120  # 5 days - matches backtest max_wait_bars=5
     WEEKEND_GAP_THRESHOLD_PCT = 1.0  # 1% gap threshold
     
     def __init__(self, immediate_scan: bool = False):
