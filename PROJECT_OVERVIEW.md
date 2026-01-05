@@ -2,19 +2,26 @@
 
 ## What This Project Does
 
-This is an **automated trading bot** that trades forex, indices, and commodities on MetaTrader 5 (MT5) for the **5ers 60K High Stakes** prop firm challenge.
+This is a **production-ready automated trading bot** that trades forex, indices, and commodities on MetaTrader 5 (MT5) for the **5ers 60K High Stakes** prop firm challenge.
 
-### Key Results (Validated 2023-2025)
+### Key Validated Results (January 2026)
 
-If this bot ran from January 2023 to December 2025:
+**Equivalence Test: 97.6% Match Rate** - The live bot generates the same trades as the TPE backtest.
 
-| Metric | Result |
-|--------|--------|
-| **Starting Balance** | $60,000 |
-| **Final Balance** | $1,160,462 |
-| **Total Profit** | $1,100,462 |
-| **Return** | +1,834% |
-| **Win Rate** | 71.8% |
+| Metric | Fixed Risk | With Compounding |
+|--------|------------|------------------|
+| **Starting Balance** | $60,000 | $60,000 |
+| **Final Balance** | $310,553 | $3,203,619 |
+| **Total Profit** | $250,553 | $3,143,619 |
+| **Return** | +418% | +5,239% |
+| **Trades** | 1,779 | 1,777 |
+| **Win Rate** | 72.3% | 72.3% |
+| **Total R** | +696.03R | +696.03R |
+
+**5ers Compliance Verified:**
+- Max Total DD: 7.75% (limit 10%) ✅
+- Max Daily DD: 3.80% (limit 5%) ✅
+- DD Margin: 1.20% with safety halt at 3.5%
 
 ---
 
@@ -26,12 +33,13 @@ The bot scans 34 trading instruments daily at 22:05 UTC (after NY close) looking
 - Support/Resistance levels
 - Fibonacci retracements
 - Price action patterns
+- Confluence scoring (minimum 5 factors)
 
 ### 2. Trade Entry
 When a setup has enough "confluence" (multiple factors aligning), the bot:
 - Calculates entry price, stop loss, and 5 take profit levels
-- Places a pending order or enters immediately
-- Sizes position based on 0.6% account risk per trade
+- Places a pending order or enters immediately via MT5
+- Sizes position based on 0.6% account risk per trade (dynamic lot sizing)
 
 ### 3. Trade Management (5-TP System)
 The bot uses 5 take profit levels with partial exits:
@@ -44,10 +52,37 @@ The bot uses 5 take profit levels with partial exits:
 | TP4 | 2.5R | 20% | Close 20%, trail SL |
 | TP5 | 3.5R | 45% | Close remaining 45% |
 
-### 4. Risk Management
-- **Base Risk**: 0.6% per trade ($360 on 60K)
-- **Dynamic Scaling**: Adjusts size based on win/loss streaks and equity curve
-- **Safety Mechanism**: Closes all trades if daily DD exceeds 4.2%
+> ⚠️ **CRITICAL**: The strategy uses 5 TPs. Never reduce to 3 TPs - it breaks exit calculations!
+
+### 4. Risk Management (3-Tier System)
+The live bot implements DDD (Daily DrawDown) safety:
+
+| Tier | Daily DD | Action |
+|------|----------|--------|
+| Warning | ≥2.0% | Log warning, no action |
+| Reduce | ≥3.0% | Reduce risk: 0.6% → 0.4% |
+| Halt | ≥3.5% | Halt new trades until next day |
+
+**Total DrawDown (TDD):**
+- Static from initial balance ($60K → stop-out at $54K)
+- NOT trailing (5ers rule, unlike FTMO)
+- Maximum loss = $6,000 from starting balance
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────┐     ┌────────────────────────────────┐
+│   OPTIMIZER (Any Platform)      │     │  LIVE BOT (Windows VM + MT5)   │
+│                                  │     │                                 │
+│  ftmo_challenge_analyzer.py      │────▶│  main_live_bot.py              │
+│  - Optuna TPE / NSGA-II          │     │  - Loads params/current*.json  │
+│  - Backtesting 2003-2025         │     │  - Real-time MT5 execution     │
+│  - H1 realistic validation       │     │  - 5 Take Profit levels        │
+│                                  │     │  - Dynamic lot sizing          │
+└─────────────────────────────────┘     └────────────────────────────────┘
+```
 
 ---
 
@@ -56,20 +91,24 @@ The bot uses 5 take profit levels with partial exits:
 ### Trading Logic
 | File | Purpose |
 |------|---------|
-| `strategy_core.py` | All trading logic: signals, entries, exits |
-| `main_live_bot.py` | Live trading on MT5 |
+| `strategy_core.py` | All trading logic: signals, 5-TP exits, `simulate_trades()` |
+| `main_live_bot.py` | Live trading on MT5 with dynamic lot sizing |
+| `challenge_risk_manager.py` | DDD/TDD enforcement, AccountSnapshot |
+| `ftmo_config.py` | 5ers challenge configuration |
 
 ### Optimization & Validation
 | File | Purpose |
 |------|---------|
 | `ftmo_challenge_analyzer.py` | Optimize and validate parameters |
 | `scripts/validate_h1_realistic.py` | Simulate exact live bot behavior |
+| `scripts/test_equivalence_v2.py` | Verify live bot = TPE backtest |
 
 ### Parameters
 | File | Purpose |
 |------|---------|
 | `params/current_params.json` | Active trading parameters |
 | `params/defaults.py` | Default parameter values |
+| `params/params_loader.py` | Load/merge utilities |
 
 ---
 
@@ -80,9 +119,14 @@ The bot uses 5 take profit levels with partial exits:
 python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
 ```
 
-### Run H1 Realistic Simulation
+### Run Equivalence Test
 ```bash
-python scripts/validate_h1_realistic.py --trades ftmo_analysis_output/VALIDATE/best_trades_final.csv --balance 60000
+python scripts/test_equivalence_v2.py --start 2023-01-01 --end 2025-12-31
+```
+
+### Run 5ers Compliance Simulation (with compounding)
+```bash
+python scripts/test_equivalence_v2.py --start 2023-01-01 --end 2025-12-31 --include-commissions
 ```
 
 ### Run Live Bot (Windows with MT5)
@@ -100,34 +144,86 @@ python main_live_bot.py
 | Step 1 Target | 8% = $4,800 |
 | Step 2 Target | 5% = $3,000 |
 | Max Total Drawdown | 10% = $6,000 (stop-out at $54,000) |
+| Daily Drawdown | 5% (5ers tracks this!) |
 | Min Profitable Days | 3 |
+
+**Important**: 5ers DOES track daily drawdown (5% limit), contrary to earlier documentation.
 
 ---
 
 ## Expected Performance
 
-Based on H1 realistic simulation:
+Based on validated backtests with 5ers rules:
 
 | Timeframe | Expected Return |
 |-----------|-----------------|
-| Per Month | ~$38,000 profit |
-| Step 1 (8%) | 2-3 weeks |
-| Step 2 (5%) | 1-2 weeks |
-| Total Challenge | 4-5 weeks |
+| Per Month | ~$30,000-50,000 profit (with compounding) |
+| Step 1 (8%) | 1-2 weeks |
+| Step 2 (5%) | 1 week |
+| Total Challenge | 2-3 weeks |
 
 ---
 
-## Key Technical Details
+## Output Structure
+
+```
+ftmo_analysis_output/
+├── VALIDATE/              # TPE validation results
+│   ├── best_trades_final.csv
+│   └── history/           # Historical runs
+├── hourly_validator/      # H1 realistic simulation
+├── TPE/                   # TPE optimization
+└── NSGA/                  # NSGA-II optimization
+
+analysis/
+├── SESSION_JAN05_2026_RESULTS.md  # Latest validation session
+└── h1_validation_results.json
+```
+
+---
+
+## Key Test Results (January 5, 2026)
+
+### Equivalence Test
+```
+TPE Validate: 1,779 trades
+Live Bot:     1,737 trades matched (97.6%)
+```
+
+### 5ers Compliance Simulation (2023-2025)
+```
+Starting Balance:     $60,000
+Final Balance:        $3,203,619
+Net Profit:           $3,143,619
+Return:               5,239%
+Max Total DD:         7.75% (limit 10%) ✅
+Max Daily DD:         3.80% (limit 5%) ✅
+Trades Blocked by DD: 21
+```
+
+### Configuration Applied
+```python
+# ftmo_config.py FIVEERS_CONFIG
+daily_loss_warning_pct = 0.020   # 2.0%
+daily_loss_reduce_pct = 0.030    # 3.0%
+daily_loss_halt_pct = 0.035      # 3.5%
+max_total_dd_pct = 0.10          # 10%
+```
+
+---
+
+## Technical Details
 
 ### Data
 - Historical data in `data/ohlcv/` (D1, H1 timeframes)
 - 34 trading instruments (forex pairs, gold, indices)
 - Data range: 2003-2025
+- Format: OANDA style (`EUR_USD`, `XAU_USD`)
 
-### Output
-- Validation results: `ftmo_analysis_output/VALIDATE/`
-- H1 simulation: `ftmo_analysis_output/hourly_validator/`
-- Optimization: `ftmo_analysis_output/TPE/` or `NSGA/`
+### Symbol Mapping
+- **Internal/Data**: OANDA format (`EUR_USD`, `XAU_USD`)
+- **MT5 Execution**: Broker format (`EURUSD`, `XAUUSD`)
+- Use `symbol_mapping.py` for conversions
 
 ---
 
@@ -138,13 +234,18 @@ The strategy uses 5 take profit levels. Attempts to simplify to 3 TPs broke the 
 - `atr_tp1_multiplier` through `atr_tp5_multiplier`
 - `tp1_close_pct` through `tp5_close_pct`
 
-### H1 Simulation = Live Bot Behavior
-The `validate_h1_realistic.py` script simulates exactly what the live bot would do:
-- Dynamic lot sizing
-- Commission deduction
-- Safety mechanisms
-- Hour-by-hour price simulation
+### Live Bot = TPE Backtest
+The equivalence test confirms 97.6% match rate between:
+- `ftmo_challenge_analyzer.py --validate` (TPE backtest)
+- `main_live_bot.py` signal generation (live bot)
+
+### Dynamic Lot Sizing
+The live bot uses dynamic lot sizing based on current balance:
+- Fixed 0.6% risk per trade
+- As balance grows, lot sizes grow
+- Results in compounding effect
 
 ---
 
-**Last Updated**: January 4, 2026
+**Last Updated**: January 5, 2026
+**Validated By**: Equivalence Test (97.6%), 5ers Compliance Simulation

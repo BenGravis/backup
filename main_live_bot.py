@@ -1522,11 +1522,13 @@ class LiveTradingBot:
             log.info(f"  Stop pips: {risk_pips:.1f}")
             log.info(f"  Lot size: {lot_size}")
             
-            simulated_risk = snapshot.total_risk_usd + risk_usd
+            # Get total risk from snapshot with fallback to 0
+            current_total_risk_usd = getattr(snapshot, 'total_risk_usd', 0.0)
+            simulated_risk = current_total_risk_usd + risk_usd
             simulated_risk_pct = (simulated_risk / snapshot.balance) * 100
             
             if simulated_risk_pct > FIVEERS_CONFIG.max_cumulative_risk_pct:
-                available_risk = (FIVEERS_CONFIG.max_cumulative_risk_pct / 100 * snapshot.balance) - snapshot.total_risk_usd
+                available_risk = (FIVEERS_CONFIG.max_cumulative_risk_pct / 100 * snapshot.balance) - current_total_risk_usd
                 if available_risk <= 0:
                     log.warning(f"[{symbol}] No risk budget available")
                     return False

@@ -42,6 +42,9 @@ class AccountSnapshot:
     daily_pnl: float
     daily_loss_pct: float
     total_dd_pct: float
+    total_risk_usd: float = 0.0  # Total risk of open positions in USD
+    total_risk_pct: float = 0.0  # Total risk as percentage of balance
+    open_positions: int = 0      # Number of open positions
 
 
 @dataclass
@@ -340,13 +343,52 @@ class ChallengeRiskManager:
     
     def get_account_snapshot(self):
         """Get current account snapshot."""
+        # Calculate open positions and total risk
+        open_positions = 0
+        total_risk_usd = 0.0
+        
+        if self.mt5:
+            try:
+                positions = self.mt5.get_my_positions()
+                open_positions = len(positions) if positions else 0
+                
+                # Calculate total risk from open positions
+                for pos in (positions or []):
+                    # Risk = |entry - SL| * lot_size * point_value
+                    # Simplified: use the original risk amount if available
+                    # Otherwise estimate based on current profit/loss
+                    sl = pos.get('sl', 0)
+                    entry = pos.get('price_open', pos.get('open_price', 0))
+                    volume = pos.get('volume', pos.get('lots', 0))
+                    
+                    if sl and entry and volume:
+                        # Estimate pip value (simplified)
+                        symbol = pos.get('symbol', '')
+                        if 'JPY' in symbol:
+                            pip_value = volume * 1000  # Rough estimate for JPY pairs
+                        elif 'XAU' in symbol:
+                            pip_value = volume * 100   # Gold
+                        else:
+                            pip_value = volume * 10    # Standard forex
+                        
+                        risk_pips = abs(entry - sl) * 10000 if 'JPY' not in symbol else abs(entry - sl) * 100
+                        position_risk = risk_pips * pip_value / 10000
+                        total_risk_usd += position_risk
+            except Exception as e:
+                log.warning(f"Could not calculate position risk: {e}")
+        
+        total_risk_pct = (total_risk_usd / self.current_balance * 100) if self.current_balance > 0 else 0
+        
         return AccountSnapshot(
             balance=self.current_balance,
             equity=self.current_equity,
             peak_equity=self.peak_equity,
             daily_pnl=self.daily_pnl,
             daily_loss_pct=self.daily_loss_pct,
-            total_dd_pct=self.total_drawdown_pct
+            total_dd_pct=self.total_drawdown_pct,
+            total_risk_usd=total_risk_usd,
+            total_risk_pct=total_risk_pct,
+            open_positions=open_positions
         )
     
     @property

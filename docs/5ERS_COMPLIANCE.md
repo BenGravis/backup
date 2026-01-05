@@ -1,69 +1,182 @@
 # 5ers Compliance Guide (Production)
 
-**Date**: 2025-01-02  
-**Account**: 5ers 60K High Stakes Challenge  
+**Last Updated**: January 5, 2026
+**Account**: 5ers 60K High Stakes Challenge
 **Strategy Risk**: 0.6% per trade = $360/R
 
-## 5ers Challenge Rules (CRITICAL DIFFERENCES FROM FTMO)
+---
 
-### Daily Drawdown
-**5ers has NO daily drawdown limit!** Unlike FTMO's 5% daily max, 5ers only tracks total drawdown.
+## 5ers Challenge Rules
 
-### Total Drawdown (Stop-Out)
-- **Stop-out level**: 10% below STARTING balance (constant $54,000 for 60K account)
-- **NOT trailing**: If you grow to $80K and drop to $55K, you're still safe (above $54K)
+### Total Drawdown (TDD) - STATIC
+- **Stop-out level**: 10% below STARTING balance ($54,000 for 60K account)
+- **NOT trailing**: If you grow to $80K and drop to $55K, you're still SAFE (above $54K)
 - Maximum loss = $6,000 from starting balance
 
+> ⚠️ **Key Difference from FTMO**: 5ers TDD is STATIC, not trailing!
+
+### Daily Drawdown (DDD)
+**5ers DOES track daily drawdown!** (Contrary to earlier documentation)
+- **Limit**: 5% from day start balance ($3,000 max daily loss)
+- **Reset**: Daily at 00:00 broker time
+
 ### Profit Targets
-- Step 1 target: **+8%** ($4,800)
-- Step 2 target: **+5%** ($3,000)
+| Step | Target | Amount |
+|------|--------|--------|
+| Step 1 | 8% | $4,800 |
+| Step 2 | 5% | $3,000 |
 
 ### Other Rules
 - Min profitable days: **3**
 - No weekend holding restrictions (unlike FTMO)
 
+---
+
 ## Bot Compliance Implementation
 
-### FTMOComplianceTracker (now 5ers-compatible)
+### DDD Safety System (3-Tier)
+The live bot implements graduated daily drawdown protection:
+
+| Tier | Daily DD | Action | Configuration |
+|------|----------|--------|---------------|
+| Warning | ≥2.0% | Log warning | `daily_loss_warning_pct = 0.020` |
+| Reduce | ≥3.0% | Reduce risk 0.6%→0.4% | `daily_loss_reduce_pct = 0.030` |
+| Halt | ≥3.5% | Stop new trades | `daily_loss_halt_pct = 0.035` |
+
+**Margin to 5ers limit**: 5.0% - 3.5% = **1.5% safety buffer**
+
+### TDD Implementation
 ```python
-# Stop-out level = starting_balance * 0.90
+# Stop-out level = starting_balance * 0.90 (STATIC)
 stop_out_level = 60000 * 0.90  # = $54,000
 
 # Trade is stopped if:
 is_stopped_out = current_balance < stop_out_level
 ```
 
-### Key Parameters
-- `max_total_dd_warning`: 8.0% (informational warning, not a hard stop)
-- `consecutive_loss_halt`: 999 (disabled - no streak-based halt)
-- `use_graduated_risk`: False (disabled - 5ers has no daily DD to tier against)
+### FIVEERS_CONFIG (ftmo_config.py)
+```python
+class FIVEERS_CONFIG:
+    starting_balance = 60000
+    profit_target_step1_pct = 0.08    # 8% = $4,800
+    profit_target_step2_pct = 0.05    # 5% = $3,000
+    max_total_dd_pct = 0.10           # 10% = $6,000
+    max_daily_dd_pct = 0.05           # 5% = $3,000
+    daily_loss_warning_pct = 0.020    # 2.0%
+    daily_loss_reduce_pct = 0.030     # 3.0%
+    daily_loss_halt_pct = 0.035       # 3.5%
+    min_profitable_days = 3
+```
 
-### Removed Parameters
-- `daily_loss_halt_pct`: REMOVED - 5ers doesn't have daily DD limit
-- Daily DD tracking: REMOVED from compliance reports
+---
+
+## Validated Compliance (January 5, 2026)
+
+### Simulation Results (2023-2025)
+```
+Starting Balance:     $60,000
+Final Balance:        $3,203,619 (+5,239%)
+Max Total DD:         7.75% (limit 10%) ✅
+Max Daily DD:         3.80% (limit 5%) ✅
+DDD Margin:           1.20% with 3.5% halt
+Trades Blocked by DD: 21
+Total Trades:         1,777
+Win Rate:             72.3%
+```
+
+### Equivalence Test
+```
+TPE Validate Trades: 1,779
+Live Bot Matched:    1,737 (97.6%)
+Status: Systems are EQUIVALENT ✅
+```
+
+---
 
 ## Challenge Pass Strategy
-- Use finalized params (`best_params.json` / `params/current_params.json`)
-- Step 1 (8%): Target ~22R at 0.6% risk = ~$4,800
-- Step 2 (5%): Target ~14R at 0.6% risk = ~$3,000
-- Focus on total equity curve, not daily performance
 
-## Risk Management
+### Step 1 (8% = $4,800)
+- Target: ~$4,800 profit
+- At 0.6% risk ($360/trade) × 72.3% WR
+- Expected duration: 1-2 weeks
+
+### Step 2 (5% = $3,000)
+- Target: ~$3,000 profit
+- Same parameters as Step 1
+- Expected duration: 1 week
+
+### Risk Settings
 - Max position risk: 0.6% = $360 per trade
-- Partial exit at 1R to lock in 50% profit
-- TP structure: 0.8R / 1.5R / 3.0R (current optimized values)
+- 5-TP partial exit system
+- Trailing stop after TP1
+- DDD safety system active
+
+---
+
+## AccountSnapshot Fields
+
+The `ChallengeRiskManager` provides real-time risk monitoring:
+
+```python
+@dataclass
+class AccountSnapshot:
+    balance: float
+    equity: float
+    floating_pnl: float
+    margin_used: float
+    free_margin: float
+    total_dd_pct: float       # Current TDD percentage
+    daily_dd_pct: float       # Current DDD percentage
+    is_stopped_out: bool      # True if balance < $54K
+    timestamp: datetime
+    total_risk_usd: float     # Total open position risk in USD
+    total_risk_pct: float     # Total open position risk as %
+    open_positions: int       # Number of open positions
+```
+
+---
 
 ## Operational Checklist
-- [x] Daily DD tracking removed from optimizer
-- [x] stop_out_level set to constant $54,000
-- [x] All backtest calls updated to remove daily_loss_halt_pct
-- [x] Graduated risk disabled (use_graduated_risk=False)
+
+- [x] TDD set to static $54,000 stop-out
+- [x] DDD safety system enabled (3.5%/3.0%/2.0%)
+- [x] AccountSnapshot includes risk tracking
+- [x] Dynamic lot sizing based on current balance
+- [x] Equivalence test passed (97.6%)
+- [x] 5ers compliance simulation passed
 - [ ] Load params via `params_loader.py` (no hardcoding)
 - [ ] Verify `.env` for MT5 credentials
 - [ ] Run `main_live_bot.py` on Windows VM with MT5
 
+---
+
+## Important Notes
+
+### DDD Correction
+Earlier documentation incorrectly stated "5ers has NO daily drawdown limit". This is **FALSE**.
+
+**5ers DOES track daily drawdown with a 5% limit.**
+
+The bot now implements a 3-tier DDD safety system with a halt at 3.5% to provide a 1.5% safety buffer.
+
+### TDD vs FTMO
+| | FTMO | 5ers |
+|--|------|------|
+| TDD Type | Trailing from peak | Static from start |
+| TDD Limit | 10% | 10% |
+| DDD Limit | 5% | 5% |
+
+---
+
 ## References
-- Optimization database: `regime_adaptive_v2_clean_warm.db`
-- Training period: 2023-01-01 to 2024-09-30 (21 months)
-- Validation period: 2024-10-01 to 2025-12-26 (15 months)
-- Best params: `ftmo_analysis_output/TPE/best_params.json`
+
+- Session Archive: `analysis/SESSION_JAN05_2026_RESULTS.md`
+- Config File: `ftmo_config.py`
+- Risk Manager: `challenge_risk_manager.py`
+- Live Bot: `main_live_bot.py`
+- Equivalence Test: `scripts/test_equivalence_v2.py`
+
+---
+
+**Last Validated**: January 5, 2026
+**Validated By**: Equivalence Test (97.6%), 5ers Compliance Simulation

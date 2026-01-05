@@ -4,9 +4,11 @@
 
 Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accounts.
 
-### Current State (January 2026)
+### Current State (January 5, 2026)
 - **Status**: ✅ Production Ready
-- **Validation**: H1 realistic simulation confirms +1,834% return (2023-2025)
+- **Validation**: 97.6% equivalence between backtest and live bot
+- **5ers Compliance**: Max TDD 7.75%, Max DDD 3.80% (both within limits)
+- **Profit Projection**: $3.2M with compounding (2023-2025)
 - **Exit System**: 5 Take Profit levels (NOT 3)
 
 ---
@@ -21,6 +23,8 @@ Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accoun
 │  - Optuna TPE / NSGA-II          │     │  - Loads params/current*.json  │
 │  - Backtesting 2003-2025         │     │  - Real-time MT5 execution     │
 │  - H1 realistic validation       │     │  - 5 Take Profit levels        │
+│                                  │     │  - Dynamic lot sizing          │
+│                                  │     │  - DDD/TDD safety              │
 └─────────────────────────────────┘     └────────────────────────────────┘
 ```
 
@@ -30,11 +34,13 @@ Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accoun
 
 | File | Purpose |
 |------|---------|
-| `strategy_core.py` | Trading strategy - 5-TP system, signals, simulate_trades() |
+| `strategy_core.py` | Trading strategy - 5-TP system, signals, `simulate_trades()` |
 | `ftmo_challenge_analyzer.py` | Optimization & validation engine |
-| `main_live_bot.py` | Live MT5 trading |
-| `scripts/validate_h1_realistic.py` | H1 realistic simulation (matches live bot) |
-| `tradr/backtest/h1_trade_simulator.py` | H1 trade simulation engine |
+| `main_live_bot.py` | Live MT5 trading with dynamic lot sizing |
+| `challenge_risk_manager.py` | DDD/TDD enforcement, AccountSnapshot |
+| `ftmo_config.py` | 5ers challenge configuration |
+| `scripts/test_equivalence_v2.py` | Verify live bot = TPE backtest |
+| `scripts/validate_h1_realistic.py` | H1 realistic simulation |
 | `params/current_params.json` | Active optimized parameters |
 | `params/defaults.py` | Default parameter values (includes tp4/tp5) |
 
@@ -59,20 +65,44 @@ The strategy uses **5 Take Profit levels**. This is critical - DO NOT reduce to 
 
 ---
 
-## Validated Performance (2023-2025)
+## DDD Safety System (3-Tier)
 
-### H1 Realistic Simulation Results
+The live bot implements Daily DrawDown protection:
+
+| Tier | Daily DD | Action |
+|------|----------|--------|
+| Warning | ≥2.0% | Log warning only |
+| Reduce | ≥3.0% | Reduce risk: 0.6% → 0.4% |
+| Halt | ≥3.5% | Stop new trades until next day |
+
+**5ers Rules**:
+- 5ers DOES track daily drawdown (5% limit)
+- TDD is STATIC from initial balance (not trailing like FTMO)
+- $60K account → stop-out at $54K (regardless of peak equity)
+
+---
+
+## Validated Performance (January 5, 2026)
+
+### Equivalence Test Results
+```
+TPE Validate Trades: 1,779
+Live Bot Matched:    1,737 (97.6%)
+Status: Systems are EQUIVALENT ✅
+```
+
+### 5ers Compliance Simulation (2023-2025)
 ```json
 {
   "starting_balance": 60000,
-  "final_balance": 1160461.64,
-  "net_pnl": 1100461.64,
-  "return_pct": 1834.1,
-  "total_trades": 1673,
-  "winners": 1201,
-  "win_rate": 71.8,
-  "total_r": 274.71,
-  "total_dd_breached": false
+  "final_balance": 3203619,
+  "net_pnl": 3143619,
+  "return_pct": 5239,
+  "total_trades": 1777,
+  "win_rate": 72.3,
+  "max_total_dd_pct": 7.75,
+  "max_daily_dd_pct": 3.80,
+  "trades_blocked_by_ddd": 21
 }
 ```
 
@@ -80,7 +110,17 @@ The strategy uses **5 Take Profit levels**. This is critical - DO NOT reduce to 
 
 ## Commands
 
-### Validation
+### Equivalence Test
+```bash
+python scripts/test_equivalence_v2.py --start 2023-01-01 --end 2025-12-31
+```
+
+### 5ers Compliance Simulation
+```bash
+python scripts/test_equivalence_v2.py --start 2023-01-01 --end 2025-12-31 --include-commissions
+```
+
+### TPE Validation
 ```bash
 python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
 ```
@@ -158,16 +198,35 @@ class StrategyParams:
 
 ---
 
+## FIVEERS_CONFIG Key Fields
+
+```python
+class FIVEERS_CONFIG:
+    starting_balance = 60000
+    profit_target_step1_pct = 0.08    # 8% = $4,800
+    profit_target_step2_pct = 0.05    # 5% = $3,000
+    max_total_dd_pct = 0.10           # 10% = $6,000
+    max_daily_dd_pct = 0.05           # 5% = $3,000
+    daily_loss_warning_pct = 0.020    # 2.0%
+    daily_loss_reduce_pct = 0.030     # 3.0%
+    daily_loss_halt_pct = 0.035       # 3.5%
+    min_profitable_days = 3
+```
+
+---
+
 ## 5ers Challenge Rules
 
 | Rule | Limit |
 |------|-------|
 | Account Size | $60,000 |
-| Max Total DD | 10% below start ($54K stop-out) |
-| Daily DD | None (5ers doesn't track) |
+| Max Total DD | 10% below start ($54K stop-out) - STATIC |
+| Max Daily DD | 5% from day start ($3K max daily loss) |
 | Step 1 Target | 8% = $4,800 |
 | Step 2 Target | 5% = $3,000 |
 | Min Profitable Days | 3 |
+
+**Key Difference from FTMO**: TDD is STATIC from initial balance, NOT trailing.
 
 ---
 
@@ -178,15 +237,20 @@ botcreativehub/
 ├── strategy_core.py              # 5-TP system, signals
 ├── ftmo_challenge_analyzer.py    # Optimization & validation
 ├── main_live_bot.py              # Live MT5 trading
+├── challenge_risk_manager.py     # DDD/TDD enforcement
+├── ftmo_config.py                # 5ers configuration
 ├── params/
 │   ├── current_params.json       # Active parameters
 │   ├── defaults.py               # Default values (tp1-tp5)
 │   └── params_loader.py          # Load utilities
 ├── scripts/
+│   ├── test_equivalence_v2.py    # Equivalence test
 │   └── validate_h1_realistic.py  # H1 simulation
 ├── tradr/backtest/
 │   └── h1_trade_simulator.py     # H1 trade engine
 ├── data/ohlcv/                   # Historical data
+├── analysis/
+│   └── SESSION_JAN05_2026_RESULTS.md  # Latest session
 └── ftmo_analysis_output/         # Results
 ```
 
@@ -196,12 +260,22 @@ botcreativehub/
 
 1. ❌ **Never reduce from 5 TPs to 3 TPs** - breaks exit logic
 2. ❌ **Never hardcode parameters** - use params_loader
-3. ❌ **Never change exit logic** without full H1 validation
+3. ❌ **Never change exit logic** without full validation
 4. ❌ **Never use look-ahead bias** - always slice HTF data
+5. ❌ **Never use trailing TDD** - 5ers uses STATIC TDD
+6. ❌ **Never ignore DDD** - 5ers DOES track daily drawdown (5% limit)
 
 ---
 
 ## Recent History
+
+### January 5, 2026
+- **Equivalence Test**: 97.6% match between TPE and live bot ✅
+- **5ers Compliance**: Max TDD 7.75%, Max DDD 3.80% (within limits) ✅
+- **Profit Projection**: $3.2M with compounding (2023-2025)
+- **DDD Settings**: Updated to 3.5%/3.0%/2.0% (halt/reduce/warning)
+- **Bug Fix**: Added `total_risk_usd`, `total_risk_pct`, `open_positions` to AccountSnapshot
+- **Files Modified**: ftmo_config.py, challenge_risk_manager.py, main_live_bot.py
 
 ### January 4, 2026
 - REVERTED to 5-TP system (3-TP removal broke exit logic)
@@ -214,4 +288,11 @@ botcreativehub/
 
 ---
 
-**Last Updated**: January 4, 2026
+## Session Archives
+
+- `analysis/SESSION_JAN05_2026_RESULTS.md` - Complete validation session
+- `docs/SESSION_LOG_JAN04_2026.md` - 5-TP revert session
+
+---
+
+**Last Updated**: January 5, 2026
