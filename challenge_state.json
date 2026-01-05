@@ -1,0 +1,32 @@
+{
+  "phase": 1,
+  "live_flag": true,
+  "initial_balance": 10000.0,
+  "current_balance": 50000.0,
+  "highest_balance": 50000.0,
+  "day_start_balance": 50000.0,
+  "current_day": "2026-01-05",
+  "total_trades": 0,
+  "winning_trades": 0,
+  "losing_trades": 0,
+  "profitable_days": 1,
+  "daily_records": [
+    {
+      "date": "2026-01-04",
+      "starting_balance": 10000.0,
+      "ending_balance": 50000.0,
+      "trades_count": 0,
+      "pnl_usd": 40000.0
+    }
+  ],
+  "trades_history": [],
+  "open_positions": [],
+  "start_time": "2026-01-04T23:41:39.386942+00:00",
+  "last_update": "2026-01-05T00:36:13.758410+00:00",
+  "max_daily_loss_pct": 0.0,
+  "max_drawdown_pct": 0.0,
+  "failed": false,
+  "fail_reason": "",
+  "passed_phase1": false,
+  "passed_phase2": false
+}
