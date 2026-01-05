@@ -1428,8 +1428,9 @@ class LiveTradingBot:
                 log.error(f"[{symbol}] Cannot get account snapshot")
                 return False
             
-            daily_loss_pct = abs(snapshot.daily_pnl_pct) if snapshot.daily_pnl_pct < 0 else 0
-            total_dd_pct = snapshot.total_drawdown_pct
+            # Challenge snapshot uses daily_loss_pct; fall back gracefully if fields are missing
+            daily_loss_pct = getattr(snapshot, "daily_loss_pct", 0)
+            total_dd_pct = getattr(snapshot, "total_dd_pct", 0)
             profit_pct = (snapshot.equity - self.challenge_manager.initial_balance) / self.challenge_manager.initial_balance * 100
             
             if daily_loss_pct >= FIVEERS_CONFIG.daily_loss_halt_pct:
@@ -1442,10 +1443,11 @@ class LiveTradingBot:
             
             max_trades = FIVEERS_CONFIG.get_max_trades(profit_pct)
             pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
-            total_exposure = snapshot.open_positions + pending_count
-            
-            if snapshot.open_positions >= max_trades and entry_distance_r <= FIVEERS_CONFIG.immediate_entry_r:
-                log.info(f"[{symbol}] Max filled positions reached: {snapshot.open_positions}/{max_trades} - cannot place market order")
+            open_positions = getattr(snapshot, "open_positions", len(self.mt5.get_my_positions()) if self.mt5 else 0)
+            total_exposure = open_positions + pending_count
+
+            if open_positions >= max_trades and entry_distance_r <= FIVEERS_CONFIG.immediate_entry_r:
+                log.info(f"[{symbol}] Max filled positions reached: {open_positions}/{max_trades} - cannot place market order")
                 return False
             
             if total_exposure >= FIVEERS_CONFIG.max_pending_orders:
@@ -1455,12 +1457,13 @@ class LiveTradingBot:
                     new_entry_distance_r=entry_distance_r,
                 )
                 if not replaced:
-                    log.info(f"[{symbol}] Max total exposure reached: {total_exposure}/{FIVEERS_CONFIG.max_pending_orders} (positions: {snapshot.open_positions}, pending: {pending_count})")
+                    log.info(f"[{symbol}] Max total exposure reached: {total_exposure}/{FIVEERS_CONFIG.max_pending_orders} (positions: {open_positions}, pending: {pending_count})")
                     return False
                 pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
             
-            if snapshot.total_risk_pct >= FIVEERS_CONFIG.max_cumulative_risk_pct:
-                log.info(f"[{symbol}] Max cumulative risk reached: {snapshot.total_risk_pct:.1f}%/{FIVEERS_CONFIG.max_cumulative_risk_pct}%")
+            total_risk_pct = getattr(snapshot, "total_risk_pct", 0)
+            if total_risk_pct >= FIVEERS_CONFIG.max_cumulative_risk_pct:
+                log.info(f"[{symbol}] Max cumulative risk reached: {total_risk_pct:.1f}%/{FIVEERS_CONFIG.max_cumulative_risk_pct}%")
                 return False
             
             win_streak = getattr(self.risk_manager.state, 'win_streak', 0) if hasattr(self.risk_manager, 'state') else 0
