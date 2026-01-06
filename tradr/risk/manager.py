@@ -207,11 +207,29 @@ class RiskManager:
             print(f"[RiskManager] Syncing balance: {self.state.current_balance:.2f} -> {balance:.2f}")
             self.state.current_balance = balance
         
-        if abs(self.state.initial_balance - balance) > 1.0 and not self.state.live_flag:
+        # Sync initial balance if:
+        # 1. Not live yet (new challenge), OR
+        # 2. Balance is significantly different (>10% change = new account/reset)
+        balance_diff_pct = abs(self.state.initial_balance - balance) / max(self.state.initial_balance, 1) * 100
+        should_reset_initial = (
+            not self.state.live_flag or  # Not live yet
+            balance_diff_pct > 10  # Balance changed >10% = likely new account
+        )
+        
+        if abs(self.state.initial_balance - balance) > 1.0 and should_reset_initial:
             print(f"[RiskManager] Syncing initial balance: {self.state.initial_balance:.2f} -> {balance:.2f}")
             self.state.initial_balance = balance
             self.state.highest_balance = max(self.state.highest_balance, balance)
             self.state.day_start_balance = balance
+            # Reset profit tracking when initial balance changes significantly
+            if balance_diff_pct > 10:
+                print(f"[RiskManager] Significant balance change detected ({balance_diff_pct:.1f}%), resetting challenge state")
+                self.state.live_flag = False
+                self.state.phase = 1
+                self.state.profitable_days = 0
+                self.state.total_trades = 0
+                self.state.winning_trades = 0
+                self.state.losing_trades = 0
         
         if self.state.highest_balance < equity:
             self.state.highest_balance = equity
