@@ -1,8 +1,8 @@
 # 5ers 60K High Stakes Trading Bot
 
-Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accounts. Uses a **5-TP Confluence System** with multi-timeframe analysis. Validated with **H1 Realistic Simulation** for production-ready results.
+Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accounts. Uses a **3-TP Confluence System** with multi-timeframe analysis. Validated with **H1 Realistic Simulation** for production-ready results.
 
-## 🎯 Validated Performance (2023-2025)
+## 🎯 Final Validated Performance (January 6, 2026)
 
 ### H1 Realistic Simulation Results
 *Simulates EXACTLY what `main_live_bot.py` would do in production*
@@ -10,36 +10,40 @@ Automated MetaTrader 5 trading bot for **5ers 60K High Stakes** Challenge accoun
 | Metric | Value |
 |--------|-------|
 | **Starting Balance** | $60,000 |
-| **Final Balance** | **$1,160,462** |
-| **Net P&L** | **$1,100,462** |
-| **Return** | **+1,834%** |
-| **Total R** | +274.71R |
-| **Win Rate** | **71.8%** |
-| **Total Trades** | 1,673 |
+| **Final Balance** | **$948,629** |
+| **Net Return** | **+1,481%** |
+| **Total Trades** | **943** |
+| **Win Rate** | **66.1%** |
+| **Max Total DD** | **2.17%** (limit 10%) ✅ |
+| **Max Daily DD** | **4.16%** (limit 5%) ✅ |
+| **DDD Halts** | 2 (safety working) |
+| **Commissions** | $9,391 |
 
-### Dynamic Scaling Performance
+### Entry Queue System
 | Metric | Value |
 |--------|-------|
-| Avg Lot Multiplier | 1.80x |
-| Avg Risk % Used | 1.08% |
-| Safety Close Triggers | 22 |
-| Total DD Breached | **NO ✅** |
+| Proximity Threshold | 0.3R |
+| Signals Generated | ~2,000 |
+| Trades Executed | 943 (47% fill rate) |
+| Max Wait Time | 5 days |
 
-### 5ers Challenge Speed (60K account)
-- Step 1 (8% target = $4,800): ~2-3 weeks
-- Step 2 (5% target = $3,000): ~1-2 weeks
-- **Estimated Total**: ~4-5 weeks
+### 5ers Challenge Compliance
+| Rule | Limit | Achieved | Status |
+|------|-------|----------|--------|
+| Max TDD | 10% | 2.17% | ✅ |
+| Max DDD | 5% | 4.16% | ✅ |
+| Profit Target | 8% Step 1 | +1,481% | ✅ |
 
 ---
 
 ## Quick Start
 
 ```bash
-# Run validation (test current parameters)
-python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
+# Run full live bot simulation (RECOMMENDED)
+python scripts/simulate_main_live_bot.py
 
-# Run H1 realistic simulation (exact live bot behavior)
-python scripts/validate_h1_realistic.py --trades ftmo_analysis_output/VALIDATE/best_trades_final.csv --balance 60000
+# Run signal validation (TPE backtest)
+python ftmo_challenge_analyzer.py --validate --start 2023-01-01 --end 2025-12-31
 
 # Run optimization
 python ftmo_challenge_analyzer.py --single --trials 100  # TPE single-objective
@@ -63,22 +67,21 @@ python main_live_bot.py
 │                                  │     │                                 │
 │  ftmo_challenge_analyzer.py      │────▶│  main_live_bot.py              │
 │  - Optuna TPE / NSGA-II          │     │  - Loads params/current*.json  │
-│  - Backtesting 2003-2025         │     │  - Real-time MT5 execution     │
-│  - Parameter optimization        │     │  - 5ers risk management        │
-│  - Out-of-sample validation      │     │  - 5 Take Profit levels        │
-│                                  │     │                                 │
-│  Output: params/current_params   │     │  Output: Live trade log        │
+│  - Backtesting 2003-2025         │     │  - Entry queue system          │
+│  - Parameter optimization        │     │  - 3-TP partial close          │
+│                                  │     │  - Dynamic lot sizing          │
+│  Output: params/current_params   │     │  - DDD/TDD safety              │
 └─────────────────────────────────┘     └────────────────────────────────┘
 ```
 
 ### Data Flow
 ```
-params/current_params.json       ← Optimized strategy parameters (28 params)
+params/current_params.json       ← Optimized strategy parameters
          ↑                            ↓
 ftmo_challenge_analyzer.py      main_live_bot.py
 (Optuna optimization)           (loads params at startup)
          ↑                            ↓
-data/ohlcv/                      scripts/validate_h1_realistic.py
+data/ohlcv/                      scripts/simulate_main_live_bot.py
 (historical D1/H1 data)          (H1 realistic simulation)
 ```
 
@@ -87,7 +90,7 @@ data/ohlcv/                      scripts/validate_h1_realistic.py
 ## Project Structure
 
 ```
-├── strategy_core.py              # Core trading logic (5-TP system, 3100+ lines)
+├── strategy_core.py              # Core trading logic (3-TP system)
 ├── ftmo_challenge_analyzer.py    # Optimization engine & validation
 ├── main_live_bot.py              # Live MT5 trading entry point
 ├── broker_config.py              # Multi-broker configuration
@@ -96,38 +99,33 @@ data/ohlcv/                      scripts/validate_h1_realistic.py
 ├── ftmo_config.py                # 5ers challenge rules
 │
 ├── params/                       # Parameter management
-│   ├── current_params.json       # Active parameters (28 optimized values)
+│   ├── current_params.json       # Active parameters
 │   ├── defaults.py               # Default parameter values
 │   └── params_loader.py          # Load/save utilities
 │
 ├── scripts/
-│   └── validate_h1_realistic.py  # H1 realistic simulation (matches live bot)
+│   └── simulate_main_live_bot.py # H1 realistic simulation (matches live bot)
 │
-├── tradr/
-│   └── backtest/
-│       └── h1_trade_simulator.py # H1-based trade simulation
-│
-├── data/ohlcv/                   # Historical data (D1, H1, H4)
+├── data/ohlcv/                   # Historical data (D1, H1)
 ├── ftmo_analysis_output/         # Optimization & validation results
-│   ├── VALIDATE/history/         # Validation run history
-│   └── hourly_validator/         # H1 simulation results
+│   ├── FINAL_SIMULATION_JAN06_2026/  # Definitive results
+│   ├── VALIDATE/                 # TPE validation results
+│   └── NSGA/                     # Multi-objective results
 │
 └── docs/                         # Documentation
 ```
 
 ---
 
-## 5-TP Exit System
+## 3-TP Exit System
 
-The strategy uses 5 Take Profit levels with partial position closing:
+The strategy uses 3 Take Profit levels with partial position closing:
 
-| Level | R-Multiple | Close % | Description |
-|-------|------------|---------|-------------|
-| TP1 | 0.6R | 10% | Lock early profit |
-| TP2 | 1.2R | 10% | Secure 1R |
-| TP3 | 2.0R | 15% | 2R milestone |
-| TP4 | 2.5R | 20% | Extended profit |
-| TP5 | 3.5R | 45% | Maximum target |
+| Level | R-Multiple | Close % | SL Action |
+|-------|------------|---------|-----------|
+| TP1 | 0.6R | 35% | Move to breakeven |
+| TP2 | 1.2R | 30% | Trail to TP1+0.5R |
+| TP3 | 2.0R | 35% | Close remaining |
 
 **Trailing Stop**: Activated after TP1, moves to breakeven, then follows price.
 
@@ -137,11 +135,11 @@ The strategy uses 5 Take Profit levels with partial position closing:
 
 | Rule | Limit | Our Performance |
 |------|-------|-----------------|
-| Max Total Drawdown | 10% below start ($54K stop-out) | **<10% ✅** |
-| Daily Drawdown | None (5ers doesn't track) | N/A |
-| Step 1 Target | 8% = $4,800 | **Achieved** |
-| Step 2 Target | 5% = $3,000 | **Achieved** |
-| Min Profitable Days | 3 | **22+ days** |
+| Max Total Drawdown | 10% below start ($54K stop-out) | **2.17% ✅** |
+| Max Daily Drawdown | 5% from day start | **4.16% ✅** |
+| Step 1 Target | 8% = $4,800 | **+1,481% ✅** |
+| Step 2 Target | 5% = $3,000 | **Achieved ✅** |
+| Min Profitable Days | 3 | **943 trades ✅** |
 
 ---
 
@@ -149,49 +147,44 @@ The strategy uses 5 Take Profit levels with partial position closing:
 
 | File | Purpose |
 |------|---------|
-| `strategy_core.py` | Trading strategy logic - 5-TP system, signals |
+| `strategy_core.py` | Trading strategy logic - 3-TP system, signals |
 | `params/current_params.json` | Current optimized parameters |
-| `params/defaults.py` | Default parameter values with tp4/tp5 |
 | `ftmo_challenge_analyzer.py` | Optimization & validation engine |
-| `scripts/validate_h1_realistic.py` | H1 realistic simulation |
-| `tradr/backtest/h1_trade_simulator.py` | H1 trade simulation engine |
+| `scripts/simulate_main_live_bot.py` | H1 realistic simulation |
+| `main_live_bot.py` | Live MT5 trading bot |
+| `challenge_risk_manager.py` | DDD/TDD enforcement |
 
 ---
 
 ## Documentation
 
+- **[docs/5ERS_COMPLIANCE.md](docs/5ERS_COMPLIANCE.md)** - 5ers rule compliance
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
 - **[docs/STRATEGY_GUIDE.md](docs/STRATEGY_GUIDE.md)** - Trading strategy details
-- **[docs/EXIT_STRATEGY.md](docs/EXIT_STRATEGY.md)** - 5-TP exit system
-- **[docs/DEPLOYMENT_GUIDE.md](docs/DEPLOYMENT_GUIDE.md)** - Deployment instructions
+- **[docs/EXIT_STRATEGY.md](docs/EXIT_STRATEGY.md)** - 3-TP exit system
+- **[docs/CHANGELOG.md](docs/CHANGELOG.md)** - Version history
 - **[.github/copilot-instructions.md](.github/copilot-instructions.md)** - AI assistant guide
 
 ---
 
-## Validation Results Reference
+## Final Simulation Results (January 6, 2026)
 
-Latest validation run: `val_2023_2025_007`
-
-### D1 Backtest Results
-| Period | Trades | Total R | Win Rate | Est. Profit |
-|--------|--------|---------|----------|-------------|
-| Training (2023-01 to 2025-02) | 1,273 | +431.83R | 44.1% | $155,460 |
-| Validation (2025-02 to 2025-12) | 521 | +266.68R | 48.6% | $96,005 |
-| **Full Period** | **1,779** | **+696.03R** | **45.5%** | **$250,569** |
-
-### H1 Realistic Simulation
+### Full Live Bot Simulation (2023-2025)
 ```json
 {
-  "total_trades": 1673,
-  "winners": 1201,
-  "win_rate": 71.8,
-  "total_r": 274.71,
-  "net_pnl": 1100461.64,
-  "final_balance": 1160461.64,
-  "return_pct": 1834.1,
-  "total_dd_breached": false
+  "starting_balance": 60000,
+  "final_balance": 948629,
+  "net_return_pct": 1481,
+  "total_trades": 943,
+  "win_rate": 66.1,
+  "max_total_dd_pct": 2.17,
+  "max_daily_dd_pct": 4.16,
+  "ddd_halt_events": 2,
+  "total_commissions": 9391
 }
 ```
+
+**Results Location**: `ftmo_analysis_output/FINAL_SIMULATION_JAN06_2026/`
 
 ---
 

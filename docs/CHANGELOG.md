@@ -1,7 +1,55 @@
 # Changelog
 
-**Last Updated**: 2026-01-05
+**Last Updated**: 2026-01-06
 **Auto-generated**: From git commits and session logs
+
+---
+
+## v1.4.0 - Final Validation & Production Ready (Jan 6, 2026)
+
+### 🎯 Final Simulation Results
+- **$948,629 Final Balance** (+1,481% from $60K)
+- **943 Trades** over 3 years (2023-2025)
+- **66.1% Win Rate** with 3-TP partial close system
+- **Max TDD: 2.17%** (limit 10%) ✅
+- **Max DDD: 4.16%** (limit 5%) ✅
+- **2 DDD Halt Events** - Safety system working perfectly
+
+### New Simulation Script
+Created `scripts/simulate_main_live_bot.py`:
+- Full H1 simulation of exact live bot behavior
+- Entry queue system (0.3R proximity, 5 day expiry)
+- Lot sizing at FILL moment (not signal time)
+- 3-TP partial close with profit booking
+- DDD safety with halt/reduce/warning tiers
+- Complete trade log and daily snapshots
+
+### Bug Fixes
+- ✅ **Lot Sizing**: Fixed CONTRACT_SPECS with correct pip_size/pip_value_per_lot
+- ✅ **Partial Profits**: Fixed profit booking at each TP level
+- ✅ **params/current_params.json**: Removed double nesting
+
+### Entry Queue System
+- Signals wait in queue until price within 0.3R of entry
+- 47% of signals execute (943/~2000)
+- Higher quality trades through proximity filtering
+- 5 day max wait, 1.5R max distance cancellation
+
+### 3-TP Exit System
+| Level | R-Multiple | Close % | SL Action |
+|-------|------------|---------|-----------|
+| TP1 | 0.6R | 35% | Move to breakeven |
+| TP2 | 1.2R | 30% | Trail to TP1+0.5R |
+| TP3 | 2.0R | 35% | Close remaining |
+
+### Files Created
+- `scripts/simulate_main_live_bot.py` - Definitive simulation script
+- `ftmo_analysis_output/FINAL_SIMULATION_JAN06_2026/` - All results
+
+### Documentation Updates
+- `.github/copilot-instructions.md` - Complete rewrite
+- `PROJECT_STATUS.md` - New projections and results
+- `docs/5ERS_COMPLIANCE.md` - Updated compliance data
 
 ---
 
