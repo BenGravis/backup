@@ -40,11 +40,13 @@ class Fiveers60KConfig:
     max_concurrent_trades: int = 7  # Backtest used up to 21, but 10 balances opportunity with risk
     max_trades_per_day: int = 10  # Increased to match concurrent capacity
     max_trades_per_week: int = 40  # Increased proportionally
-    max_pending_orders: int = 20  # Increased pending orders limit
+    max_pending_orders: int = 100  # High Stakes: margin analysis shows 75 positions at 32.8% max margin
 
     # === ENTRY OPTIMIZATION ===
     max_entry_distance_r: float = 1.0  # Max 1R distance from current price (realistic anticipation)
     immediate_entry_r: float = 0.4  # Execute immediately if within 0.4R
+    limit_order_proximity_r: float = 0.3  # Place limit order when price is within 0.3R of entry
+    entry_check_interval_minutes: int = 30  # Check entry proximity every 30 minutes
 
     # === PENDING ORDER SETTINGS ===
     pending_order_expiry_hours: float = 120.0  # 5 days - matches backtest max_wait_bars=5

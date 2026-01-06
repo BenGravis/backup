@@ -371,10 +371,13 @@ class LiveTradingBot:
     TRADING_DAYS_FILE = "trading_days.json"
     FIRST_RUN_FLAG_FILE = "first_run_complete.flag"
     AWAITING_SPREAD_FILE = "awaiting_spread.json"
+    AWAITING_ENTRY_FILE = "awaiting_entry.json"  # Signals waiting for price proximity
     VALIDATE_INTERVAL_MINUTES = 10
     MAIN_LOOP_INTERVAL_SECONDS = 10
     SPREAD_CHECK_INTERVAL_MINUTES = 10
+    ENTRY_CHECK_INTERVAL_MINUTES = 30  # Check entry proximity every 30 min
     MAX_SPREAD_WAIT_HOURS = 120  # 5 days - matches backtest max_wait_bars=5
+    MAX_ENTRY_WAIT_HOURS = 120  # 5 days - matches backtest max_wait_bars=5
     WEEKEND_GAP_THRESHOLD_PCT = 1.0  # 1% gap threshold
     
     def __init__(self, immediate_scan: bool = False):
@@ -392,6 +395,7 @@ class LiveTradingBot:
         self.last_scan_time: Optional[datetime] = None
         self.last_validate_time: Optional[datetime] = None
         self.last_spread_check_time: Optional[datetime] = None
+        self.last_entry_check_time: Optional[datetime] = None  # Track entry proximity checks
         self.scan_count = 0
         self.pending_setups: Dict[str, PendingSetup] = {}
         self.symbol_map: Dict[str, str] = {}  # our_symbol -> broker_symbol
@@ -413,6 +417,7 @@ class LiveTradingBot:
         self._load_pending_setups()
         self._load_trading_days()
         self._load_awaiting_spread()
+        self._load_awaiting_entry()  # Signals waiting for price proximity
         self._auto_start_challenge()
     
     # ═══════════════════════════════════════════════════════════════════════════
@@ -469,6 +474,153 @@ class LiveTradingBot:
                 json.dump(self.awaiting_spread, f, indent=2, default=str)
         except Exception as e:
             log.error(f"Error saving awaiting_spread: {e}")
+    
+    # ═══════════════════════════════════════════════════════════════════════════
+    # AWAITING ENTRY - Queue for signals waiting for price proximity
+    # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _load_awaiting_entry(self):
+        """Load signals waiting for price to approach entry level."""
+        self.awaiting_entry: Dict = {}
+        try:
+            if Path(self.AWAITING_ENTRY_FILE).exists():
+                with open(self.AWAITING_ENTRY_FILE, 'r') as f:
+                    self.awaiting_entry = json.load(f)
+                if self.awaiting_entry:
+                    log.info(f"Loaded {len(self.awaiting_entry)} signals awaiting entry proximity")
+        except Exception as e:
+            log.error(f"Error loading awaiting_entry: {e}")
+            self.awaiting_entry = {}
+    
+    def _save_awaiting_entry(self):
+        """Save signals waiting for price proximity."""
+        try:
+            with open(self.AWAITING_ENTRY_FILE, 'w') as f:
+                json.dump(self.awaiting_entry, f, indent=2, default=str)
+        except Exception as e:
+            log.error(f"Error saving awaiting_entry: {e}")
+    
+    def add_to_awaiting_entry(self, setup: Dict):
+        """
+        Add setup to entry queue - wait for price to approach entry level.
+        
+        When price is far from entry (>0.3R), we don't place limit order yet.
+        This avoids wasted limit orders that never fill.
+        """
+        symbol = setup["symbol"]
+        entry = setup.get("entry", 0)
+        sl = setup.get("stop_loss", 0)
+        
+        self.awaiting_entry[symbol] = {
+            **setup,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "last_check": datetime.now(timezone.utc).isoformat(),
+            "check_count": 0,
+        }
+        self._save_awaiting_entry()
+        
+        # Calculate current distance for logging
+        broker_symbol = self.symbol_map.get(symbol, symbol)
+        tick = self.mt5.get_tick(broker_symbol)
+        if tick:
+            risk = abs(entry - sl) if entry and sl else 0
+            if risk > 0:
+                current_price = tick.bid if setup.get("direction") == "bullish" else tick.ask
+                entry_distance_r = abs(current_price - entry) / risk
+                log.info(f"[{symbol}] Added to entry queue - price is {entry_distance_r:.2f}R from entry, waiting for proximity")
+            else:
+                log.info(f"[{symbol}] Added to entry queue - waiting for price proximity")
+        else:
+            log.info(f"[{symbol}] Added to entry queue - waiting for price proximity")
+    
+    def check_awaiting_entry_signals(self):
+        """
+        Check signals waiting for price to approach entry level.
+        Called every ENTRY_CHECK_INTERVAL_MINUTES (default: 30 min).
+        
+        Logic:
+        - If price is within limit_order_proximity_r (0.3R) of entry: place limit order
+        - If signal too old (MAX_ENTRY_WAIT_HOURS): remove
+        - If entry is beyond max_entry_distance_r: remove
+        """
+        if not self.awaiting_entry:
+            return
+        
+        now = datetime.now(timezone.utc)
+        signals_to_remove = []
+        proximity_r = FIVEERS_CONFIG.limit_order_proximity_r  # 0.3R
+        
+        log.info(f"Checking {len(self.awaiting_entry)} signals awaiting price proximity...")
+        
+        for symbol, setup in list(self.awaiting_entry.items()):
+            # Check age - expire after MAX_ENTRY_WAIT_HOURS
+            created_at_str = setup.get("created_at", "")
+            if created_at_str:
+                try:
+                    created_at = datetime.fromisoformat(created_at_str.replace("Z", "+00:00"))
+                    age_hours = (now - created_at).total_seconds() / 3600
+                    
+                    if age_hours > self.MAX_ENTRY_WAIT_HOURS:
+                        log.info(f"[{symbol}] Entry signal expired after {age_hours:.1f} hours")
+                        signals_to_remove.append(symbol)
+                        continue
+                except ValueError:
+                    pass
+            
+            # Get current price
+            broker_symbol = self.symbol_map.get(symbol, symbol)
+            tick = self.mt5.get_tick(broker_symbol)
+            if not tick:
+                log.debug(f"[{symbol}] Cannot get tick, will retry later")
+                continue
+            
+            entry = setup.get("entry", 0)
+            sl = setup.get("stop_loss", 0)
+            risk = abs(entry - sl) if entry and sl else 0
+            
+            if risk <= 0:
+                log.warning(f"[{symbol}] Invalid risk={risk}, removing from queue")
+                signals_to_remove.append(symbol)
+                continue
+            
+            current_price = tick.bid if setup.get("direction") == "bullish" else tick.ask
+            entry_distance_r = abs(current_price - entry) / risk
+            
+            # Check if entry still valid (not too far)
+            if entry_distance_r > FIVEERS_CONFIG.max_entry_distance_r:
+                log.info(f"[{symbol}] Entry too far ({entry_distance_r:.2f}R > {FIVEERS_CONFIG.max_entry_distance_r}R), removing")
+                signals_to_remove.append(symbol)
+                continue
+            
+            # Check if price is close enough to place limit order
+            if entry_distance_r <= proximity_r:
+                log.info(f"[{symbol}] ✅ Price within {proximity_r}R of entry ({entry_distance_r:.2f}R)")
+                
+                # Check spread before placing order
+                conditions = self.check_market_conditions(symbol)
+                
+                if conditions["spread_ok"]:
+                    log.info(f"[{symbol}] Placing limit order!")
+                    if self.place_setup_order(setup, check_spread=False, skip_proximity_check=True):
+                        signals_to_remove.append(symbol)
+                else:
+                    # Price close but spread bad - move to spread queue
+                    log.info(f"[{symbol}] Price OK but spread bad ({conditions['spread_pips']:.1f} pips)")
+                    log.info(f"[{symbol}] Moving to spread queue...")
+                    signals_to_remove.append(symbol)
+                    self.add_to_awaiting_spread(setup)
+            else:
+                # Still too far
+                setup["check_count"] = setup.get("check_count", 0) + 1
+                setup["last_check"] = now.isoformat()
+                log.debug(f"[{symbol}] Price at {entry_distance_r:.2f}R from entry, waiting for {proximity_r}R")
+        
+        # Remove processed signals
+        for symbol in signals_to_remove:
+            if symbol in self.awaiting_entry:
+                del self.awaiting_entry[symbol]
+        
+        self._save_awaiting_entry()
     
     def add_to_awaiting_spread(self, setup: Dict):
         """Add setup to awaiting spread queue."""
@@ -1353,7 +1505,7 @@ class LiveTradingBot:
         log.info(f"[{new_symbol}] New setup (score: {new_score:.2f}) not better than worst pending (score: {worst_score:.2f})")
         return False
     
-    def place_setup_order(self, setup: Dict, check_spread: bool = True) -> bool:
+    def place_setup_order(self, setup: Dict, check_spread: bool = True, skip_proximity_check: bool = False) -> bool:
         """
         Place order for a validated setup.
         
@@ -1363,10 +1515,12 @@ class LiveTradingBot:
         - Validates all risk limits before placing
         - Calculates proper lot size for 60K account
         - Spread check: If spread too wide, adds to awaiting_spread queue
+        - Proximity check: If price too far, adds to awaiting_entry queue
         
         Args:
             setup: Trade setup dict
             check_spread: If True, check spread and add to queue if too wide
+            skip_proximity_check: If True, skip proximity check (used when called from awaiting_entry)
         """
         from ftmo_config import FTMO_CONFIG, get_pip_size, get_sl_limits
         
@@ -1384,6 +1538,16 @@ class LiveTradingBot:
         confluence = setup["confluence"]
         quality_factors = setup["quality_factors"]
         entry_distance_r = setup.get("entry_distance_r", 0)
+        
+        # ═══════════════════════════════════════════════════════════════
+        # ENTRY PROXIMITY CHECK - Wait for price to approach entry
+        # If price is > 0.3R from entry, add to awaiting_entry queue
+        # ═══════════════════════════════════════════════════════════════
+        if not skip_proximity_check and entry_distance_r > FIVEERS_CONFIG.limit_order_proximity_r:
+            log.info(f"[{symbol}] Price too far from entry ({entry_distance_r:.2f}R > {FIVEERS_CONFIG.limit_order_proximity_r}R)")
+            log.info(f"[{symbol}] Adding to entry queue - will check every {self.ENTRY_CHECK_INTERVAL_MINUTES} min")
+            self.add_to_awaiting_entry(setup)
+            return False
         
         # ═══════════════════════════════════════════════════════════════
         # SPREAD & VOLUME CHECK (if enabled)
@@ -2511,6 +2675,18 @@ class LiveTradingBot:
                     if time_since_spread >= self.SPREAD_CHECK_INTERVAL_MINUTES:
                         self.check_awaiting_spread_signals()
                         self.last_spread_check_time = now
+                
+                # ═══════════════════════════════════════════════════════════════
+                # ENTRY QUEUE CHECK - Every ENTRY_CHECK_INTERVAL_MINUTES
+                # Check signals waiting for price to approach entry level
+                # ═══════════════════════════════════════════════════════════════
+                if self.last_entry_check_time is None:
+                    self.last_entry_check_time = now
+                else:
+                    time_since_entry = (now - self.last_entry_check_time).total_seconds() / 60
+                    if time_since_entry >= self.ENTRY_CHECK_INTERVAL_MINUTES:
+                        self.check_awaiting_entry_signals()
+                        self.last_entry_check_time = now
                 
                 # Pending orders and position updates
                 self.check_pending_orders()
