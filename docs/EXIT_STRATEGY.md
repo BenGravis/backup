@@ -1,3 +1,4 @@
+
 # Exit Strategy - 3-TP System
 
 ## Overview

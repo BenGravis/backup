@@ -359,7 +359,7 @@ class LiveTradingBot:
     Now uses pending orders to match backtest entry behavior exactly.
     
     KEY FEATURES (5ers Compliant):
-    - 5-TP Exit System: 5 take profit levels (0.6R to 3.5R)
+    - 3-TP Exit System: 3 take profit levels (0.6R, 1.2R, 2.0R)
     - Immediate scan on first run after restart/weekend
     - Daily scan 10 min after daily close (00:10 server time)
     - Spread & volume checks before entry
@@ -1410,9 +1410,7 @@ class LiveTradingBot:
         log.info(f"  SL: {sl:.5f} ({sl_pips:.1f} pips)")
         log.info(f"  TP1: {tp1:.5f} ({self.params.atr_tp1_multiplier}R) -> {self.params.tp1_close_pct*100:.0f}%")
         log.info(f"  TP2: {tp2:.5f} ({self.params.atr_tp2_multiplier}R) -> {self.params.tp2_close_pct*100:.0f}%")
-        log.info(f"  TP3: {tp3:.5f} ({self.params.atr_tp3_multiplier}R) -> {self.params.tp3_close_pct*100:.0f}%")
-        log.info(f"  TP4: {tp4:.5f} ({self.params.atr_tp4_multiplier}R) -> {self.params.tp4_close_pct*100:.0f}%")
-        log.info(f"  TP5: {tp5:.5f} ({self.params.atr_tp5_multiplier}R) -> {self.params.tp5_close_pct*100:.0f}% (ALL remaining)")
+        log.info(f"  TP3: {tp3:.5f} ({self.params.atr_tp3_multiplier}R) -> {self.params.tp3_close_pct*100:.0f}% (closes ALL remaining)")
         
         return {
             "symbol": symbol,
@@ -2589,12 +2587,10 @@ class LiveTradingBot:
         log.info(f"  - Step 2: 5% profit = ${ACCOUNT_SIZE * 0.05:,.0f}")
         log.info(f"  - Min Trading Days: 3")
         log.info("=" * 70)
-        log.info(f"5-TP EXIT SYSTEM:")
+        log.info(f"3-TP EXIT SYSTEM:")
         log.info(f"  - TP1: {self.params.atr_tp1_multiplier}R -> {self.params.tp1_close_pct*100:.0f}%")
         log.info(f"  - TP2: {self.params.atr_tp2_multiplier}R -> {self.params.tp2_close_pct*100:.0f}%")
-        log.info(f"  - TP3: {self.params.atr_tp3_multiplier}R -> {self.params.tp3_close_pct*100:.0f}%")
-        log.info(f"  - TP4: {self.params.atr_tp4_multiplier}R -> {self.params.tp4_close_pct*100:.0f}%")
-        log.info(f"  - TP5: {self.params.atr_tp5_multiplier}R -> {self.params.tp5_close_pct*100:.0f}%")
+        log.info(f"  - TP3: {self.params.atr_tp3_multiplier}R -> {self.params.tp3_close_pct*100:.0f}% (closes ALL remaining)")
         log.info("=" * 70)
         log.info(f"Server: {MT5_SERVER}")
         log.info(f"Login: {MT5_LOGIN}")
