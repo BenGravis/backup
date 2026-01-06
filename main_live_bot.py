@@ -1550,20 +1550,28 @@ class LiveTradingBot:
             return False
         
         # ═══════════════════════════════════════════════════════════════
-        # SPREAD & VOLUME CHECK (if enabled)
+        # SPREAD & VOLUME CHECK - Only for MARKET orders (immediate entry)
+        # For LIMIT orders, spread at placement doesn't matter - we wait for our price
         # ═══════════════════════════════════════════════════════════════
-        if check_spread:
+        is_market_order = entry_distance_r <= FIVEERS_CONFIG.immediate_entry_r
+        
+        if check_spread and is_market_order:
             conditions = self.check_market_conditions(symbol)
             
             if not conditions["spread_ok"] or not conditions["volume_ok"]:
-                log.warning(f"[{symbol}] Market conditions not ideal: {conditions['reason']}")
+                log.warning(f"[{symbol}] Market order blocked - bad conditions: {conditions['reason']}")
                 log.warning(f"[{symbol}] Adding to spread queue for retry every {self.SPREAD_CHECK_INTERVAL_MINUTES} min")
                 self.add_to_awaiting_spread(setup)
                 return False
             
-            log.info(f"[{symbol}] Market conditions OK - Spread: {conditions['spread_pips']:.1f} pips")
+            log.info(f"[{symbol}] Market conditions OK for market order - Spread: {conditions['spread_pips']:.1f} pips")
+        elif is_market_order:
+            log.debug(f"[{symbol}] Spread check skipped for market order (check_spread=False)")
+        else:
+            log.debug(f"[{symbol}] Limit order - spread at placement doesn't matter")
         
-        if FIVEERS_CONFIG.min_spread_check:
+        # Additional spread sanity check for market orders only
+        if FIVEERS_CONFIG.min_spread_check and is_market_order:
             tick = self.mt5.get_tick(broker_symbol)
             if tick is not None:
                 pip_size = get_pip_size(symbol)
