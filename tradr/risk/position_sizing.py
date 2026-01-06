@@ -37,7 +37,7 @@ CONTRACT_SPECS = {
     "CADCHF": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
     "CHFJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
     "XAUUSD": {"pip_value": 1.0, "contract_size": 100, "pip_location": 0},  # Forex.com quotes in cents
-    "XAGUSD": {"pip_value": 0.001, "contract_size": 5000, "pip_location": 3},
+    "XAGUSD": {"pip_value": 1.0, "contract_size": 5000, "pip_location": 0},  # Forex.com quotes in cents
     "US30": {"pip_value": 1.0, "contract_size": 1, "pip_location": 0},
     "US100": {"pip_value": 1.0, "contract_size": 1, "pip_location": 0},
     "US500": {"pip_value": 1.0, "contract_size": 1, "pip_location": 0},
