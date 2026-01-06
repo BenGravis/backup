@@ -7,45 +7,64 @@ Calculates lot sizes based on risk parameters and contract specifications.
 from typing import Dict, Optional
 
 
+# CONTRACT_SPECS aligned with simulate_main_live_bot.py
+# pip_size = price movement for 1 pip
+# pip_value_per_lot = how much $ moves per pip per lot (in USD)
 CONTRACT_SPECS = {
-    "EURUSD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "GBPUSD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "USDJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
-    "USDCHF": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "USDCAD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "AUDUSD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "NZDUSD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "EURJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
-    "GBPJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
-    "EURGBP": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "EURCHF": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "EURAUD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "EURCAD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "EURNZD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "GBPCHF": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "GBPAUD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "GBPCAD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "GBPNZD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "AUDJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
-    "AUDCHF": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "AUDCAD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "AUDNZD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "NZDJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
-    "NZDCHF": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "NZDCAD": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "CADJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
-    "CADCHF": {"pip_value": 0.0001, "contract_size": 100000, "pip_location": 4},
-    "CHFJPY": {"pip_value": 0.01, "contract_size": 100000, "pip_location": 2},
-    "XAUUSD": {"pip_value": 0.01, "contract_size": 100, "pip_location": 0},  # pip_location=0 for distance, pip_value=0.01 for monetary
-    "XAGUSD": {"pip_value": 0.001, "contract_size": 5000, "pip_location": 0},  # pip_location=0 for distance, pip_value=0.001 for monetary
-    "US30": {"pip_value": 1.0, "contract_size": 1, "pip_location": 0},
-    "US100": {"pip_value": 1.0, "contract_size": 1, "pip_location": 0},
-    "US500": {"pip_value": 1.0, "contract_size": 1, "pip_location": 0},
-    "SPX500USD": {"pip_value": 0.1, "contract_size": 1, "pip_location": 1},
-    "NAS100USD": {"pip_value": 0.1, "contract_size": 1, "pip_location": 1},
-    "BTCUSD": {"pip_value": 1.0, "contract_size": 1, "pip_location": 0},
-    "ETHUSD": {"pip_value": 0.01, "contract_size": 1, "pip_location": 2},
+    # Forex - XXX/USD pairs - $10/pip/lot
+    "EURUSD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "GBPUSD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "AUDUSD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "NZDUSD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    
+    # JPY pairs - pip = 0.01, ~$6.67/pip/lot at USDJPY=150
+    "USDJPY": {"pip_size": 0.01, "contract_size": 100000, "pip_value_per_lot": 6.67},
+    "EURJPY": {"pip_size": 0.01, "contract_size": 100000, "pip_value_per_lot": 6.67},
+    "GBPJPY": {"pip_size": 0.01, "contract_size": 100000, "pip_value_per_lot": 6.67},
+    "AUDJPY": {"pip_size": 0.01, "contract_size": 100000, "pip_value_per_lot": 6.67},
+    "NZDJPY": {"pip_size": 0.01, "contract_size": 100000, "pip_value_per_lot": 6.67},
+    "CADJPY": {"pip_size": 0.01, "contract_size": 100000, "pip_value_per_lot": 6.67},
+    "CHFJPY": {"pip_size": 0.01, "contract_size": 100000, "pip_value_per_lot": 6.67},
+    
+    # USD/XXX pairs - variable pip value
+    "USDCHF": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "USDCAD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 7.5},
+    
+    # Cross pairs
+    "EURGBP": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 12.5},
+    "EURAUD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 6.5},
+    "EURCAD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 7.5},
+    "EURNZD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 6.0},
+    "EURCHF": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "GBPAUD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 6.5},
+    "GBPCAD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 7.5},
+    "GBPNZD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 6.0},
+    "GBPCHF": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "AUDCAD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 7.5},
+    "AUDNZD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 6.0},
+    "AUDCHF": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "NZDCAD": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 7.5},
+    "NZDCHF": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    "CADCHF": {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0},
+    
+    # Metals - CRITICAL: correct pip values
+    "XAUUSD": {"pip_size": 0.01, "contract_size": 100, "pip_value_per_lot": 1.0},  # $1/pip/lot (100oz)
+    "XAGUSD": {"pip_size": 0.01, "contract_size": 5000, "pip_value_per_lot": 50.0},  # $50/pip/lot (5000oz)
+    
+    # Indices - $1/point
+    "US30": {"pip_size": 1.0, "contract_size": 1, "pip_value_per_lot": 1.0},
+    "US100": {"pip_size": 1.0, "contract_size": 1, "pip_value_per_lot": 1.0},
+    "US500": {"pip_size": 1.0, "contract_size": 1, "pip_value_per_lot": 1.0},
+    "SPX500USD": {"pip_size": 1.0, "contract_size": 1, "pip_value_per_lot": 1.0},
+    "NAS100USD": {"pip_size": 1.0, "contract_size": 1, "pip_value_per_lot": 1.0},
+    
+    # Crypto
+    "BTCUSD": {"pip_size": 1.0, "contract_size": 1, "pip_value_per_lot": 1.0},
+    "ETHUSD": {"pip_size": 0.01, "contract_size": 1, "pip_value_per_lot": 0.01},
 }
+
+# Default specs for unknown symbols
+DEFAULT_SPEC = {"pip_size": 0.0001, "contract_size": 100000, "pip_value_per_lot": 10.0}
 
 
 def normalize_symbol(symbol: str) -> str:
@@ -56,41 +75,25 @@ def normalize_symbol(symbol: str) -> str:
 def get_contract_specs(symbol: str) -> Dict:
     """Get contract specifications for a symbol."""
     normalized = normalize_symbol(symbol)
-    return CONTRACT_SPECS.get(normalized, {
-        "pip_value": 0.0001,
-        "contract_size": 100000,
-        "pip_location": 4
-    })
+    return CONTRACT_SPECS.get(normalized, DEFAULT_SPEC)
 
 
 def get_pip_value(symbol: str, current_price: float = None) -> float:
     """
     Get pip value per standard lot in USD.
     
+    Uses pre-calculated pip_value_per_lot from CONTRACT_SPECS.
+    This matches simulate_main_live_bot.py exactly.
+    
     Args:
         symbol: Trading symbol
-        current_price: Current price (for quote currency conversion)
+        current_price: Current price (unused, kept for compatibility)
         
     Returns:
         Pip value in USD per standard lot
     """
     specs = get_contract_specs(symbol)
-    pip_size = specs.get("pip_value", 0.0001)
-    contract_size = specs.get("contract_size", 100000)
-    
-    normalized = normalize_symbol(symbol)
-    
-    if normalized.endswith("USD"):
-        return pip_size * contract_size
-    elif normalized.startswith("USD") and current_price and current_price > 0:
-        return (pip_size / current_price) * contract_size
-    elif normalized.startswith("USD"):
-        if "JPY" in normalized:
-            return (pip_size / 150.0) * contract_size
-        else:
-            return (pip_size / 1.0) * contract_size
-    else:
-        return pip_size * contract_size
+    return specs.get("pip_value_per_lot", 10.0)
 
 
 def calculate_lot_size(
@@ -106,10 +109,12 @@ def calculate_lot_size(
     """
     Calculate position size for a trade.
     
+    Aligned with simulate_main_live_bot.py for consistent results.
+    
     Args:
         symbol: Trading symbol
         account_balance: Current account balance in USD
-        risk_percent: Risk per trade as decimal (e.g., 0.0075 for 0.75%)
+        risk_percent: Risk per trade as decimal (e.g., 0.006 for 0.6%)
         entry_price: Entry price level
         stop_loss_price: Stop loss price level
         max_lot: Maximum lot size allowed
@@ -129,18 +134,16 @@ def calculate_lot_size(
         }
     
     specs = get_contract_specs(symbol)
-    pip_value_unit = specs.get("pip_value", 0.0001)
-    pip_location = specs.get("pip_location", 4)
+    pip_size = specs.get("pip_size", 0.0001)
+    pip_value_per_lot = specs.get("pip_value_per_lot", 10.0)
     
     stop_distance = abs(entry_price - stop_loss_price)
     
-    if pip_location == 0:
-        stop_pips = stop_distance
+    # Calculate stop in pips
+    if pip_size > 0:
+        stop_pips = stop_distance / pip_size
     else:
-        # Use actual pip size based on pip_location (e.g., 0.0001 for 4-digit, 0.01 for 2-digit)
-        # This handles both 4-digit and 5-digit brokers correctly
-        actual_pip_size = 10 ** (-pip_location)
-        stop_pips = stop_distance / actual_pip_size
+        stop_pips = stop_distance
     
     if stop_pips <= 0:
         return {
@@ -151,20 +154,23 @@ def calculate_lot_size(
             "error": "Stop loss too close to entry"
         }
     
+    # Risk in USD
     risk_usd = account_balance * risk_percent
     
-    pip_value_per_lot = get_pip_value(symbol, entry_price)
+    # Risk per lot at this stop distance
+    risk_per_lot = stop_pips * pip_value_per_lot
     
-    if pip_value_per_lot <= 0:
+    if risk_per_lot <= 0:
         return {
             "lot_size": min_lot,
             "risk_usd": risk_usd,
             "stop_pips": stop_pips,
             "actual_risk_pct": risk_percent,
-            "error": "Could not calculate pip value"
+            "error": "Could not calculate risk per lot"
         }
     
-    lot_size = risk_usd / (stop_pips * pip_value_per_lot)
+    # Lot size calculation (same as simulate_main_live_bot.py)
+    lot_size = risk_usd / risk_per_lot
     
     if existing_positions > 0:
         reduction_factor = 1.0 / (existing_positions + 1)
@@ -173,7 +179,7 @@ def calculate_lot_size(
     lot_size = round(lot_size, 2)
     lot_size = max(min_lot, min(max_lot, lot_size))
     
-    actual_risk_usd = lot_size * stop_pips * pip_value_per_lot
+    actual_risk_usd = lot_size * risk_per_lot
     actual_risk_pct = actual_risk_usd / account_balance if account_balance > 0 else 0
     
     return {
