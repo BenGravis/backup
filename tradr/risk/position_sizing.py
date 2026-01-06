@@ -137,7 +137,10 @@ def calculate_lot_size(
     if pip_location == 0:
         stop_pips = stop_distance
     else:
-        stop_pips = stop_distance / pip_value_unit
+        # Use actual pip size based on pip_location (e.g., 0.0001 for 4-digit, 0.01 for 2-digit)
+        # This handles both 4-digit and 5-digit brokers correctly
+        actual_pip_size = 10 ** (-pip_location)
+        stop_pips = stop_distance / actual_pip_size
     
     if stop_pips <= 0:
         return {
