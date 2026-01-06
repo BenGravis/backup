@@ -375,7 +375,7 @@ class LiveTradingBot:
     VALIDATE_INTERVAL_MINUTES = 10
     MAIN_LOOP_INTERVAL_SECONDS = 10
     SPREAD_CHECK_INTERVAL_MINUTES = 10
-    ENTRY_CHECK_INTERVAL_MINUTES = 30  # Check entry proximity every 30 min
+    ENTRY_CHECK_INTERVAL_MINUTES = 5  # Check entry proximity every 5 min (matches simulation)
     MAX_SPREAD_WAIT_HOURS = 120  # 5 days - matches backtest max_wait_bars=5
     MAX_ENTRY_WAIT_HOURS = 120  # 5 days - matches backtest max_wait_bars=5
     WEEKEND_GAP_THRESHOLD_PCT = 1.0  # 1% gap threshold
