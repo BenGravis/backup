@@ -37,11 +37,11 @@ class Fiveers60KConfig:
     max_risk_conservative_pct: float = 0.5  # Conservative mode: 0.5%
     max_cumulative_risk_pct: float = 100.0  # Disabled - DDD halt @ 3.5% provides sufficient protection
 
-    # === TRADE LIMITS ===
-    max_concurrent_trades: int = 7  # Backtest used up to 21, but 10 balances opportunity with risk
-    max_trades_per_day: int = 10  # Increased to match concurrent capacity
-    max_trades_per_week: int = 40  # Increased proportionally
-    max_pending_orders: int = 100  # High Stakes: margin analysis shows 75 positions at 32.8% max margin
+    # === TRADE LIMITS (disabled to match simulate_main_live_bot.py) ===
+    max_concurrent_trades: int = 100  # Disabled - DDD halt provides protection
+    max_trades_per_day: int = 100  # Disabled - DDD halt provides protection
+    max_trades_per_week: int = 500  # Disabled - DDD halt provides protection
+    max_pending_orders: int = 100  # Keep for practical limit
 
     # === ENTRY OPTIMIZATION ===
     max_entry_distance_r: float = 1.5  # Max 1.5R distance from current price (match simulate)
@@ -192,8 +192,7 @@ class Fiveers60KConfig:
             raise ValueError("Max daily loss cannot exceed 5% for 5ers")
         if self.max_total_drawdown_pct > 10.0:
             raise ValueError("Max total drawdown cannot exceed 10% for 5ers")
-        if self.max_concurrent_trades > 10:
-            raise ValueError("Max concurrent trades should not exceed 10 for safety")
+        # max_concurrent_trades check removed - DDD halt provides sufficient protection
 
     def get_risk_pct(self, daily_loss_pct: float, total_dd_pct: float) -> float:
         """
@@ -225,21 +224,18 @@ class Fiveers60KConfig:
     def get_max_trades(self, profit_pct: float) -> int:
         """
         Get max concurrent trades based on profit level.
-        Reduce exposure as we approach target.
+        
+        DISABLED: Always returns max_concurrent_trades to match simulate_main_live_bot.py.
+        DDD halt @ 3.5% provides sufficient protection.
 
         Args:
             profit_pct: Total profit percentage relative to initial balance
-                       (e.g., 8.5 means 8.5% profit from starting balance)
 
         Returns:
             Maximum number of concurrent trades allowed
         """
-        if profit_pct >= 8.0:  # Near target - ultra conservative
-            return 2
-        elif profit_pct >= 5.0:  # Good progress
-            return 3
-        else:  # Normal operations
-            return self.max_concurrent_trades
+        # Disabled profit-based reduction - matches simulation
+        return self.max_concurrent_trades
 
     def is_asset_whitelisted(self, symbol: str) -> bool:
         """
