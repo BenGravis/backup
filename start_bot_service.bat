@@ -10,9 +10,10 @@ echo ========================================
 REM Navigate to correct project directory
 cd /d C:\botcreativehub
 
-REM Single-instance guard: if a python process already runs main_live_bot.py, exit
-for /f "tokens=1 delims= " %%A in ('wmic process where "name='python.exe' and CommandLine like '%%main_live_bot.py%%'" get ProcessId ^| findstr /r "^[0-9][0-9]*"') do (
-    echo Bot already running (PID %%A). Exiting to prevent duplicate.
+REM Single-instance guard: check if main_live_bot.py is already running
+tasklist /FI "IMAGENAME eq python.exe" /V | find /I "main_live_bot.py" >nul 2>&1
+if %errorlevel% == 0 (
+    echo Bot already running. Exiting to prevent duplicate.
     exit /b 0
 )
 
