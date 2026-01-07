@@ -18,7 +18,7 @@ try:
     env_file = Path(__file__).parent / ".env"
     if env_file.exists():
         load_dotenv(env_file, override=True)
-        print(f"[config] ✓ Loaded environment from {env_file}")
+        print(f"[config] [OK] Loaded environment from {env_file}")
     else:
         print(f"[config] WARNING: .env file not found at {env_file}")
         print(f"[config] Looking in: {Path(__file__).parent.absolute()}")

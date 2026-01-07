@@ -295,7 +295,7 @@ class DrawdownMonitor:
 # Print broker config on startup
 log.info("=" * 70)
 log.info(f"BROKER: {BROKER_NAME}")
-log.info(f"Demo Mode: {'YES ⚠️' if IS_DEMO else 'NO (LIVE)'}")
+log.info(f"Demo Mode: {'YES [DEMO]' if IS_DEMO else 'NO (LIVE)'}")
 log.info(f"Account Size: ${ACCOUNT_SIZE:,.0f}")
 log.info(f"Risk per Trade: {BROKER_CONFIG.risk_per_trade_pct}% = ${BROKER_CONFIG.risk_amount:.0f}")
 log.info(f"Tradable Symbols: {len(TRADABLE_SYMBOLS)}")
@@ -336,7 +336,7 @@ def load_best_params_from_file():
     
     # Use the same merge logic as optimizer
     params_obj = load_strategy_params()
-    log.info("✓ Loaded %d parameters (post-merge) from params/current_params.json", len(vars(params_obj)))
+    log.info("[OK] Loaded %d parameters (post-merge) from params/current_params.json", len(vars(params_obj)))
     return params_obj
 
 
@@ -1079,16 +1079,16 @@ class LiveTradingBot:
             if self.mt5.get_symbol_info(broker_symbol):
                 self.symbol_map[our_symbol] = broker_symbol
                 mapped_count += 1
-                log.info(f"✓ {our_symbol:15s} -> {broker_symbol}")
+                log.info(f"[OK] {our_symbol:15s} -> {broker_symbol}")
             else:
                 # Try to find a match in available symbols
                 found_symbol = self.mt5.find_symbol_match(our_symbol)
                 if found_symbol:
                     self.symbol_map[our_symbol] = found_symbol
                     mapped_count += 1
-                    log.info(f"✓ {our_symbol:15s} -> {found_symbol} (auto-detected)")
+                    log.info(f"[OK] {our_symbol:15s} -> {found_symbol} (auto-detected)")
                 else:
-                    log.warning(f"✗ {our_symbol:15s} -> NOT FOUND (expected: {broker_symbol})")
+                    log.warning(f"[X] {our_symbol:15s} -> NOT FOUND (expected: {broker_symbol})")
         
         log.info("=" * 70)
         log.info(f"Mapped {mapped_count}/{len(TRADABLE_SYMBOLS)} symbols")
@@ -1107,9 +1107,9 @@ class LiveTradingBot:
             # Test that we can get symbol info
             info = self.mt5.get_symbol_info(broker_sym)
             if info:
-                log.info(f"✓ {oanda_sym} -> {broker_sym} (digits: {info.get('digits')}, spread: {info.get('spread')})")
+                log.info(f"[OK] {oanda_sym} -> {broker_sym} (digits: {info.get('digits')}, spread: {info.get('spread')})")
             else:
-                log.error(f"✗ {oanda_sym} -> {broker_sym} FAILED to get symbol info")
+                log.error(f"[X] {oanda_sym} -> {broker_sym} FAILED to get symbol info")
         log.info("=" * 70)
         
         balance = account.get('balance', 0)
@@ -2645,7 +2645,7 @@ class LiveTradingBot:
         log.info("=" * 70)
         log.info(f"Server: {MT5_SERVER}")
         log.info(f"Login: {MT5_LOGIN}")
-        log.info(f"Demo: {'YES ⚠️' if IS_DEMO else 'NO (LIVE)'}")
+        log.info(f"Demo: {'YES [DEMO]' if IS_DEMO else 'NO (LIVE)'}")
         log.info(f"Min Confluence: {MIN_CONFLUENCE}/7")
         log.info(f"Symbols: {len(TRADABLE_SYMBOLS)}")
         log.info("=" * 70)
