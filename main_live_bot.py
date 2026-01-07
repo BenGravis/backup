@@ -2675,9 +2675,20 @@ class LiveTradingBot:
             self.scan_all_symbols()
             self._mark_first_run_complete()
         else:
-            next_scan = get_next_scan_time()
-            log.info(f"Skipping immediate scan - next scheduled: {next_scan.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-            self.last_scan_time = datetime.now(timezone.utc)
+            # Check if we missed today's scan
+            server_now = get_server_time()
+            todays_scan = get_todays_scan_time().astimezone(SERVER_TZ)
+            
+            # If it's past scan time (00:10) and market is open, do the missed scan
+            if server_now.hour >= 0 and server_now.minute >= 10 and is_market_open():
+                log.info("=" * 70)
+                log.info(f"[CATCH-UP SCAN] Missed today's scan at 00:10 - scanning now")
+                log.info("=" * 70)
+                self.scan_all_symbols()
+            else:
+                next_scan = get_next_scan_time()
+                log.info(f"Skipping immediate scan - next scheduled: {next_scan.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+                self.last_scan_time = datetime.now(timezone.utc)
         
         # Weekend gap check (only on Monday morning)
         self.handle_weekend_gap_positions()
