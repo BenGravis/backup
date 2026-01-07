@@ -2664,7 +2664,7 @@ class LiveTradingBot:
         # ═══════════════════════════════════════════════════════════════════
         if self.should_do_immediate_scan():
             log.info("=" * 70)
-            log.info("🚀 IMMEDIATE SCAN - First run after restart/weekend")
+            log.info("[FIRST RUN] IMMEDIATE SCAN - First run after restart/weekend")
             log.info("=" * 70)
             self.scan_all_symbols()
             self._mark_first_run_complete()
