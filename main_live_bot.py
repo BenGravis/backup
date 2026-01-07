@@ -726,10 +726,12 @@ class LiveTradingBot:
             }
         
         # Calculate spread in pips
-        # NOTE: tick.spread in MT5 is in POINTS, not price units!
-        # Use (ask - bid) / pip_size for correct pip calculation
+        # NOTE: get_pip_size returns POINT size (0.00001), not pip size (0.0001)
+        # For 5-digit pairs: 1 pip = 10 points, so multiply point_size by 10
+        # For 3-digit JPY: 1 pip = 10 points, so multiply point_size by 10
         from ftmo_config import get_pip_size
-        pip_size = get_pip_size(symbol)
+        point_size = get_pip_size(symbol)
+        pip_size = point_size * 10  # Convert point size to pip size
         spread_price = tick.ask - tick.bid
         spread_pips = spread_price / pip_size if pip_size > 0 else tick.spread
         
@@ -1575,12 +1577,13 @@ class LiveTradingBot:
         if FIVEERS_CONFIG.min_spread_check and is_market_order:
             tick = self.mt5.get_tick(broker_symbol)
             if tick is not None:
-                pip_size = get_pip_size(symbol)
-                if pip_size <= 0:
+                point_size = get_pip_size(symbol)
+                if point_size <= 0:
                     log.warning(f"[{symbol}] Cannot determine pip size for spread check - using default 5 pip max")
-                    pip_size = 0.0001
+                    point_size = 0.00001
                 
-                # NOTE: tick.spread in MT5 is in POINTS, use (ask - bid) for correct calculation
+                # NOTE: get_pip_size returns POINT size, multiply by 10 for pip size
+                pip_size = point_size * 10
                 spread_price = tick.ask - tick.bid
                 current_spread_pips = spread_price / pip_size
                 
