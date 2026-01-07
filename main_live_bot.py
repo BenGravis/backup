@@ -168,16 +168,22 @@ def get_next_daily_close() -> datetime:
     """
     server_now = get_server_time()
     
-    # Daily close is at 00:00 server time
-    today_close = server_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Daily close is at 00:00 server time (midnight)
+    today_midnight = server_now.replace(hour=0, minute=0, second=0, microsecond=0)
     
-    if server_now >= today_close:
-        # Today's close has passed, next one is tomorrow
-        next_close = today_close + timedelta(days=1)
-    else:
-        next_close = today_close
-    
-    return next_close
+    # Next close is always tomorrow at 00:00
+    return today_midnight + timedelta(days=1)
+
+
+def get_todays_scan_time() -> datetime:
+    """
+    Get TODAY's scheduled scan time (00:10 server time).
+    This is for checking if we missed today's scan.
+    Returns datetime in UTC.
+    """
+    server_now = get_server_time()
+    today_scan = server_now.replace(hour=0, minute=10, second=0, microsecond=0)
+    return today_scan.astimezone(timezone.utc)
 
 
 def get_next_scan_time() -> datetime:
@@ -2755,12 +2761,31 @@ class LiveTradingBot:
                 
                 # ═══════════════════════════════════════════════════════════════
                 # DAILY SCAN - 10 min after daily close (00:10 server time)
+                # Check if we should scan: either we missed today's scan or next scan is due
                 # ═══════════════════════════════════════════════════════════════
-                next_scan = get_next_scan_time()
-                if self.last_scan_time and now >= next_scan:
+                todays_scan = get_todays_scan_time()
+                server_now = get_server_time()
+                
+                # Should we scan? Check if:
+                # 1. It's past today's scan time (00:10 server)
+                # 2. We haven't scanned yet today (last_scan_time < today's scan time)
+                should_scan = False
+                if self.last_scan_time:
+                    # Convert to server time for comparison
+                    last_scan_server = self.last_scan_time.astimezone(SERVER_TZ)
+                    todays_scan_server = todays_scan.astimezone(SERVER_TZ)
+                    
+                    # Past scan time AND haven't scanned today
+                    if server_now.hour >= 0 and server_now.minute >= 10:
+                        # Check if last scan was before today's scan time
+                        if last_scan_server < todays_scan_server:
+                            should_scan = True
+                            log.info(f"Scan due: last scan was {last_scan_server.strftime('%Y-%m-%d %H:%M')}, today's scan at {todays_scan_server.strftime('%Y-%m-%d %H:%M')}")
+                
+                if should_scan:
                     if is_market_open():
                         log.info("=" * 70)
-                        log.info(f"📊 DAILY SCAN - {get_server_time().strftime('%Y-%m-%d %H:%M')} Server Time")
+                        log.info(f"[DAILY SCAN] {server_now.strftime('%Y-%m-%d %H:%M')} Server Time")
                         log.info("=" * 70)
                         self.scan_all_symbols()
                     else:
