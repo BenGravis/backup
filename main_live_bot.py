@@ -1427,7 +1427,7 @@ class LiveTradingBot:
                 log.warning(f"[{symbol}] Current price {current_price:.5f} already above SL {sl:.5f} - skipping")
                 return None
         
-        log.info(f"[{symbol}] ✓ ACTIVE SIGNAL VALIDATED!")
+        log.info(f"[{symbol}] [OK] ACTIVE SIGNAL VALIDATED!")
         log.info(f"  Direction: {direction.upper()}")
         log.info(f"  Confluence: {confluence_score}/7")
         log.info(f"  Current Price: {current_price:.5f}")
