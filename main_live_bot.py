@@ -594,7 +594,7 @@ class LiveTradingBot:
             
             # Check if price is close enough to place limit order
             if entry_distance_r <= proximity_r:
-                log.info(f"[{symbol}] ✅ Price within {proximity_r}R of entry ({entry_distance_r:.2f}R)")
+                log.info(f"[{symbol}] [READY] Price within {proximity_r}R of entry ({entry_distance_r:.2f}R)")
                 
                 # Check spread before placing order
                 conditions = self.check_market_conditions(symbol)
