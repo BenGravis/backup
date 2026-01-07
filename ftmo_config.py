@@ -44,10 +44,10 @@ class Fiveers60KConfig:
     max_pending_orders: int = 100  # High Stakes: margin analysis shows 75 positions at 32.8% max margin
 
     # === ENTRY OPTIMIZATION ===
-    max_entry_distance_r: float = 1.0  # Max 1R distance from current price (realistic anticipation)
-    immediate_entry_r: float = 0.4  # Execute immediately if within 0.4R
+    max_entry_distance_r: float = 1.5  # Max 1.5R distance from current price (match simulate)
+    immediate_entry_r: float = 0.05  # Execute immediately if within 0.05R (match simulate)
     limit_order_proximity_r: float = 0.3  # Place limit order when price is within 0.3R of entry
-    entry_check_interval_minutes: int = 30  # Check entry proximity every 30 minutes
+    entry_check_interval_minutes: int = 5  # Check entry proximity every 5 minutes
 
     # === PENDING ORDER SETTINGS ===
     pending_order_expiry_hours: float = 120.0  # 5 days - matches backtest max_wait_bars=5
