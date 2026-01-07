@@ -35,7 +35,7 @@ class Fiveers60KConfig:
     max_risk_aggressive_pct: float = 1.5  # Aggressive mode: 1.5%
     max_risk_normal_pct: float = 0.75  # Normal mode: 0.75%
     max_risk_conservative_pct: float = 0.5  # Conservative mode: 0.5%
-    max_cumulative_risk_pct: float = 5.0  # Max total risk across all positions
+    max_cumulative_risk_pct: float = 100.0  # Disabled - DDD halt @ 3.5% provides sufficient protection
 
     # === TRADE LIMITS ===
     max_concurrent_trades: int = 7  # Backtest used up to 21, but 10 balances opportunity with risk
