@@ -60,6 +60,13 @@ class Fiveers60KConfig:
     # === CONFLUENCE SETTINGS ===
     min_confluence_score: int = 4  # OPTIMIZED: Lowered from 6 to 4 for 2-3x more trade opportunities (allows 4/7 setups)
     min_quality_factors: int = 2  # OPTIMIZED: Lowered from 3 to 2 for easier entry triggers
+    
+    # === CONFLUENCE SCALING (Match simulate_main_live_bot.py) ===
+    use_dynamic_scaling: bool = True  # Enable confluence-based risk scaling
+    confluence_base_score: int = 4  # Base confluence score (no scaling)
+    confluence_scale_per_point: float = 0.15  # Scale 15% per confluence point above base
+    max_confluence_multiplier: float = 1.5  # Max 150% of base risk (0.6% → 0.9%)
+    min_confluence_multiplier: float = 0.6  # Min 60% of base risk (0.6% → 0.36%)
 
     # ════════════════════════════════════════════════════════════════════════
     # DEPRECATED: TP SETTINGS - NOW LOADED FROM current_params.json

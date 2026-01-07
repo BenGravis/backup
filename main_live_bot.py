@@ -1708,6 +1708,12 @@ class LiveTradingBot:
                 stop_loss_price=sl,
                 max_lot=max_lot,
                 min_lot=min_lot,
+                confluence=confluence,
+                use_dynamic_scaling=FIVEERS_CONFIG.use_dynamic_scaling,
+                confluence_base_score=FIVEERS_CONFIG.confluence_base_score,
+                confluence_scale_per_point=FIVEERS_CONFIG.confluence_scale_per_point,
+                max_confluence_multiplier=FIVEERS_CONFIG.max_confluence_multiplier,
+                min_confluence_multiplier=FIVEERS_CONFIG.min_confluence_multiplier,
             )
             
             if lot_result.get("error") or lot_result["lot_size"] <= 0:
@@ -1725,6 +1731,13 @@ class LiveTradingBot:
             
             log.info(f"[{symbol}] Risk calculation:")
             log.info(f"  Balance: ${snapshot.balance:.2f}")
+            log.info(f"  Confluence: {confluence} (base: {FIVEERS_CONFIG.confluence_base_score})")
+            if FIVEERS_CONFIG.use_dynamic_scaling and confluence != FIVEERS_CONFIG.confluence_base_score:
+                confluence_diff = confluence - FIVEERS_CONFIG.confluence_base_score
+                multiplier = 1.0 + (confluence_diff * FIVEERS_CONFIG.confluence_scale_per_point)
+                multiplier = max(FIVEERS_CONFIG.min_confluence_multiplier, 
+                               min(FIVEERS_CONFIG.max_confluence_multiplier, multiplier))
+                log.info(f"  Risk scaling: {multiplier:.2f}x (confluence {confluence_diff:+d})")
             log.info(f"  Risk %: {risk_pct:.2f}% (daily loss: {daily_loss_pct:.1f}%, DD: {total_dd_pct:.1f}%)")
             log.info(f"  Risk $: ${risk_usd:.2f}")
             log.info(f"  Stop pips: {risk_pips:.1f}")

@@ -105,6 +105,12 @@ def calculate_lot_size(
     max_lot: float = 10.0,
     min_lot: float = 0.01,
     existing_positions: int = 0,
+    confluence: int = None,
+    use_dynamic_scaling: bool = False,
+    confluence_base_score: int = 4,
+    confluence_scale_per_point: float = 0.15,
+    max_confluence_multiplier: float = 1.5,
+    min_confluence_multiplier: float = 0.6,
 ) -> Dict:
     """
     Calculate position size for a trade.
@@ -120,6 +126,12 @@ def calculate_lot_size(
         max_lot: Maximum lot size allowed
         min_lot: Minimum lot size
         existing_positions: Number of open positions (for lot reduction)
+        confluence: Confluence score (optional, for scaling)
+        use_dynamic_scaling: Enable confluence-based risk scaling
+        confluence_base_score: Base confluence score (no scaling at this level)
+        confluence_scale_per_point: Scale factor per confluence point above base
+        max_confluence_multiplier: Maximum risk multiplier
+        min_confluence_multiplier: Minimum risk multiplier
         
     Returns:
         Dict with lot_size, risk_usd, stop_pips, actual_risk_pct
@@ -154,8 +166,16 @@ def calculate_lot_size(
             "error": "Stop loss too close to entry"
         }
     
+    # Apply confluence scaling (matching simulate_main_live_bot.py)
+    adjusted_risk_percent = risk_percent
+    if use_dynamic_scaling and confluence is not None:
+        confluence_diff = confluence - confluence_base_score
+        multiplier = 1.0 + (confluence_diff * confluence_scale_per_point)
+        multiplier = max(min_confluence_multiplier, min(max_confluence_multiplier, multiplier))
+        adjusted_risk_percent = risk_percent * multiplier
+    
     # Risk in USD
-    risk_usd = account_balance * risk_percent
+    risk_usd = account_balance * adjusted_risk_percent
     
     # Risk per lot at this stop distance
     risk_per_lot = stop_pips * pip_value_per_lot
