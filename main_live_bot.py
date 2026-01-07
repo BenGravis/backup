@@ -726,9 +726,12 @@ class LiveTradingBot:
             }
         
         # Calculate spread in pips
+        # NOTE: tick.spread in MT5 is in POINTS, not price units!
+        # Use (ask - bid) / pip_size for correct pip calculation
         from ftmo_config import get_pip_size
         pip_size = get_pip_size(symbol)
-        spread_pips = tick.spread / pip_size if pip_size > 0 else tick.spread
+        spread_price = tick.ask - tick.bid
+        spread_pips = spread_price / pip_size if pip_size > 0 else tick.spread
         
         # Get max allowed spread
         max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
@@ -1577,7 +1580,9 @@ class LiveTradingBot:
                     log.warning(f"[{symbol}] Cannot determine pip size for spread check - using default 5 pip max")
                     pip_size = 0.0001
                 
-                current_spread_pips = tick.spread / pip_size
+                # NOTE: tick.spread in MT5 is in POINTS, use (ask - bid) for correct calculation
+                spread_price = tick.ask - tick.bid
+                current_spread_pips = spread_price / pip_size
                 
                 if not FIVEERS_CONFIG.is_spread_acceptable(symbol, current_spread_pips):
                     max_spread = FIVEERS_CONFIG.get_max_spread_pips(symbol)
