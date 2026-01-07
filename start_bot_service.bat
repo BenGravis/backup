@@ -40,6 +40,6 @@ REM Start the bot with logging (append)
 echo Starting main_live_bot.py at %date% %time%
 echo Using Python: %PYTHON%
 echo Log file: logs\bot_output.log
-"%PYTHON%" main_live_bot.py >> logs\bot_output.log 2>&1
+"%PYTHON%" main_live_bot.py --first-run >> logs\bot_output.log 2>&1
 
 endlocal
