@@ -262,6 +262,36 @@ class MT5Client:
             "currency": info.currency,
         }
     
+    def _get_filling_mode(self, symbol: str) -> int:
+        """
+        Get the appropriate filling mode for a symbol based on broker support.
+        
+        Different brokers support different filling modes:
+        - ORDER_FILLING_FOK (0): Fill or Kill - must fill completely or cancel
+        - ORDER_FILLING_IOC (1): Immediate or Cancel - fill what's available
+        - ORDER_FILLING_RETURN (2): Return - for partial fills (pending orders)
+        
+        The symbol_info.filling_mode is a bitmask of supported modes.
+        """
+        mt5 = self._import_mt5()
+        info = mt5.symbol_info(symbol)
+        
+        if info is None:
+            # Default to FOK if we can't get symbol info
+            return mt5.ORDER_FILLING_FOK
+        
+        filling_mode = info.filling_mode
+        
+        # Check supported modes in order of preference
+        # FOK is most commonly supported for market orders
+        if filling_mode & mt5.SYMBOL_FILLING_FOK:
+            return mt5.ORDER_FILLING_FOK
+        elif filling_mode & mt5.SYMBOL_FILLING_IOC:
+            return mt5.ORDER_FILLING_IOC
+        else:
+            # Some brokers only support RETURN mode
+            return mt5.ORDER_FILLING_RETURN
+    
     def get_tick(self, symbol: str) -> Optional[TickData]:
         """Get current tick for a symbol."""
         if not self.connected:
@@ -366,7 +396,7 @@ class MT5Client:
             "magic": self.MAGIC_NUMBER,
             "comment": self.COMMENT,
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": self._get_filling_mode(symbol),
         }
         
         result = mt5.order_send(request)
@@ -425,7 +455,7 @@ class MT5Client:
             "magic": self.MAGIC_NUMBER,
             "comment": "TradrBot Close",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": self._get_filling_mode(symbol),
         }
         
         result = mt5.order_send(request)
@@ -498,7 +528,7 @@ class MT5Client:
             "magic": self.MAGIC_NUMBER,
             "comment": "TradrBot PartialClose",
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": self._get_filling_mode(symbol),
         }
         
         result = mt5.order_send(request)
@@ -720,7 +750,7 @@ class MT5Client:
             "comment": self.COMMENT,
             "type_time": mt5.ORDER_TIME_SPECIFIED,
             "expiration": expiration_timestamp,
-            "type_filling": mt5.ORDER_FILLING_RETURN,
+            "type_filling": self._get_filling_mode(symbol),
         }
         
         if tp and tp > 0:
@@ -860,7 +890,7 @@ class MT5Client:
             "magic": self.MAGIC_NUMBER,
             "comment": self.COMMENT,
             "type_time": mt5.ORDER_TIME_GTC,
-            "type_filling": mt5.ORDER_FILLING_IOC,
+            "type_filling": self._get_filling_mode(symbol),
         }
         
         if tp and tp > 0:
