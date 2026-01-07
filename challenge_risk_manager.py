@@ -357,6 +357,19 @@ class ChallengeRiskManager:
                     # Risk = |entry - SL| * lot_size * point_value
                     # Simplified: use the original risk amount if available
                     # Otherwise estimate based on current profit/loss
+                    # Handle both dict and MT5 Position objects
+                    if hasattr(pos, '_asdict'):
+                        # MT5 Position is a named tuple - convert to dict
+                        pos = pos._asdict()
+                    elif hasattr(pos, 'sl'):
+                        # MT5 Position object with attributes - convert to dict
+                        pos = {
+                            'sl': getattr(pos, 'sl', 0),
+                            'price_open': getattr(pos, 'price_open', 0),
+                            'volume': getattr(pos, 'volume', 0),
+                            'symbol': getattr(pos, 'symbol', ''),
+                        }
+                    
                     sl = pos.get('sl', 0)
                     entry = pos.get('price_open', pos.get('open_price', 0))
                     volume = pos.get('volume', pos.get('lots', 0))
