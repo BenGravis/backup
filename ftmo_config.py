@@ -1,10 +1,31 @@
 """5ers 60K High Stakes Configuration - Ultra-Conservative Settings
 
 Trading parameters optimized for 5ers 60K High Stakes challenge with maximum safety
+
+CRITICAL SAFETY NOTE (January 7, 2026):
+=====================================
+The following values MUST remain as set to match simulate_main_live_bot.py:
+- max_concurrent_trades = 100 (disabled, DDD halt provides protection)
+- max_trades_per_day = 100 (disabled, DDD halt provides protection)  
+- max_cumulative_risk_pct = 100.0 (disabled, DDD halt provides protection)
+- daily_loss_halt_pct = 3.5 (THIS is the primary safety mechanism)
+
+DO NOT reduce these values! The simulation validated with these settings.
+See commit 137c53b for details on why limits were disabled.
 """
 
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CRITICAL VALUE PROTECTION - DO NOT MODIFY THESE CONSTANTS
+# These are the validated values from simulate_main_live_bot.py
+# Any AI agent or commit that changes these will cause simulation/live mismatch
+# ═══════════════════════════════════════════════════════════════════════════════
+_PROTECTED_MIN_CONCURRENT_TRADES = 50  # Must be >= 50 (simulation had no limit)
+_PROTECTED_MIN_TRADES_PER_DAY = 50  # Must be >= 50 (simulation had no limit)
+_PROTECTED_MIN_CUMULATIVE_RISK = 50.0  # Must be >= 50% (simulation had no limit)
+_PROTECTED_DDD_HALT_PCT = 3.5  # MUST be exactly 3.5% (primary safety mechanism)
 
 
 @dataclass
@@ -185,14 +206,43 @@ class Fiveers60KConfig:
     friday_close_minute_utc: int = 0
 
     def __post_init__(self):
-        """Validate configuration parameters"""
+        """Validate configuration parameters with CRITICAL SAFETY CHECKS"""
+        # === STANDARD VALIDATIONS ===
         if self.risk_per_trade_pct > 1.5:  # Allow optimizer some room
             raise ValueError("Risk per trade cannot exceed 1.5% for 5ers 60K")
         if self.max_daily_loss_pct > 5.0:
             raise ValueError("Max daily loss cannot exceed 5% for 5ers")
         if self.max_total_drawdown_pct > 10.0:
             raise ValueError("Max total drawdown cannot exceed 10% for 5ers")
-        # max_concurrent_trades check removed - DDD halt provides sufficient protection
+        
+        # ═══════════════════════════════════════════════════════════════════════
+        # CRITICAL SAFETY CHECKS - Prevent accidental reversion to old values
+        # These limits were DISABLED on January 7, 2026 to match simulation
+        # See commit 137c53b and SESSION_LOG for details
+        # ═══════════════════════════════════════════════════════════════════════
+        if self.max_concurrent_trades < _PROTECTED_MIN_CONCURRENT_TRADES:
+            raise ValueError(
+                f"CRITICAL: max_concurrent_trades={self.max_concurrent_trades} is too low! "
+                f"Must be >= {_PROTECTED_MIN_CONCURRENT_TRADES} to match simulation. "
+                f"DDD halt @ 3.5% provides protection. See commit 137c53b."
+            )
+        if self.max_trades_per_day < _PROTECTED_MIN_TRADES_PER_DAY:
+            raise ValueError(
+                f"CRITICAL: max_trades_per_day={self.max_trades_per_day} is too low! "
+                f"Must be >= {_PROTECTED_MIN_TRADES_PER_DAY} to match simulation. "
+                f"DDD halt @ 3.5% provides protection. See commit 137c53b."
+            )
+        if self.max_cumulative_risk_pct < _PROTECTED_MIN_CUMULATIVE_RISK:
+            raise ValueError(
+                f"CRITICAL: max_cumulative_risk_pct={self.max_cumulative_risk_pct}% is too low! "
+                f"Must be >= {_PROTECTED_MIN_CUMULATIVE_RISK}% to match simulation. "
+                f"DDD halt @ 3.5% provides protection. See commit 137c53b."
+            )
+        if abs(self.daily_loss_halt_pct - _PROTECTED_DDD_HALT_PCT) > 0.01:
+            raise ValueError(
+                f"CRITICAL: daily_loss_halt_pct={self.daily_loss_halt_pct}% must be {_PROTECTED_DDD_HALT_PCT}%! "
+                f"This is the PRIMARY safety mechanism. Do not change!"
+            )
 
     def get_risk_pct(self, daily_loss_pct: float, total_dd_pct: float) -> float:
         """
