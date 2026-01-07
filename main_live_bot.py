@@ -1185,6 +1185,16 @@ class LiveTradingBot:
                 return True
         return False
     
+    def check_existing_pending_order(self, symbol: str) -> bool:
+        """Check if we already have a pending order on this symbol in MT5."""
+        # symbol is in OANDA format, convert to broker format for checking
+        broker_symbol = self.symbol_map.get(symbol, symbol)
+        pending_orders = self.mt5.get_my_pending_orders()
+        for order in pending_orders:
+            if order.symbol == broker_symbol:
+                return True
+        return False
+    
     def _calculate_atr(self, candles: List[Dict], period: int = 14) -> float:
         """
         Calculate Average True Range from candles.
@@ -1250,11 +1260,21 @@ class LiveTradingBot:
             log.info(f"[{symbol}] Already in position, skipping")
             return None
         
+        # Check if already have a pending order in MT5
+        if self.check_existing_pending_order(symbol):
+            log.info(f"[{symbol}] Already have pending order in MT5, skipping")
+            return None
+        
         if symbol in self.pending_setups:
             existing = self.pending_setups[symbol]
             if existing.status == "pending":
                 log.info(f"[{symbol}] Already have pending setup, skipping")
                 return None
+        
+        # Check if already in awaiting_entry queue
+        if symbol in self.awaiting_entry:
+            log.info(f"[{symbol}] Already in awaiting_entry queue, skipping")
+            return None
         
         data = self.get_candle_data(symbol)
         
@@ -1594,11 +1614,21 @@ class LiveTradingBot:
                 
                 log.info(f"[{symbol}] Spread check passed: {current_spread_pips:.1f} pips")
         
+        # Check if already have a pending order in MT5
+        if self.check_existing_pending_order(symbol):
+            log.info(f"[{symbol}] Already have pending order in MT5, skipping")
+            return False
+        
         if symbol in self.pending_setups:
             existing = self.pending_setups[symbol]
             if existing.status == "pending":
                 log.info(f"[{symbol}] Already have pending setup at {existing.entry_price:.5f}, skipping")
                 return False
+        
+        # Also check awaiting_entry queue
+        if symbol in self.awaiting_entry:
+            log.info(f"[{symbol}] Already in awaiting_entry queue, skipping")
+            return False
         
         if CHALLENGE_MODE and self.challenge_manager:
             snapshot = self.challenge_manager.get_account_snapshot()
