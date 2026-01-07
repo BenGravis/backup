@@ -282,11 +282,16 @@ class MT5Client:
         
         filling_mode = info.filling_mode
         
+        # Bitmask constants for symbol_info.filling_mode
+        # These are not exposed as mt5.SYMBOL_FILLING_* attributes
+        SYMBOL_FILLING_FOK = 1  # Bit 0: FOK supported
+        SYMBOL_FILLING_IOC = 2  # Bit 1: IOC supported
+        
         # Check supported modes in order of preference
         # FOK is most commonly supported for market orders
-        if filling_mode & mt5.SYMBOL_FILLING_FOK:
+        if filling_mode & SYMBOL_FILLING_FOK:
             return mt5.ORDER_FILLING_FOK
-        elif filling_mode & mt5.SYMBOL_FILLING_IOC:
+        elif filling_mode & SYMBOL_FILLING_IOC:
             return mt5.ORDER_FILLING_IOC
         else:
             # Some brokers only support RETURN mode
