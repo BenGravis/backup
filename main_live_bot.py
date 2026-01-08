@@ -586,9 +586,6 @@ class LiveTradingBot:
             current_price = tick.bid if setup.get("direction") == "bullish" else tick.ask
             entry_distance_r = abs(current_price - entry) / risk
             
-            # CRITICAL: Update setup with fresh entry_distance_r for place_setup_order
-            setup["entry_distance_r"] = entry_distance_r
-            
             # Check if entry still valid (not too far)
             if entry_distance_r > FIVEERS_CONFIG.max_entry_distance_r:
                 log.info(f"[{symbol}] Entry too far ({entry_distance_r:.2f}R > {FIVEERS_CONFIG.max_entry_distance_r}R), removing")
@@ -597,7 +594,7 @@ class LiveTradingBot:
             
             # Check if price is close enough to place limit order
             if entry_distance_r <= proximity_r:
-                log.info(f"[{symbol}] [READY] Price within {proximity_r}R of entry ({entry_distance_r:.2f}R)")
+                log.info(f"[{symbol}] ✅ Price within {proximity_r}R of entry ({entry_distance_r:.2f}R)")
                 
                 # Check spread before placing order
                 conditions = self.check_market_conditions(symbol)
@@ -683,9 +680,6 @@ class LiveTradingBot:
                     log.info(f"[{symbol}] Entry too far now ({entry_distance_r:.2f}R), removing")
                     signals_to_remove.append(symbol)
                     continue
-                
-                # CRITICAL: Update setup with fresh entry_distance_r for place_setup_order
-                setup["entry_distance_r"] = entry_distance_r
             
             # Check market conditions
             conditions = self.check_market_conditions(symbol)
@@ -694,8 +688,8 @@ class LiveTradingBot:
                 log.info(f"[{symbol}] ✅ Spread now OK ({conditions['spread_pips']:.1f} pips)")
                 log.info(f"[{symbol}] Executing trade!")
                 
-                # Execute trade - skip_proximity_check=True since we already validated entry is reachable
-                if self.place_setup_order(setup, check_spread=False, skip_proximity_check=True):
+                # Execute trade
+                if self.place_setup_order(setup, check_spread=False):
                     signals_to_remove.append(symbol)
             else:
                 log.debug(f"[{symbol}] Still waiting - {conditions['reason']}")
@@ -1381,23 +1375,19 @@ class LiveTradingBot:
                 log.info(f"[{symbol}] SL adjusted to {FIVEERS_CONFIG.min_sl_atr_ratio} ATR: {sl:.5f}")
             
         # ════════════════════════════════════════════════════════════════════════
-        # 5-TP SYSTEM: Use atr_tp*_multiplier from current_params.json
-        # This ensures live trading uses SAME TP levels as optimizer/backtest
-        # TP5 closes ALL remaining position (45%)
+        # 3-TP SYSTEM: Use tp*_r_multiple from current_params.json
+        # ALIGNED WITH SIMULATOR - uses tp1_r_multiple, tp2_r_multiple, tp3_r_multiple
+        # TP3 closes ALL remaining position (same as simulator)
         # ════════════════════════════════════════════════════════════════════════
         risk = abs(entry - sl)
         if direction == "bullish":
-            tp1 = entry + (risk * self.params.atr_tp1_multiplier)
-            tp2 = entry + (risk * self.params.atr_tp2_multiplier)
-            tp3 = entry + (risk * self.params.atr_tp3_multiplier)
-            tp4 = entry + (risk * self.params.atr_tp4_multiplier)
-            tp5 = entry + (risk * self.params.atr_tp5_multiplier)
+            tp1 = entry + (risk * self.params.tp1_r_multiple)
+            tp2 = entry + (risk * self.params.tp2_r_multiple)
+            tp3 = entry + (risk * self.params.tp3_r_multiple)
         else:
-            tp1 = entry - (risk * self.params.atr_tp1_multiplier)
-            tp2 = entry - (risk * self.params.atr_tp2_multiplier)
-            tp3 = entry - (risk * self.params.atr_tp3_multiplier)
-            tp4 = entry - (risk * self.params.atr_tp4_multiplier)
-            tp5 = entry - (risk * self.params.atr_tp5_multiplier)
+            tp1 = entry - (risk * self.params.tp1_r_multiple)
+            tp2 = entry - (risk * self.params.tp2_r_multiple)
+            tp3 = entry - (risk * self.params.tp3_r_multiple)
         
         if direction == "bullish":
             if current_price <= sl:
@@ -1414,11 +1404,9 @@ class LiveTradingBot:
         log.info(f"  Current Price: {current_price:.5f}")
         log.info(f"  Entry: {entry:.5f} ({entry_distance_r:.2f}R away)")
         log.info(f"  SL: {sl:.5f} ({sl_pips:.1f} pips)")
-        log.info(f"  TP1: {tp1:.5f} ({self.params.atr_tp1_multiplier}R) -> {self.params.tp1_close_pct*100:.0f}%")
-        log.info(f"  TP2: {tp2:.5f} ({self.params.atr_tp2_multiplier}R) -> {self.params.tp2_close_pct*100:.0f}%")
-        log.info(f"  TP3: {tp3:.5f} ({self.params.atr_tp3_multiplier}R) -> {self.params.tp3_close_pct*100:.0f}%")
-        log.info(f"  TP4: {tp4:.5f} ({self.params.atr_tp4_multiplier}R) -> {self.params.tp4_close_pct*100:.0f}%")
-        log.info(f"  TP5: {tp5:.5f} ({self.params.atr_tp5_multiplier}R) -> {self.params.tp5_close_pct*100:.0f}% (ALL remaining)")
+        log.info(f"  TP1: {tp1:.5f} ({self.params.tp1_r_multiple}R) -> {self.params.tp1_close_pct*100:.0f}%")
+        log.info(f"  TP2: {tp2:.5f} ({self.params.tp2_r_multiple}R) -> {self.params.tp2_close_pct*100:.0f}%")
+        log.info(f"  TP3: {tp3:.5f} ({self.params.tp3_r_multiple}R) -> CLOSE ALL remaining")
         
         return {
             "symbol": symbol,
@@ -1432,8 +1420,6 @@ class LiveTradingBot:
             "tp1": tp1,
             "tp2": tp2,
             "tp3": tp3,
-            "tp4": tp4,
-            "tp5": tp5,
             "entry_distance_r": entry_distance_r,
             "sl_pips": sl_pips,
             "flags": flags,
@@ -1619,15 +1605,13 @@ class LiveTradingBot:
                 log.warning(f"[{symbol}] Trading halted: total DD {total_dd_pct:.1f}% >= {FIVEERS_CONFIG.total_dd_emergency_pct}%")
                 return False
             
-            max_trades = FIVEERS_CONFIG.get_max_trades(profit_pct)
+            # NOTE: No max_trades limit - simulator has no position limit
+            # Only max_pending_orders (100) applies as a sanity check
             pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
             open_positions = getattr(snapshot, "open_positions", len(self.mt5.get_my_positions()) if self.mt5 else 0)
             total_exposure = open_positions + pending_count
 
-            if open_positions >= max_trades and entry_distance_r <= FIVEERS_CONFIG.immediate_entry_r:
-                log.info(f"[{symbol}] Max filled positions reached: {open_positions}/{max_trades} - cannot place market order")
-                return False
-            
+            # Only limit total pending orders (not filled positions)
             if total_exposure >= FIVEERS_CONFIG.max_pending_orders:
                 replaced = self._try_replace_worst_pending(
                     new_symbol=symbol,
@@ -1716,12 +1700,9 @@ class LiveTradingBot:
                 lot_size = max(0.01, lot_size)
                 log.info(f"[{symbol}] Lot reduced to {lot_size} to stay within cumulative risk limit")
             
-            simulated_daily_loss = abs(snapshot.daily_pnl) + risk_usd if snapshot.daily_pnl < 0 else risk_usd
-            simulated_daily_loss_pct = (simulated_daily_loss / self.challenge_manager.day_start_balance) * 100
-            
-            if simulated_daily_loss_pct >= FIVEERS_CONFIG.max_daily_loss_pct:
-                log.warning(f"[{symbol}] Would breach daily loss: simulated {simulated_daily_loss_pct:.1f}% >= {FIVEERS_CONFIG.max_daily_loss_pct}%")
-                return False
+            # NOTE: We do NOT simulate daily loss from potential SL hit.
+            # The simulator (simulate_main_live_bot.py) only checks DDD at fill moment,
+            # not hypothetical losses. This matches backtest behavior.
             
         else:
             risk_check = self.risk_manager.check_trade(
@@ -2170,23 +2151,19 @@ class LiveTradingBot:
         """
         Manage partial take profits for active positions.
         
-        5-TP SYSTEM (from current_params.json):
-        - TP1: Close tp1_close_pct (10%) at atr_tp1_multiplier (0.6R)
-        - TP2: Close tp2_close_pct (10%) at atr_tp2_multiplier (1.2R)
-        - TP3: Close tp3_close_pct (15%) at atr_tp3_multiplier (2.0R)
-        - TP4: Close tp4_close_pct (20%) at atr_tp4_multiplier (2.5R)
-        - TP5: Close tp5_close_pct (45%) at atr_tp5_multiplier (3.5R) - ALL REMAINING
+        3-TP SYSTEM (ALIGNED WITH SIMULATOR):
+        - TP1: Close tp1_close_pct at tp1_r_multiple
+        - TP2: Close tp2_close_pct at tp2_r_multiple  
+        - TP3: Close ALL REMAINING at tp3_r_multiple
         
         All closes via MARKET ORDERS with position=ticket!
         
-        TRAILING STOP LOGIC (matches H1 validator):
-        - TP1 hit: SL → Breakeven (if TP1 >= trail_activation_r, else just BE)
-        - TP2 hit: SL → TP1 + 0.5R (if TP2 >= trail_activation_r)
-        - TP3 hit: SL → TP2 + 0.5R (always trails from TP3+)
-        - TP4 hit: SL → TP3 + 0.5R
-        - TP5 hit: Close ALL remaining position
+        TRAILING STOP LOGIC (matches simulator):
+        - TP1 hit: SL → Breakeven
+        - TP2 hit: SL → TP1 + 0.5R
+        - TP3 hit: Close ALL remaining position
         
-        Tracks partial close state in pending_setups.partial_closes (0-5).
+        Tracks partial close state in pending_setups.partial_closes (0-3).
         """
         positions = self.mt5.get_my_positions()
         if not positions:
@@ -2227,22 +2204,20 @@ class LiveTradingBot:
             else:
                 current_r = (entry - current_price) / risk
             
-            # Get TP levels from params (5-TP system)
-            tp1_r = self.params.atr_tp1_multiplier  # 0.6R
-            tp2_r = self.params.atr_tp2_multiplier  # 1.2R
-            tp3_r = self.params.atr_tp3_multiplier  # 2.0R
-            tp4_r = self.params.atr_tp4_multiplier  # 2.5R
-            tp5_r = self.params.atr_tp5_multiplier  # 3.5R
+            # Get TP levels from params (3-TP system - ALIGNED WITH SIMULATOR)
+            tp1_r = self.params.tp1_r_multiple
+            tp2_r = self.params.tp2_r_multiple
+            tp3_r = self.params.tp3_r_multiple
             
             original_volume = setup.lot_size
             current_volume = pos.volume
             partial_state = setup.partial_closes if hasattr(setup, 'partial_closes') else 0
             
             # ═══════════════════════════════════════════════════════════════
-            # TP1 HIT - Close 10% (tp1_close_pct)
+            # TP1 HIT - Close tp1_close_pct, move SL to breakeven
             # ═══════════════════════════════════════════════════════════════
             if current_r >= tp1_r and partial_state == 0:
-                close_pct = self.params.tp1_close_pct  # 0.10
+                close_pct = self.params.tp1_close_pct
                 close_volume = max(0.01, round(original_volume * close_pct, 2))
                 close_volume = min(close_volume, current_volume)
                 
@@ -2254,30 +2229,20 @@ class LiveTradingBot:
                     setup.partial_closes = 1
                     setup.tp1_hit = True
                     
-                    # Check if TP1 activates trailing (must be >= trail_activation_r)
-                    trail_activation_r = getattr(self.params, 'trail_activation_r', 0.65)
-                    
-                    if tp1_r >= trail_activation_r:
-                        # TP1 activates trailing - move to breakeven
-                        new_sl = entry
-                        log.info(f"[{broker_symbol}] TP1 >= {trail_activation_r}R: Trail activated, SL → Breakeven")
-                    else:
-                        # TP1 < trail_activation_r - only move to breakeven (no trailing yet)
-                        new_sl = entry
-                        log.info(f"[{broker_symbol}] TP1 < {trail_activation_r}R: SL → Breakeven (trail not active yet)")
-                    
+                    # Move SL to breakeven (matches simulator)
+                    new_sl = entry
                     self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
-                    log.info(f"[{broker_symbol}] SL moved to: {new_sl:.5f}")
+                    log.info(f"[{broker_symbol}] SL moved to breakeven: {new_sl:.5f}")
                     
                     self._save_pending_setups()
                 else:
                     log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
             
             # ═══════════════════════════════════════════════════════════════
-            # TP2 HIT - Close 10% (tp2_close_pct)
+            # TP2 HIT - Close tp2_close_pct, trail SL to TP1 + 0.5R
             # ═══════════════════════════════════════════════════════════════
             elif current_r >= tp2_r and partial_state == 1:
-                close_pct = self.params.tp2_close_pct  # 0.10
+                close_pct = self.params.tp2_close_pct
                 close_volume = max(0.01, round(original_volume * close_pct, 2))
                 close_volume = min(close_volume, current_volume)
                 
@@ -2289,109 +2254,37 @@ class LiveTradingBot:
                     setup.partial_closes = 2
                     setup.tp2_hit = True
                     
-                    # Check if TP2 activates trailing
-                    trail_activation_r = getattr(self.params, 'trail_activation_r', 0.65)
-                    
-                    if tp2_r >= trail_activation_r:
-                        # Trail SL to TP1 + 0.5R (matches H1 validator)
-                        if setup.direction == "bullish":
-                            new_sl = entry + (risk * tp1_r) + (0.5 * risk)
-                        else:
-                            new_sl = entry - (risk * tp1_r) - (0.5 * risk)
-                        log.info(f"[{broker_symbol}] TP2 >= {trail_activation_r}R: Trail to TP1+0.5R")
+                    # Trail SL to TP1 + 0.5R (matches simulator)
+                    if setup.direction == "bullish":
+                        new_sl = entry + (risk * tp1_r) + (0.5 * risk)
                     else:
-                        # Move to TP1 without buffer
-                        if setup.direction == "bullish":
-                            new_sl = entry + (risk * tp1_r)
-                        else:
-                            new_sl = entry - (risk * tp1_r)
-                        log.info(f"[{broker_symbol}] TP2 < {trail_activation_r}R: Move to TP1")
+                        new_sl = entry - (risk * tp1_r) - (0.5 * risk)
                     
                     self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
-                    log.info(f"[{broker_symbol}] SL moved to: {new_sl:.5f}")
+                    log.info(f"[{broker_symbol}] SL trailed to TP1+0.5R: {new_sl:.5f}")
                     
                     self._save_pending_setups()
                 else:
                     log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
             
             # ═══════════════════════════════════════════════════════════════
-            # TP3 HIT - Close 15% (tp3_close_pct)
+            # TP3 HIT - Close ALL REMAINING (matches simulator exactly)
             # ═══════════════════════════════════════════════════════════════
             elif current_r >= tp3_r and partial_state == 2:
-                close_pct = self.params.tp3_close_pct  # 0.15
-                close_volume = max(0.01, round(original_volume * close_pct, 2))
-                close_volume = min(close_volume, current_volume)
-                
-                log.info(f"[{broker_symbol}] TP3 HIT at {current_r:.2f}R! Closing {close_pct*100:.0f}%")
-                
-                result = self.mt5.partial_close(pos.ticket, close_volume)
-                if result.success:
-                    log.info(f"[{broker_symbol}] ✅ Partial close at {result.price}")
-                    setup.partial_closes = 3
-                    setup.tp3_hit = True
-                    
-                    # Trail SL to TP2 + 0.5R (matches H1 validator)
-                    if setup.direction == "bullish":
-                        new_sl = entry + (risk * tp2_r) + (0.5 * risk)
-                    else:
-                        new_sl = entry - (risk * tp2_r) - (0.5 * risk)
-                    
-                    self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
-                    log.info(f"[{broker_symbol}] SL trailed to TP2+0.5R: {new_sl:.5f}")
-                    
-                    self._save_pending_setups()
-                else:
-                    log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
-            
-            # ═══════════════════════════════════════════════════════════════
-            # TP4 HIT - Close 20% (tp4_close_pct)
-            # ═══════════════════════════════════════════════════════════════
-            elif current_r >= tp4_r and partial_state == 3:
-                close_pct = self.params.tp4_close_pct  # 0.20
-                close_volume = max(0.01, round(original_volume * close_pct, 2))
-                close_volume = min(close_volume, current_volume)
-                
-                log.info(f"[{broker_symbol}] TP4 HIT at {current_r:.2f}R! Closing {close_pct*100:.0f}%")
-                
-                result = self.mt5.partial_close(pos.ticket, close_volume)
-                if result.success:
-                    log.info(f"[{broker_symbol}] ✅ Partial close at {result.price}")
-                    setup.partial_closes = 4
-                    setup.tp4_hit = True if hasattr(setup, 'tp4_hit') else None
-                    
-                    # Trail SL to TP3 + 0.5R (matches H1 validator)
-                    if setup.direction == "bullish":
-                        new_sl = entry + (risk * tp3_r) + (0.5 * risk)
-                    else:
-                        new_sl = entry - (risk * tp3_r) - (0.5 * risk)
-                    
-                    self.mt5.modify_sl_tp(pos.ticket, sl=new_sl)
-                    log.info(f"[{broker_symbol}] SL trailed to TP3+0.5R: {new_sl:.5f}")
-                    
-                    self._save_pending_setups()
-                else:
-                    log.error(f"[{broker_symbol}] Partial close failed: {result.error}")
-            
-            # ═══════════════════════════════════════════════════════════════
-            # TP5 HIT - Close remaining 45% (tp5_close_pct) - ALL REMAINING
-            # ═══════════════════════════════════════════════════════════════
-            elif current_r >= tp5_r and partial_state == 4:
-                log.info(f"[{broker_symbol}] TP5 HIT at {current_r:.2f}R! Closing ALL remaining")
+                log.info(f"[{broker_symbol}] TP3 HIT at {current_r:.2f}R! Closing ALL remaining")
                 
                 result = self.mt5.close_position(pos.ticket)
                 if result.success:
                     log.info(f"[{broker_symbol}] ✅ Position FULLY CLOSED at {result.price}")
-                    setup.partial_closes = 5
-                    setup.tp5_hit = True if hasattr(setup, 'tp5_hit') else None
+                    setup.partial_closes = 3
+                    setup.tp3_hit = True
                     setup.status = "closed"
                     
-                    # Calculate total R for this trade
+                    # Calculate total R for this trade (matches simulator)
                     total_r = (tp1_r * self.params.tp1_close_pct +
                               tp2_r * self.params.tp2_close_pct +
-                              tp3_r * self.params.tp3_close_pct +
-                              tp4_r * self.params.tp4_close_pct +
-                              tp5_r * self.params.tp5_close_pct)
-                    log.info(f"[{broker_symbol}] Total R: ~{total_r:.2f}R (perfect 5-TP exit)")
+                              tp3_r * (1.0 - self.params.tp1_close_pct - self.params.tp2_close_pct))
+                    log.info(f"[{broker_symbol}] Total R: ~{total_r:.2f}R (perfect 3-TP exit)")
                     
                     self._save_pending_setups()
                 else:
@@ -2595,12 +2488,10 @@ class LiveTradingBot:
         log.info(f"  - Step 2: 5% profit = ${ACCOUNT_SIZE * 0.05:,.0f}")
         log.info(f"  - Min Trading Days: 3")
         log.info("=" * 70)
-        log.info(f"5-TP EXIT SYSTEM:")
-        log.info(f"  - TP1: {self.params.atr_tp1_multiplier}R -> {self.params.tp1_close_pct*100:.0f}%")
-        log.info(f"  - TP2: {self.params.atr_tp2_multiplier}R -> {self.params.tp2_close_pct*100:.0f}%")
-        log.info(f"  - TP3: {self.params.atr_tp3_multiplier}R -> {self.params.tp3_close_pct*100:.0f}%")
-        log.info(f"  - TP4: {self.params.atr_tp4_multiplier}R -> {self.params.tp4_close_pct*100:.0f}%")
-        log.info(f"  - TP5: {self.params.atr_tp5_multiplier}R -> {self.params.tp5_close_pct*100:.0f}%")
+        log.info(f"3-TP EXIT SYSTEM (ALIGNED WITH SIMULATOR):")
+        log.info(f"  - TP1: {self.params.tp1_r_multiple}R -> {self.params.tp1_close_pct*100:.0f}%")
+        log.info(f"  - TP2: {self.params.tp2_r_multiple}R -> {self.params.tp2_close_pct*100:.0f}%")
+        log.info(f"  - TP3: {self.params.tp3_r_multiple}R -> CLOSE ALL remaining")
         log.info("=" * 70)
         log.info(f"Server: {MT5_SERVER}")
         log.info(f"Login: {MT5_LOGIN}")
