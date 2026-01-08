@@ -1605,21 +1605,22 @@ class LiveTradingBot:
                 log.warning(f"[{symbol}] Trading halted: total DD {total_dd_pct:.1f}% >= {FIVEERS_CONFIG.total_dd_emergency_pct}%")
                 return False
             
-            # NOTE: No max_trades limit - simulator has no position limit
-            # Only max_pending_orders (100) applies as a sanity check
+            # DYNAMIC POSITION LIMIT based on drawdown
+            # Reduces exposure when in drawdown to protect account
+            max_trades = FIVEERS_CONFIG.get_max_trades(profit_pct, total_dd_pct)
             pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
             open_positions = getattr(snapshot, "open_positions", len(self.mt5.get_my_positions()) if self.mt5 else 0)
             total_exposure = open_positions + pending_count
 
-            # Only limit total pending orders (not filled positions)
-            if total_exposure >= FIVEERS_CONFIG.max_pending_orders:
+            # Check against dynamic max trades limit
+            if total_exposure >= max_trades:
                 replaced = self._try_replace_worst_pending(
                     new_symbol=symbol,
                     new_confluence=setup.get("confluence_score", 0),
                     new_entry_distance_r=entry_distance_r,
                 )
                 if not replaced:
-                    log.info(f"[{symbol}] Max total exposure reached: {total_exposure}/{FIVEERS_CONFIG.max_pending_orders} (positions: {open_positions}, pending: {pending_count})")
+                    log.info(f"[{symbol}] Max trades reached for DD {total_dd_pct:.1f}%: {total_exposure}/{max_trades} (positions: {open_positions}, pending: {pending_count})")
                     return False
                 pending_count = len([s for s in self.pending_setups.values() if s.status == "pending"])
             
