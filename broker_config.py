@@ -211,13 +211,13 @@ def get_forexcom_demo_config() -> BrokerConfig:
 
 def get_fiveers_live_config() -> BrokerConfig:
     """
-    Get 5ers 60K High Stakes Live configuration.
+    Get 5ers 20K High Stakes Live configuration.
     
     ⚠️ LIVE TRADING - Real money!
     """
     return BrokerConfig(
         broker_type=BrokerType.FIVEERS_LIVE,
-        broker_name="5ers 60K High Stakes",
+        broker_name="5ers 20K High Stakes",
         is_demo=False,
         
         # MT5 Connection (from environment)
@@ -226,8 +226,8 @@ def get_fiveers_live_config() -> BrokerConfig:
         mt5_server=os.getenv("MT5_SERVER", "5ersLtd-Server"),
         mt5_path=os.getenv("MT5_PATH"),
         
-        # Account
-        account_size=60000.0,
+        # Account - 20K HIGH STAKES
+        account_size=20000.0,
         account_currency="USD",
         
         # Risk
@@ -242,7 +242,7 @@ def get_fiveers_live_config() -> BrokerConfig:
         max_trades_per_day=15,
         max_open_positions=10,
         max_spread_pips=3.0,  # Tighter spread requirement for live
-        magic_number=60000001,
+        magic_number=20000001,  # Changed for 20K account
         scan_interval_hours=int(os.getenv("SCAN_INTERVAL_HOURS", "4")),
         
         # Challenge targets
