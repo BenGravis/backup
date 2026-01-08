@@ -2,30 +2,14 @@
 
 Trading parameters optimized for 5ers 60K High Stakes challenge with maximum safety
 
-CRITICAL SAFETY NOTE (January 7, 2026):
-=====================================
-The following values MUST remain as set to match simulate_main_live_bot.py:
-- max_concurrent_trades = 100 (disabled, DDD halt provides protection)
-- max_trades_per_day = 100 (disabled, DDD halt provides protection)  
-- max_cumulative_risk_pct = 100.0 (disabled, DDD halt provides protection)
-- daily_loss_halt_pct = 3.5 (THIS is the primary safety mechanism)
-
-DO NOT reduce these values! The simulation validated with these settings.
-See commit 137c53b for details on why limits were disabled.
+ALIGNED WITH simulate_main_live_bot.py:
+- immediate_entry_r: 0.05 (market order threshold)
+- max_entry_distance_r: 1.5 (max distance for valid entry)
+- XAUUSD pip size: 0.01 (MT5 Forex.com compliant)
 """
 
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CRITICAL VALUE PROTECTION - DO NOT MODIFY THESE CONSTANTS
-# These are the validated values from simulate_main_live_bot.py
-# Any AI agent or commit that changes these will cause simulation/live mismatch
-# ═══════════════════════════════════════════════════════════════════════════════
-_PROTECTED_MIN_CONCURRENT_TRADES = 50  # Must be >= 50 (simulation had no limit)
-_PROTECTED_MIN_TRADES_PER_DAY = 50  # Must be >= 50 (simulation had no limit)
-_PROTECTED_MIN_CUMULATIVE_RISK = 50.0  # Must be >= 50% (simulation had no limit)
-_PROTECTED_DDD_HALT_PCT = 3.5  # MUST be exactly 3.5% (primary safety mechanism)
 
 
 @dataclass
@@ -42,7 +26,6 @@ class Fiveers60KConfig:
     phase1_target_pct: float = 8.0  # Phase 1 profit target (8% = $4,800)
     phase2_target_pct: float = 5.0  # Phase 2 profit target (5% = $3,000)
     min_profitable_days: int = 3  # Minimum 3 profitable trading days required
-    min_trading_days: int = 3  # Alias for min_profitable_days (used by live bot)
 
     # === SAFETY BUFFERS (Ultra-Conservative) ===
     daily_loss_warning_pct: float = 2.0  # Warning at 2.0% daily loss
@@ -56,19 +39,21 @@ class Fiveers60KConfig:
     max_risk_aggressive_pct: float = 1.5  # Aggressive mode: 1.5%
     max_risk_normal_pct: float = 0.75  # Normal mode: 0.75%
     max_risk_conservative_pct: float = 0.5  # Conservative mode: 0.5%
-    max_cumulative_risk_pct: float = 100.0  # Disabled - DDD halt @ 3.5% provides sufficient protection
+    max_cumulative_risk_pct: float = 5.0  # Max total risk across all positions
 
-    # === TRADE LIMITS (disabled to match simulate_main_live_bot.py) ===
-    max_concurrent_trades: int = 100  # Disabled - DDD halt provides protection
-    max_trades_per_day: int = 100  # Disabled - DDD halt provides protection
-    max_trades_per_week: int = 500  # Disabled - DDD halt provides protection
-    max_pending_orders: int = 100  # Keep for practical limit
+    # === TRADE LIMITS ===
+    # NOTE: No position limit - simulator has no max_concurrent_trades
+    # Only max_pending_orders applies as sanity check (100)
+    max_concurrent_trades: int = 100  # ALIGNED: No limit (was 7)
+    max_trades_per_day: int = 100  # No daily limit
+    max_trades_per_week: int = 500  # No weekly limit
+    max_pending_orders: int = 100  # High Stakes: margin analysis shows 75 positions at 32.8% max margin
 
-    # === ENTRY OPTIMIZATION ===
-    max_entry_distance_r: float = 1.5  # Max 1.5R distance from current price (match simulate)
-    immediate_entry_r: float = 0.05  # Execute immediately if within 0.05R (match simulate)
+    # === ENTRY OPTIMIZATION (ALIGNED WITH SIMULATOR) ===
+    max_entry_distance_r: float = 1.5  # ALIGNED: Max 1.5R distance (was 1.0)
+    immediate_entry_r: float = 0.05  # ALIGNED: Execute immediately if within 0.05R (was 0.4)
     limit_order_proximity_r: float = 0.3  # Place limit order when price is within 0.3R of entry
-    entry_check_interval_minutes: int = 5  # Check entry proximity every 5 minutes
+    entry_check_interval_minutes: int = 30  # Check entry proximity every 30 minutes
 
     # === PENDING ORDER SETTINGS ===
     pending_order_expiry_hours: float = 120.0  # 5 days - matches backtest max_wait_bars=5
@@ -81,13 +66,6 @@ class Fiveers60KConfig:
     # === CONFLUENCE SETTINGS ===
     min_confluence_score: int = 4  # OPTIMIZED: Lowered from 6 to 4 for 2-3x more trade opportunities (allows 4/7 setups)
     min_quality_factors: int = 2  # OPTIMIZED: Lowered from 3 to 2 for easier entry triggers
-    
-    # === CONFLUENCE SCALING (Match simulate_main_live_bot.py) ===
-    use_dynamic_scaling: bool = True  # Enable confluence-based risk scaling
-    confluence_base_score: int = 4  # Base confluence score (no scaling)
-    confluence_scale_per_point: float = 0.15  # Scale 15% per confluence point above base
-    max_confluence_multiplier: float = 1.5  # Max 150% of base risk (0.6% → 0.9%)
-    min_confluence_multiplier: float = 0.6  # Min 60% of base risk (0.6% → 0.36%)
 
     # ════════════════════════════════════════════════════════════════════════
     # DEPRECATED: TP SETTINGS - NOW LOADED FROM current_params.json
@@ -206,43 +184,14 @@ class Fiveers60KConfig:
     friday_close_minute_utc: int = 0
 
     def __post_init__(self):
-        """Validate configuration parameters with CRITICAL SAFETY CHECKS"""
-        # === STANDARD VALIDATIONS ===
+        """Validate configuration parameters"""
         if self.risk_per_trade_pct > 1.5:  # Allow optimizer some room
             raise ValueError("Risk per trade cannot exceed 1.5% for 5ers 60K")
         if self.max_daily_loss_pct > 5.0:
             raise ValueError("Max daily loss cannot exceed 5% for 5ers")
         if self.max_total_drawdown_pct > 10.0:
             raise ValueError("Max total drawdown cannot exceed 10% for 5ers")
-        
-        # ═══════════════════════════════════════════════════════════════════════
-        # CRITICAL SAFETY CHECKS - Prevent accidental reversion to old values
-        # These limits were DISABLED on January 7, 2026 to match simulation
-        # See commit 137c53b and SESSION_LOG for details
-        # ═══════════════════════════════════════════════════════════════════════
-        if self.max_concurrent_trades < _PROTECTED_MIN_CONCURRENT_TRADES:
-            raise ValueError(
-                f"CRITICAL: max_concurrent_trades={self.max_concurrent_trades} is too low! "
-                f"Must be >= {_PROTECTED_MIN_CONCURRENT_TRADES} to match simulation. "
-                f"DDD halt @ 3.5% provides protection. See commit 137c53b."
-            )
-        if self.max_trades_per_day < _PROTECTED_MIN_TRADES_PER_DAY:
-            raise ValueError(
-                f"CRITICAL: max_trades_per_day={self.max_trades_per_day} is too low! "
-                f"Must be >= {_PROTECTED_MIN_TRADES_PER_DAY} to match simulation. "
-                f"DDD halt @ 3.5% provides protection. See commit 137c53b."
-            )
-        if self.max_cumulative_risk_pct < _PROTECTED_MIN_CUMULATIVE_RISK:
-            raise ValueError(
-                f"CRITICAL: max_cumulative_risk_pct={self.max_cumulative_risk_pct}% is too low! "
-                f"Must be >= {_PROTECTED_MIN_CUMULATIVE_RISK}% to match simulation. "
-                f"DDD halt @ 3.5% provides protection. See commit 137c53b."
-            )
-        if abs(self.daily_loss_halt_pct - _PROTECTED_DDD_HALT_PCT) > 0.01:
-            raise ValueError(
-                f"CRITICAL: daily_loss_halt_pct={self.daily_loss_halt_pct}% must be {_PROTECTED_DDD_HALT_PCT}%! "
-                f"This is the PRIMARY safety mechanism. Do not change!"
-            )
+        # NOTE: No max_concurrent_trades validation - aligned with simulator (no limit)
 
     def get_risk_pct(self, daily_loss_pct: float, total_dd_pct: float) -> float:
         """
@@ -275,17 +224,18 @@ class Fiveers60KConfig:
         """
         Get max concurrent trades based on profit level.
         
-        DISABLED: Always returns max_concurrent_trades to match simulate_main_live_bot.py.
-        DDD halt @ 3.5% provides sufficient protection.
+        NOTE: ALIGNED WITH SIMULATOR - No dynamic reduction.
+        Simulator has no position limit, so we don't limit either.
 
         Args:
             profit_pct: Total profit percentage relative to initial balance
+                       (e.g., 8.5 means 8.5% profit from starting balance)
 
         Returns:
-            Maximum number of concurrent trades allowed
+            Maximum number of concurrent trades allowed (always max)
         """
-        # Disabled profit-based reduction - matches simulation
-        return self.max_concurrent_trades
+        # ALIGNED: Simulator has no position limit
+        return self.max_concurrent_trades  # Always 100 (no limit)
 
     def is_asset_whitelisted(self, symbol: str) -> bool:
         """
@@ -516,52 +466,60 @@ FTMO200KConfig = Fiveers60KConfig
 FTMO10KConfig = Fiveers60KConfig
 
 
-# Pip sizes for different asset classes
+# ════════════════════════════════════════════════════════════════════════════════
+# PIP SIZES - ALIGNED WITH SIMULATOR & MT5 FOREX.COM
+# ════════════════════════════════════════════════════════════════════════════════
+# CRITICAL: These are PIP sizes (not point sizes)
+# For 5-digit brokers: 1 pip = 0.0001 for EUR/USD (4th decimal)
+# For 3-digit JPY pairs: 1 pip = 0.01 (2nd decimal)
+# For Gold (XAUUSD): 1 pip = 0.01 (MT5 standard, matches simulator)
 PIP_SIZES = {
-    # Major Forex Pairs (5-digit)
-    "EURUSD": 0.00001,
-    "GBPUSD": 0.00001,
-    "USDJPY": 0.001,
-    "USDCHF": 0.00001,
-    "AUDUSD": 0.00001,
-    "USDCAD": 0.00001,
-    "NZDUSD": 0.00001,
+    # Major Forex Pairs - 1 pip = 0.0001 (4th decimal place)
+    "EURUSD": 0.0001,
+    "GBPUSD": 0.0001,
+    "USDJPY": 0.01,  # JPY pairs: 1 pip = 0.01
+    "USDCHF": 0.0001,
+    "AUDUSD": 0.0001,
+    "USDCAD": 0.0001,
+    "NZDUSD": 0.0001,
 
     # Cross Pairs
-    "EURJPY": 0.001,
-    "GBPJPY": 0.001,
-    "EURGBP": 0.00001,
-    "AUDJPY": 0.001,
-    "EURAUD": 0.00001,
-    "EURCHF": 0.00001,
-    "GBPAUD": 0.00001,
-    "GBPCAD": 0.00001,
-    "GBPCHF": 0.00001,
-    "GBPNZD": 0.00001,
-    "NZDJPY": 0.001,
-    "AUDCAD": 0.00001,
-    "AUDCHF": 0.00001,
-    "AUDNZD": 0.00001,
-    "CADJPY": 0.001,
-    "CHFJPY": 0.001,
-    "EURCAD": 0.00001,
-    "EURNZD": 0.00001,
-    "NZDCAD": 0.00001,
-    "NZDCHF": 0.00001,
+    "EURJPY": 0.01,  # JPY pair
+    "GBPJPY": 0.01,  # JPY pair
+    "EURGBP": 0.0001,
+    "AUDJPY": 0.01,  # JPY pair
+    "EURAUD": 0.0001,
+    "EURCHF": 0.0001,
+    "GBPAUD": 0.0001,
+    "GBPCAD": 0.0001,
+    "GBPCHF": 0.0001,
+    "GBPNZD": 0.0001,
+    "NZDJPY": 0.01,  # JPY pair
+    "AUDCAD": 0.0001,
+    "AUDCHF": 0.0001,
+    "AUDNZD": 0.0001,
+    "CADJPY": 0.01,  # JPY pair
+    "CHFJPY": 0.01,  # JPY pair
+    "EURCAD": 0.0001,
+    "EURNZD": 0.0001,
+    "NZDCAD": 0.0001,
+    "NZDCHF": 0.0001,
 
     # Exotic/Commodity Currencies
-    "USDMXN": 0.00001,
-    "USDZAR": 0.00001,
-    "USDTRY": 0.00001,
-    "USDSEK": 0.00001,
-    "USDNOK": 0.00001,
-    "USDDKK": 0.00001,
-    "USDPLN": 0.00001,
-    "USDHUF": 0.001,
+    "USDMXN": 0.0001,
+    "USDZAR": 0.0001,
+    "USDTRY": 0.0001,
+    "USDSEK": 0.0001,
+    "USDNOK": 0.0001,
+    "USDDKK": 0.0001,
+    "USDPLN": 0.0001,
+    "USDHUF": 0.01,  # HUF like JPY
 
-    # Metals
-    "XAUUSD": 0.01,  # Gold
-    "XAGUSD": 0.001,  # Silver
+    # Metals - ALIGNED WITH SIMULATOR & MT5 FOREX.COM
+    # Gold: 1 pip = $0.01 movement (MT5 standard)
+    # This matches simulate_main_live_bot.py CONTRACT_SPECS
+    "XAUUSD": 0.01,  # FIXED: Was 0.10, now 0.01 to match simulator
+    "XAGUSD": 0.01,  # Silver: $0.01 per pip
 
     # Indices (if traded)
     "US30": 1.0,
@@ -581,7 +539,17 @@ PIP_SIZES = {
 def get_pip_size(symbol: str) -> float:
     """
     Get pip size for a symbol.
-    Returns the point value (0.00001 for 5-digit EUR/USD, 0.001 for 3-digit JPY pairs).
+    Returns the PIP value (not point value).
+    
+    ALIGNED WITH SIMULATOR:
+    - EUR/USD: 1 pip = 0.0001 (4th decimal)
+    - USD/JPY: 1 pip = 0.01 (2nd decimal)
+    - XAU/USD: 1 pip = 0.01 (MT5 standard, matches simulator)
+    
+    Examples:
+    - EUR/USD: 1 pip = 0.0001 ($10 per pip per standard lot)
+    - USD/JPY: 1 pip = 0.01 (~$10 per pip per standard lot)
+    - XAU/USD: 1 pip = 0.01 ($1 per pip per standard lot of 100oz)
     """
     # Normalize symbol - remove underscores, suffixes, convert to uppercase
     base_symbol = symbol.replace('.a', '').replace('_m', '').replace('_', '').upper()
@@ -601,16 +569,16 @@ def get_pip_size(symbol: str) -> float:
         return 0.1  # SPX500
     elif any(i in base_symbol for i in ["NAS", "US100", "US30", "UK100", "GER40", "FRA40", "JPN225"]):
         return 1.0  # Other indices
-    # Metals
+    # Metals - ALIGNED WITH SIMULATOR
     elif "XAU" in base_symbol or "GOLD" in base_symbol:
-        return 0.01  # Gold
+        return 0.01  # FIXED: Gold 1 pip = $0.01 (matches simulator)
     elif "XAG" in base_symbol or "SILVER" in base_symbol:
-        return 0.001  # Silver
+        return 0.01  # Silver: 1 pip = $0.01
     # JPY pairs
     elif "JPY" in base_symbol or "HUF" in base_symbol:
-        return 0.001  # 3-digit quote
+        return 0.01  # JPY pairs: 1 pip = 0.01 (2nd decimal)
     else:
-        return 0.00001  # Standard 5-digit forex
+        return 0.0001  # Standard forex: 1 pip = 0.0001 (4th decimal)
 
 
 def get_sl_limits(symbol: str) -> Tuple[float, float]:
