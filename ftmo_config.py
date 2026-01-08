@@ -17,14 +17,14 @@ class Fiveers60KConfig:
     """5ers 60K High Stakes Challenge Configuration - Ultra-Conservative Approach"""
 
     # === ACCOUNT SETTINGS ===
-    account_size: float = 60000.0  # 5ers 60K High Stakes challenge account size
+    account_size: float = 20000.0  # 5ers 20K High Stakes challenge account size
     account_currency: str = "USD"
 
     # === 5ERS RULES ===
-    max_daily_loss_pct: float = 5.0  # Maximum daily loss (5% = $3,000)
-    max_total_drawdown_pct: float = 10.0  # Maximum total drawdown (10% = $6,000)
-    phase1_target_pct: float = 8.0  # Phase 1 profit target (8% = $4,800)
-    phase2_target_pct: float = 5.0  # Phase 2 profit target (5% = $3,000)
+    max_daily_loss_pct: float = 5.0  # Maximum daily loss (5% = $1,000)
+    max_total_drawdown_pct: float = 10.0  # Maximum total drawdown (10% = $2,000)
+    phase1_target_pct: float = 8.0  # Phase 1 profit target (8% = $1,600)
+    phase2_target_pct: float = 5.0  # Phase 2 profit target (5% = $1,000)
     min_profitable_days: int = 3  # Minimum 3 profitable trading days required
 
     # === SAFETY BUFFERS (Ultra-Conservative) ===
