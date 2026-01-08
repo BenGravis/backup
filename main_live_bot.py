@@ -233,7 +233,7 @@ class DrawdownMonitor:
     Dit is NIET hetzelfde als FTMO waar daily DD wel geldt!
     """
     
-    initial_balance: float = 60000.0
+    initial_balance: float = 20000.0
     
     def __post_init__(self):
         self.stop_out_level = self.initial_balance * 0.90  # $54,000
