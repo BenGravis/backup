@@ -220,22 +220,27 @@ class Fiveers60KConfig:
         # Low or no loss - use aggressive/full risk
         return self.max_risk_aggressive_pct
 
-    def get_max_trades(self, profit_pct: float) -> int:
+    def get_max_trades(self, profit_pct: float, total_dd_pct: float = 0.0) -> int:
         """
-        Get max concurrent trades based on profit level.
+        Get max concurrent trades based on profit/drawdown level.
         
-        NOTE: ALIGNED WITH SIMULATOR - No dynamic reduction.
-        Simulator has no position limit, so we don't limit either.
-
+        SAFETY FEATURE: Reduce exposure when in drawdown to protect account.
+        
         Args:
             profit_pct: Total profit percentage relative to initial balance
                        (e.g., 8.5 means 8.5% profit from starting balance)
+            total_dd_pct: Total drawdown as positive percentage (e.g., 5.0 means 5% DD)
 
         Returns:
-            Maximum number of concurrent trades allowed (always max)
+            Maximum number of concurrent trades allowed
         """
-        # ALIGNED: Simulator has no position limit
-        return self.max_concurrent_trades  # Always 100 (no limit)
+        # Below 5% DD: no limit
+        # At 5%+ DD: max 7 trades
+        if total_dd_pct >= 5.0:
+            return 7
+        
+        # Normal trading - no limit
+        return self.max_concurrent_trades  # 100 (no limit)
 
     def is_asset_whitelisted(self, symbol: str) -> bool:
         """
