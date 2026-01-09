@@ -414,6 +414,10 @@ class LiveTradingBot:
         self.challenge_start_date: Optional[datetime] = None
         self.challenge_end_date: Optional[datetime] = None
         
+        # Clean state on --first-run (remove old pending orders)
+        if immediate_scan:
+            self._clear_state_files()
+        
         self._load_pending_setups()
         self._load_trading_days()
         self._load_awaiting_spread()
@@ -423,6 +427,21 @@ class LiveTradingBot:
     # ═══════════════════════════════════════════════════════════════════════════
     # FIRST RUN DETECTION - Scan immediately after restart/weekend
     # ═══════════════════════════════════════════════════════════════════════════
+    
+    def _clear_state_files(self):
+        """Clear old state files on --first-run to start fresh (no old pending orders)."""
+        state_files = [
+            self.PENDING_SETUPS_FILE,
+            self.AWAITING_SPREAD_FILE,
+            self.AWAITING_ENTRY_FILE,
+        ]
+        for file in state_files:
+            try:
+                if Path(file).exists():
+                    Path(file).unlink()
+                    log.info(f"Cleared {file}")
+            except Exception as e:
+                log.warning(f"Could not clear {file}: {e}")
     
     def _check_first_run_complete(self) -> bool:
         """Check of eerste scan al gedaan is sinds laatste restart."""
