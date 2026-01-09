@@ -26,6 +26,8 @@ class Fiveers60KConfig:
     phase1_target_pct: float = 8.0  # Phase 1 profit target (8% = $1,600)
     phase2_target_pct: float = 5.0  # Phase 2 profit target (5% = $1,000)
     min_profitable_days: int = 3  # Minimum 3 profitable trading days required
+    # Backwards-compatible alias expected by main_live_bot
+    min_trading_days: int = 3
 
     # === SAFETY BUFFERS (Ultra-Conservative) ===
     daily_loss_warning_pct: float = 2.0  # Warning at 2.0% daily loss
